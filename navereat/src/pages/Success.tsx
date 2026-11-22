@@ -1,77 +1,95 @@
-import { motion } from 'framer-motion';
-import { Icon } from '../components/Icon';
-import { formatMoney } from '../lib/money';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import badgeSvg from '../assets/order-success-badge.svg?raw';
+import { demoOrders, type Order } from '../data/demo';
 import { useAppNav } from '../lib/navigation';
 import { useAppStore } from '../store/appStore';
+import successSheetCss from '../styles/original/order-success-sheet.css?raw';
 import '../styles/pages/success.css';
+
+const CONF_COLORS = ['#FFFFFF', '#FDE68A', '#BAE6FD', '#FBCFE8', '#FACC15', '#FFFFFF', '#A7F3D0'];
+
+function confettiStyle(index: number, total: number): CSSProperties {
+  const angle = (index / total) * Math.PI * 2 + ((index % 3) - 1) * 0.12;
+  const radius = 96 + ((index * 37) % 5) * 16;
+  const pill = index % 3 === 1;
+  const width = pill ? 4 : 5 + (index % 4);
+  const height = pill ? 10 : 5 + (index % 4);
+  return {
+    '--c': CONF_COLORS[index % CONF_COLORS.length],
+    '--dx': `${Math.round(Math.sin(angle) * radius * 1.15)}px`,
+    '--dy': `${Math.max(-104, Math.round(-Math.cos(angle) * radius * 0.8))}px`,
+    '--r': `${(index % 2 ? 1 : -1) * (180 + ((index * 53) % 220))}deg`,
+    '--w': `${width}px`,
+    '--h': `${height}px`,
+    '--br': pill ? '2px' : '50%',
+    '--d': `${(index % 4) * 0.025}s`,
+  } as CSSProperties;
+}
 
 export function Success() {
   const nav = useAppNav();
   const orders = useAppStore((s) => s.orders);
-  const lastOrderId = useAppStore((s) => s.lastOrderId);
-  const order = orders.find((entry) => entry.id === lastOrderId) ?? orders[0];
+  const [entered, setEntered] = useState(false);
+  const timer = useRef<number | null>(null);
+
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.dataset.navereatSuccess = 'true';
+    style.textContent = successSheetCss;
+    document.head.appendChild(style);
+    const frame = requestAnimationFrame(() => setEntered(true));
+    return () => {
+      cancelAnimationFrame(frame);
+      style.remove();
+    };
+  }, []);
+
+  const order = useMemo<Order | undefined>(() => {
+    return orders.find((entry) => entry.status !== 'delivered' && entry.status !== 'cancelled') ?? orders[0] ?? demoOrders[0];
+  }, [orders]);
+
+  const go = () => {
+    if (timer.current) window.clearTimeout(timer.current);
+    if (order) nav.push(`/track/${order.id}`);
+    else nav.tab('/orders');
+  };
+
+  useEffect(() => {
+    timer.current = window.setTimeout(go, 2600);
+    return () => {
+      if (timer.current) window.clearTimeout(timer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.id]);
+
+  const confetti = Array.from({ length: 18 }, (_, index) => (
+    <i key={index} style={confettiStyle(index, 18)} />
+  ));
 
   return (
-    <div className="page success-page">
-      <div className="page-scroll success-scroll">
-        <motion.div
-          className="success-check"
-          initial={{ scale: 0.5, rotate: -12, opacity: 0 }}
-          animate={{ scale: 1, rotate: 0, opacity: 1 }}
-          transition={{ type: 'spring', stiffness: 260, damping: 16 }}
-        >
-          <Icon name="solid:check" size={44} />
-        </motion.div>
-
-        <h1 className="success-title">Order Placed!</h1>
-        <p className="success-sub">
-          {order ? `${order.restaurantName} is preparing your food.` : 'Your demo order is confirmed.'}
-        </p>
-
-        <div className="success-eta">
-          <span className="success-eta-icon">
-            <Icon name="solid:motorcycle" size={16} />
-          </span>
-          <div>
-            <p className="success-eta-label">Estimated delivery</p>
-            <p className="success-eta-value">{order?.eta ?? '30 mins'}</p>
+    <div className="success-page">
+      <div className={`ew-os ew-os--done ew-os--direct${entered ? ' is-open' : ''}`} role="dialog" aria-modal="true" aria-labelledby="ew-os-title">
+        <div className="ew-os__scrim" />
+        <div className="ew-os__sheet" tabIndex={-1}>
+          <div className="ew-os__wash">
+            <div className="ew-os__wash-fill" />
           </div>
-        </div>
-
-        {order && (
-          <div className="success-card">
-            <div className="success-order-id">
-              <span>ORDER ID</span>
-              <span>{order.id}</span>
-            </div>
-            <p className="success-rest">{order.restaurantName}</p>
-            {order.lines.map((line) => (
-              <div className="success-line" key={line.name}>
-                <span>
-                  {line.qty} × {line.name}
-                </span>
-                <span>{formatMoney(line.qty * line.price)}</span>
-              </div>
-            ))}
-            <div className="success-total">
-              <span>Total paid</span>
-              <span>{formatMoney(order.total)}</span>
-            </div>
+          <span className="ew-os__grab" />
+          <div className="ew-os__hero">
+            <span className="ew-os__pulse" />
+            <span className="ew-os__ring" />
+            <span className="ew-os__ring ew-os__ring--2" />
+            <div className="ew-os__confetti">{confetti}</div>
+            <span dangerouslySetInnerHTML={{ __html: badgeSvg }} />
           </div>
-        )}
-
-        <div className="success-actions">
-          {order && (
-            <button type="button" className="success-btn primary" onClick={() => nav.push(`/track/${order.id}`)}>
-              Track Order <Icon name="solid:arrow-right" size={14} />
+          <h2 className="ew-os__title" id="ew-os-title">Order placed</h2>
+          <p className="ew-os__msg" role="status">The restaurant is getting your order ready.</p>
+          <div className="ew-os__actions">
+            <button className="ew-os__btn tap" type="button" onClick={go}>
+              Track my order
             </button>
-          )}
-          <button type="button" className="success-btn ghost" onClick={() => nav.reset('/')}>
-            Back to Home
-          </button>
+          </div>
         </div>
-
-        <p className="success-note">This is a demo order — no payment was taken.</p>
       </div>
     </div>
   );

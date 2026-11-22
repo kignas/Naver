@@ -4,6 +4,7 @@ import { AnimatePresence } from 'framer-motion';
 import { Capacitor } from '@capacitor/core';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { StatusBar, Style } from '@capacitor/status-bar';
+import { CartBar } from './components/CartBar';
 import { PageTransition } from './components/PageTransition';
 import { ToastHost } from './components/ToastHost';
 import { useBackButton } from './hooks/useBackButton';
@@ -43,6 +44,16 @@ function AppRoutes() {
 
   if (!token && location.pathname !== '/login') return null;
 
+  const pathname = location.pathname;
+  const cartBarVisible =
+    pathname === '/' ||
+    pathname === '/search' ||
+    pathname === '/under99' ||
+    pathname.startsWith('/category/') ||
+    pathname.startsWith('/restaurant/');
+  const cartBarMode = pathname.startsWith('/restaurant/') ? 'pink' : 'home';
+  const cartBarAboveNav = !pathname.startsWith('/restaurant/');
+
   return (
     <div className="app-shell">
       <div className="app-viewport">
@@ -69,6 +80,7 @@ function AppRoutes() {
           </PageTransition>
         </AnimatePresence>
       </div>
+      <CartBar visible={cartBarVisible} mode={cartBarMode} aboveNav={cartBarAboveNav} />
       <ToastHost />
     </div>
   );

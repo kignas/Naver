@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BottomNav } from '../components/BottomNav';
-import { CartBar } from '../components/CartBar';
 import { Icon } from '../components/Icon';
 import { QtyControl } from '../components/QtyControl';
 import { VegDot } from '../components/VegDot';
@@ -212,14 +211,6 @@ export function Under99() {
         </main>
       </div>
 
-      <CartBar
-        aboveNav
-        subtitle={
-          <>
-            <Icon name="solid:bolt-lightning" size={8} style={{ color: '#fde047' }} /> Fast Delivery
-          </>
-        }
-      />
       <BottomNav />
     </div>
   );

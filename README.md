@@ -22,7 +22,7 @@ npm install
 npm run dev
 ```
 
-Login accepts any 10-digit phone number and any 4–6 digit OTP.
+Login accepts any 6–10 digit phone number and any 4–6 digit OTP.
 
 ```bash
 npm run check          # tsc --noEmit + eslint
@@ -30,6 +30,22 @@ npm run build          # typecheck + production build
 npm run android:prepare
 npm run android:debug
 ```
+
+## Visual reference / screenshot diff
+
+The original Eatswada frontend is **not** part of this public repo and must
+never be committed here. Keep a read-only copy outside the repository, for
+example at `/workspace/reference/Nearbite-main/`, then run:
+
+```bash
+cd navereat
+ORIGINAL_DIR=/workspace/reference/Nearbite-main npm run visual
+```
+
+`scripts/visual-check.ts` serves the original pages from `ORIGINAL_DIR` and
+compares them against the app at 360px, 390px and 430px. Screenshots and diff
+images are written to `verify/`, which is gitignored along with `reference/`
+and copies of the original HTML/JS/CSS files.
 
 ## CI
 

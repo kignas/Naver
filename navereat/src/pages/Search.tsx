@@ -1,20 +1,15 @@
 import { useMemo, useState } from 'react';
 import { BottomNav } from '../components/BottomNav';
 import { Icon } from '../components/Icon';
-import { categories, restaurants, type Category } from '../data/demo';
+import { categories, restaurants } from '../data/demo';
 import { useAppNav } from '../lib/navigation';
 import '../styles/pages/search.css';
-
-const QUICK_NAMES = ['Biryani', 'Pizzas', 'Burgers', 'Momos', 'Noodles', 'Sweets'];
 
 export function Search() {
   const nav = useAppNav();
   const [query, setQuery] = useState('');
 
-  const quickCategories = useMemo(
-    () => QUICK_NAMES.map((name) => categories.find((c) => c.name === name)).filter((c): c is Category => Boolean(c)),
-    [],
-  );
+  const quickCategories = categories.slice(0, 10);
 
   const q = query.trim().toLowerCase();
 

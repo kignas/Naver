@@ -5,6 +5,10 @@ export interface CartLine {
   quantity: number;
   price: number;
   resId: number;
+  isVeg?: boolean;
+  originalPrice?: number;
+  image?: string;
+  resName?: string;
 }
 
 export type Cart = Record<string, CartLine>;
@@ -33,9 +37,8 @@ export const couponDiscount = (coupon: Coupon | null, subtotal: number): number 
 };
 
 /**
- * Legacy cart behaviour: the bill summary always showed delivery as FREE
- * (the "free above ₹149" banner was marketing copy only), so the port keeps
- * exactly the same totals: subtotal + ₹5 platform fee.
+ * Legacy cart behaviour: delivery is free and checkout charges no platform fee,
+ * matching the original cart bill (item total + delivery only).
  */
 export const billFor = (cart: Cart, coupon: Coupon | null = null): Bill => {
   const subtotal = cartSubtotal(cart);

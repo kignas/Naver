@@ -1,47 +1,110 @@
-.rest-page { background: var(--page-alt); }
-.rest-scroll { padding-bottom: 140px; }
-.rest-topbar { flex-shrink: 0; z-index: 50; background: #fff; padding: 16px; display: flex; justify-content: space-between; align-items: center; box-shadow: var(--sh-sm); }
-.icon-btn { width: 36px; height: 36px; border-radius: 50%; background: var(--g100); color: var(--g700); display: flex; align-items: center; justify-content: center; transition: background 0.15s; }
-.icon-btn:active { background: var(--g200); }
-.rest-top-actions { display: flex; gap: 12px; }
-.rest-info { padding: 16px 16px 0; }
-.rest-info-card { background: #fff; border: 1px solid var(--g100); border-radius: var(--r-5xl); box-shadow: var(--sh-sm); padding: 20px; }
-.rest-info-top { display: flex; justify-content: space-between; align-items: flex-start; }
-.rest-info-left { flex: 1; min-width: 0; padding-right: 12px; }
-.rest-title { font-size: 22px; font-weight: 900; color: var(--g900); line-height: 1.2; }
-.rest-cuisine { font-size: 12px; font-weight: 600; color: var(--g400); margin-top: 2px; }
-.rest-meta-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
-.rating-badge { display: flex; align-items: center; gap: 4px; background: var(--green); color: #fff; font-size: 11px; font-weight: 900; padding: 2px 8px; border-radius: 8px; }
-.meta-dot { color: var(--g300); font-size: 12px; }
-.meta-text { font-size: 13px; font-weight: 700; color: var(--g600); }
-.heart-btn { width: 36px; height: 36px; border: 1px solid var(--g200); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--g400); flex-shrink: 0; transition: color 0.15s, background 0.15s, border-color 0.15s; }
-.heart-btn.liked { color: var(--red-500); border-color: #fecaca; background: var(--red-50); }
-.offer-banner { margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--g200); }
-.offer-line { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: var(--brand-600); }
-.delivery-info { margin-top: 12px; display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; color: var(--g500); flex-wrap: wrap; }
-.delivery-info .sep { color: var(--g200); }
-.delivery-info .bike { color: var(--brand); }
-.delivery-info .clock { color: var(--blue-400); }
-.menu-wrap { padding: 24px 16px 0; }
-.menu-filters { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 16px; scrollbar-width: none; }
-.menu-filters::-webkit-scrollbar { display: none; }
-.menu-heading { font-size: 18px; font-weight: 900; color: var(--g900); margin-bottom: 8px; }
-.menu-count { color: var(--g400); font-size: 14px; font-weight: 700; }
-.menu-list > * + * { border-top: 1px solid var(--g100); }
-.menu-item { display: flex; justify-content: space-between; align-items: flex-start; padding: 24px 0; animation: slideUp 0.45s cubic-bezier(0.2, 1, 0.3, 1) both; }
-.menu-item-left { flex: 1; min-width: 0; padding-right: 16px; }
-.menu-name { font-size: 16px; font-weight: 700; color: var(--g900); line-height: 1.35; }
-.menu-price { font-size: 15px; font-weight: 900; color: var(--g800); margin-top: 2px; }
-.menu-desc { font-size: 12px; font-weight: 500; color: var(--g400); margin-top: 6px; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.bestseller { display: inline-flex; align-items: center; gap: 4px; font-size: 9px; font-weight: 900; color: #d97706; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 4px; }
-.menu-item-img-wrap { position: relative; width: 112px; height: 112px; flex-shrink: 0; }
-.menu-item-img { width: 100%; height: 100%; object-fit: cover; border-radius: 16px; background: var(--g100); box-shadow: var(--sh-sm); }
-.menu-add { position: absolute; left: 50%; bottom: -12px; transform: translateX(-50%); min-width: 88px; height: 36px; background: #fff; border: 1px solid var(--g200); border-radius: 12px; box-shadow: var(--sh-md); display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.menu-add .add-btn-wrap { width: 100%; height: 100%; min-width: 0; border: 0; box-shadow: none; }
-.menu-skeleton-row { display: flex; justify-content: space-between; padding: 32px 0; border-bottom: 1px solid var(--g100); }
-.menu-skeleton-lines { flex: 1; display: flex; flex-direction: column; gap: 8px; padding-right: 16px; }
-.not-found { text-align: center; padding: 64px 16px; }
-.not-found h3 { font-size: 16px; font-weight: 900; color: var(--g700); margin-top: 16px; }
-.not-found p { font-size: 12px; color: var(--g400); margin-top: 4px; }
-.not-found-btn { margin-top: 24px; background: var(--brand); color: #fff; font-weight: 700; padding: 10px 24px; border-radius: 12px; }
-@keyframes slideUp { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: translateY(0); } }
+/* App-shell glue for the original restaurant-shell markup. The original
+   restaurant.bundle.css is injected at runtime by Restaurant.tsx so its
+   global body/page rules only apply while this page is mounted. */
+.rest-page {
+  padding-top: 0;
+  background: #fff;
+}
+
+.rest-page .rest-scroll {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  padding-bottom: 120px;
+  scrollbar-width: none;
+}
+
+.rest-page .rest-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+body.navereat-restaurant {
+  padding-bottom: 0 !important;
+  overflow: hidden !important;
+  background: #fff !important;
+}
+
+body.navereat-restaurant .app-shell,
+body.navereat-restaurant .app-viewport {
+  background: #fff;
+}
+
+/* Local SVG icons replace the original Font Awesome <i> glyphs. */
+.rest-page .offer-icon .icon,
+.rest-page .del-chip .icon,
+.rest-page .rmf-report .icon,
+.rest-page .inf-svc-ic .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.rest-page .ew-hd-circle .icon,
+.rest-page .ew-hd-back .icon {
+  width: 22px;
+  height: 22px;
+}
+
+.rest-page .ew-hd-search .icon {
+  width: 19px;
+  height: 19px;
+}
+
+.rest-page .menu-cat-chevron.icon {
+  transition: transform 0.2s ease;
+}
+
+.rest-page .menu-cat-chevron.icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+.rest-page .menu-cat-header.collapsed .menu-cat-chevron.icon {
+  transform: rotate(-90deg);
+}
+
+.rest-page .menu-search-inline .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.rest-page .rmf-report {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  width: 100%;
+}
+
+.rest-page .cart-bar {
+  bottom: calc(16px + var(--sab));
+}
+
+.rest-page .delivery-copy {
+  padding: 0 54px !important;
+}
+
+.rest-page .delivery-strip .del-chip {
+  font-size: 13px !important;
+  line-height: 1.2 !important;
+  text-align: center !important;
+}
+
+.rest-page .nb-item-title {
+  font-size: 16px !important;
+}
+
+.rest-page .nb-item-media {
+  width: 150px !important;
+  flex: 0 0 150px !important;
+}
+
+.rest-page .nb-item-title {
+  font-size: 13px !important;
+  letter-spacing: -0.7px !important;
+}
+
+.rest-page .ew-hd-back::before {
+  display: none !important;
+}

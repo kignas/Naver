@@ -1,310 +1,486 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { StatusBar, Style } from '@capacitor/status-bar';
+import heroDish from '../assets/placeholders/hero-dish.svg';
 import { BottomNav } from '../components/BottomNav';
-import { CartBar } from '../components/CartBar';
+import { HomeRestaurantCard } from '../components/HomeRestaurantCard';
 import { Icon } from '../components/Icon';
-import { VegDot } from '../components/VegDot';
-import { categories, DEMO_LOCATION, restaurants } from '../data/demo';
+import {
+  categories,
+  DEMO_ADDRESS_LINE,
+  DEMO_LOCATION,
+  demoUser,
+  restaurants,
+  type MenuItem,
+  type Restaurant,
+} from '../data/demo';
 import { useSkeleton } from '../hooks/useSkeleton';
 import { useAppNav } from '../lib/navigation';
-import { formatMoney } from '../lib/money';
+import { useAppStore } from '../store/appStore';
+import { toast } from '../store/toastStore';
+import '../styles/original/header-theme.css';
+import '../styles/original/home-base.css';
+import '../styles/original/home.bundle.css';
+import '../styles/original/home-final.css';
 import '../styles/pages/home.css';
 
-const PHRASES = ["Search for 'Biryani'", "Search for 'Pizza'", "Search for 'Momos'", "Search for 'Burger'"];
+const SEARCH_DISHES = [
+  'Chowmein',
+  'Biryani',
+  'Pizza',
+  'Momos',
+  'Rolls',
+  'Fried Rice',
+  'Puchka',
+  'Burger',
+  'Dosa',
+  'Noodles',
+  'Thali',
+  'Sweets',
+  'Pasta',
+];
 
-interface Sparkle {
-  id: number;
-  x: number;
-  y: number;
-  size: number;
+function RestaurantSkeleton() {
+  return (
+    <div className="u99-card-host rs-skeleton" aria-hidden="true">
+      <article className="u99-restaurant-card">
+        <div className="u99-restaurant-head">
+          <div className="u99-card-copy">
+            <div className="u99-discount-line">
+              <span className="sk rsk-line" style={{ width: '38%' }} />
+            </div>
+            <h2 className="u99-restaurant-name">
+              <span className="sk rsk-line" style={{ width: '64%' }} />
+            </h2>
+            <div className="u99-meta">
+              <span className="sk rsk-line" style={{ width: 52 }} />
+              <span className="sk rsk-line" style={{ width: 70 }} />
+              <span className="sk rsk-line" style={{ width: 88 }} />
+            </div>
+            <div className="u99-free-row">
+              <span className="sk rsk-line" style={{ width: '56%' }} />
+            </div>
+          </div>
+        </div>
+        <div className="u99-carousel-wrap">
+          <div className="u99-carousel">
+            {[0, 1].map((index) => (
+              <article className="u99-item" key={index}>
+                <div className="u99-item-image">
+                  <span className="sk rsk-fill" />
+                  <span className="sk rsk-add" />
+                </div>
+                <div className="u99-item-name">
+                  <span className="sk rsk-line" style={{ width: '82%' }} />
+                </div>
+                <div className="u99-price-row">
+                  <span className="sk rsk-line" style={{ width: '44%' }} />
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </article>
+    </div>
+  );
 }
-
-const letterDelay = (seconds: string): CSSProperties => ({ ['--d' as string]: seconds });
 
 export function Home() {
   const nav = useAppNav();
-  const ready = useSkeleton(450, 700);
+  const ready = useSkeleton(420, 650);
+  const cart = useAppStore((state) => state.cart);
+  const user = useAppStore((state) => state.user);
+  const addItem = useAppStore((state) => state.addItem);
+  const decrementItem = useAppStore((state) => state.decrementItem);
+  const selectRestaurant = useAppStore((state) => state.selectRestaurant);
   const [vegOnly, setVegOnly] = useState(false);
-  const [phraseIndex, setPhraseIndex] = useState(0);
-  const [phraseVisible, setPhraseVisible] = useState(true);
-  const [sparkles, setSparkles] = useState<Sparkle[]>([]);
-  const heroRef = useRef<HTMLElement | null>(null);
+  const [nearFast, setNearFast] = useState(false);
+  const [rating4, setRating4] = useState(false);
+  const [under30, setUnder30] = useState(false);
+  const [under100, setUnder100] = useState(false);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const [dishIndex, setDishIndex] = useState(0);
+
+  const initial = (user?.name ?? demoUser.name).charAt(0).toUpperCase();
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
-      setPhraseVisible(false);
-      window.setTimeout(() => {
-        setPhraseIndex((index) => (index + 1) % PHRASES.length);
-        setPhraseVisible(true);
-      }, 300);
-    }, 3000);
-    return () => window.clearInterval(interval);
+    const id = window.setInterval(() => {
+      setDishIndex((index) => (index + 1) % SEARCH_DISHES.length);
+    }, 2800);
+    return () => window.clearInterval(id);
   }, []);
 
-  const visibleRestaurants = useMemo(
-    () => (vegOnly ? restaurants.filter((r) => r.menu.every((item) => item.isVeg)) : restaurants),
-    [vegOnly],
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    void StatusBar.setStyle({ style: Style.Light });
+    void StatusBar.setBackgroundColor({ color: '#5D0D18' });
+    return () => {
+      void StatusBar.setStyle({ style: Style.Dark });
+      void StatusBar.setBackgroundColor({ color: '#ffffff' });
+    };
+  }, []);
+
+  const filteredRestaurants = useMemo(
+    () =>
+      restaurants.filter((restaurant) => {
+        if (vegOnly && !(restaurant.pureVeg ?? restaurant.menu.every((item) => item.isVeg))) return false;
+        if (nearFast && (restaurant.deliveryMax ?? 999) > 30) return false;
+        if (rating4 && Number(restaurant.rating) < 4) return false;
+        if (under100 && !restaurant.menu.some((item) => item.price < 100)) return false;
+        if (under30 && (restaurant.deliveryMax ?? 999) > 30) return false;
+        return true;
+      }),
+    [vegOnly, nearFast, rating4, under30, under100],
   );
 
-  const storeItems = useMemo(
-    () => [
-      { menu: restaurants[2].menu[0], resName: 'Mumbai Dosa Plaza', price: 69 },
-      { menu: restaurants[7].menu[0], resName: 'Rolls Mania', price: 89 },
-      { menu: restaurants[4].menu[0], resName: 'Burger King', price: 79 },
-    ],
-    [],
-  );
+  const openRestaurant = (restaurant: Restaurant) => {
+    selectRestaurant(restaurant.id);
+    nav.push(`/restaurant/${restaurant.id}`);
+  };
 
-  const spawnSparkles = (event: MouseEvent<HTMLElement>) => {
-    const rect = heroRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const batch = Array.from({ length: 4 }, (_, index) => ({
-      id: Date.now() + index,
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
-      size: Math.random() * 5 + 3,
-    }));
-    setSparkles((prev) => [...prev, ...batch]);
-    window.setTimeout(() => {
-      setSparkles((prev) => prev.filter((sparkle) => !batch.some((added) => added.id === sparkle.id)));
-    }, 1400);
+  const addFromHome = (restaurant: Restaurant, menuItem: MenuItem) => {
+    selectRestaurant(restaurant.id);
+    nav.push(`/restaurant/${restaurant.id}`);
+    toast(`${menuItem.name} — add it from the menu`);
+  };
+
+  const openCategory = (name: string, query: string) => {
+    nav.push(`/category/${encodeURIComponent(name)}?q=${encodeURIComponent(query)}`);
+  };
+
+  const clearFilters = () => {
+    setNearFast(false);
+    setRating4(false);
+    setUnder30(false);
+    setUnder100(false);
+    setVegOnly(false);
   };
 
   return (
-    <div className="page home-page">
-      <div className="page-scroll home-scroll">
-        <header className="home-hero" ref={heroRef} onClick={spawnSparkles}>
-          <div className="hero-gradient" />
-          <div className="hero-blob hero-blob-a" />
-          <div className="hero-blob hero-blob-b" />
-          {sparkles.map((sparkle) => (
-            <span
-              key={sparkle.id}
-              className="sparkle"
-              style={{ left: sparkle.x, top: sparkle.y, width: sparkle.size, height: sparkle.size }}
-            />
-          ))}
-
-          <div className="home-hero-inner">
-            <div className="home-top">
-              <div>
-                <button type="button" className="location-btn" title={DEMO_LOCATION}>
-                  <Icon name="solid:location-dot" size={14} className="loc-dot" />
-                  Home – Demo Street
-                  <Icon name="solid:chevron-down" size={11} className="loc-chev" />
-                </button>
-                <p className="location-sub">Demo City · Delivery under 15 km</p>
-              </div>
-              <button type="button" className="profile-btn tap" aria-label="Profile" onClick={() => nav.tab('/profile')}>
-                <Icon name="solid:user" size={12} />
+    <div className="home-screen">
+      <div className="home-scroll">
+        <header className="hero-header" id="home-header">
+          <div className="loc-row es-header-item">
+            <button
+              type="button"
+              className="loc-left tap"
+              aria-label="Delivery location"
+              onClick={() => toast(DEMO_LOCATION)}
+            >
+              <span className="loc-pin-wrap" aria-hidden="true">
+                <Icon name="solid:location-dot" size={27} className="loc-pin-icon" />
+              </span>
+              <span className="loc-copy">
+                <span className="loc-name-row">
+                  <span className="loc-name" id="loc-name">
+                    Home
+                  </span>
+                  <Icon name="solid:chevron-down" size={9} className="loc-chevron" />
+                </span>
+                <span className="loc-sub" id="loc-sub">
+                  {DEMO_ADDRESS_LINE}
+                </span>
+              </span>
+            </button>
+            <div className="loc-right">
+              <button
+                type="button"
+                className="btn-store tap"
+                aria-label="Under 99 store"
+                onClick={() => nav.push('/under99')}
+              >
+                <span className="store-top">UNDER</span>
+                <span className="store-bot">₹99</span>
+              </button>
+              <button
+                type="button"
+                className="btn-profile tap"
+                aria-label="Profile"
+                onClick={() => nav.tab('/profile')}
+              >
+                <span className="profile-initial">{initial}</span>
               </button>
             </div>
+          </div>
 
-            <div className="search-row">
-              <button type="button" className="search-pill" onClick={() => nav.tab('/search')}>
-                <Icon name="solid:magnifying-glass" size={14} style={{ color: 'var(--g400)' }} />
-                <span className="search-placeholder" style={{ opacity: phraseVisible ? 1 : 0 }}>
-                  {PHRASES[phraseIndex]}
+          <div className="search-row es-header-item">
+            <button type="button" className="search-box tap" onClick={() => nav.push('/search')}>
+              <Icon name="solid:magnifying-glass" size={18} className="search-icon" />
+              <span className="search-text" id="search-placeholder" aria-label="Search dishes, restaurants and cuisines">
+                <span className="search-static">Search&nbsp;</span>
+                <span className="search-dish is-sliding" key={dishIndex}>
+                  &quot;{SEARCH_DISHES[dishIndex]}&quot;
                 </span>
-                <span className="search-divider" />
-                <Icon name="solid:microphone" size={14} className="mic" />
-              </button>
-              <div className="veg-card">
-                <span className="veg-card-label">VEG</span>
-                <button
-                  type="button"
-                  className={`veg-toggle${vegOnly ? ' on' : ''}`}
-                  aria-label="Show pure vegetarian restaurants"
-                  aria-pressed={vegOnly}
-                  onClick={(event) => {
+              </span>
+              <span
+                className="search-mic"
+                role="button"
+                tabIndex={0}
+                aria-label="Voice search"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  toast('Voice search is demo only');
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
                     event.stopPropagation();
-                    setVegOnly((value) => !value);
-                  }}
-                >
-                  <span className="veg-thumb" />
-                </button>
-              </div>
-            </div>
-
-            <div className="payday">
-              <div className="payday-row">
-                <div className="payday-text">
-                  {['P', 'A', 'Y'].map((letter, index) => (
-                    <span key={letter} className="letter" style={letterDelay(`${index * 0.1}s`)}>
-                      {letter}
-                    </span>
-                  ))}
-                </div>
-                <div className="payday-img-wrap">
-                  <img className="payday-img" src={restaurants[0].menu[0].image} alt="Pizza" />
-                </div>
-                <div className="payday-text">
-                  {['D', 'A', 'Y'].map((letter, index) => (
-                    <span key={`${letter}${index}`} className="letter" style={letterDelay(`${0.3 + index * 0.1}s`)}>
-                      {letter}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <button type="button" className="payday-btn" onClick={() => nav.push('/under99')}>
-                Order Now
-              </button>
-              <p className="payday-sub">Flat ₹200 Off &amp; More</p>
-            </div>
-
-            <div className="offer-row">
-              <div className="offer-card">
-                <p>
-                  Flat ₹200
-                  <br />
-                  OFF &amp; More
-                </p>
-                <span className="offer-icon">
-                  <Icon name="solid:tag" size={10} />
+                    toast('Voice search is demo only');
+                  }
+                }}
+              >
+                <Icon name="solid:microphone" size={17} />
+              </span>
+            </button>
+            <button
+              type="button"
+              className="veg-box tap"
+              id="veg-toggle-btn"
+              aria-pressed={vegOnly}
+              aria-label="Show pure veg restaurants only"
+              onClick={() => setVegOnly((value) => !value)}
+            >
+              <span className="veg-label-txt">VEG</span>
+              <span className={`veg-track${vegOnly ? ' on' : ''}`} id="veg-track">
+                <span className="veg-thumb">
+                  <span className="veg-inner">
+                    <span className="veg-inner-dot" />
+                  </span>
                 </span>
-              </div>
-              <div className="offer-card offer-center">
-                <p>
-                  Burst &amp; Win
-                  <br />
-                  Up to ₹600
-                </p>
-                <p className="offer-pink">HOLI BLAST</p>
-              </div>
-              <div className="offer-card">
-                <p>
-                  Meals
-                  <br />
-                  At ₹99
-                </p>
-                <span className="offer-99">99</span>
+              </span>
+            </button>
+          </div>
+
+          <div className="banner-wrap es-header-item" id="hero-banner-region" aria-live="polite">
+            <div className="header-carousel" id="banner-carousel" aria-roledescription="carousel" aria-label="Promotions">
+              <div className="header-carousel-track" id="header-carousel-track">
+                <article className="header-slide is-active" role="group" aria-roledescription="slide" aria-label="Banner 1">
+                  <div className="header-slide__panel">
+                    <div className="header-slide__copy">
+                      <h2 className="banner-title">
+                        Good Food
+                        <br />
+                        <span className="banner-title-accent">Closer to Home.</span>
+                      </h2>
+                      <p className="banner-subtitle banner-subtitle--default">
+                        Tasty food
+                        <br />
+                        Happier you. <span className="banner-heart" aria-hidden="true">♥</span>
+                      </p>
+                      <button type="button" className="banner-cta" onClick={() => nav.push('/under99')}>
+                        Order Now
+                        <span className="banner-cta__chev" aria-hidden="true">
+                          <Icon name="solid:chevron-right" size={11} />
+                        </span>
+                      </button>
+                    </div>
+                    <img className="header-slide__art" src={heroDish} alt="" aria-hidden="true" />
+                  </div>
+                </article>
               </div>
             </div>
+          </div>
+          <div className="ew-strip" aria-hidden="true">
+            Nearby restaurants &middot; Demo City
           </div>
         </header>
 
-        <section className="cat-section">
-          <h2 className="section-title">What&apos;s on your mind?</h2>
-          <div className="cat-rail">
-            {categories.map((category) => (
-              <button
-                key={category.id}
-                type="button"
-                className="cat-item"
-                onClick={() =>
-                  nav.push(`/category/${encodeURIComponent(category.name)}?q=${encodeURIComponent(category.query)}`)
-                }
-              >
-                <span className="cat-img-wrap">
-                  <img src={category.image} alt={category.name} />
-                </span>
-                <span className="cat-name">{category.name}</span>
-              </button>
-            ))}
-          </div>
-        </section>
+        <main className="home-main">
+          <section className="section" id="mind-section">
+            <div className="sec-head">
+              <h2 className="sec-title">What&apos;s on your mind?</h2>
+            </div>
+            <div className="cat-scroll no-scrollbar" id="cat-scroll">
+              {categories.map((category, index) => (
+                <a
+                  className="cat-item"
+                  href={`#${encodeURIComponent(category.name)}`}
+                  data-category-name={category.name}
+                  key={category.id}
+                  style={{
+                    animation: `cardFadeUp .28s ease forwards ${Math.min(index, 8) * 0.03}s`,
+                    opacity: 0,
+                  }}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    openCategory(category.name, category.query);
+                  }}
+                >
+                  <span className="cat-ring cat-image-shell">
+                    <span className="cat-image-placeholder" aria-hidden="true">
+                      <span className="cat-placeholder-mark">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M7 9.5h10M8.5 13h7M9.5 16.5h5M5.5 6.5h13a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17V8a1.5 1.5 0 0 1 1.5-1.5Z" />
+                        </svg>
+                      </span>
+                    </span>
+                    <img src={category.image} alt={`${category.name} food delivery in Demo City`} loading="lazy" decoding="async" className="loaded" />
+                    <span className="cat-selected-badge" aria-hidden="true">
+                      <Icon name="solid:check" size={10} />
+                    </span>
+                  </span>
+                  <span className="cat-name">{category.name}</span>
+                </a>
+              ))}
+            </div>
+          </section>
 
-        <section className="store-section">
-          <div className="store-card">
-            <div className="store-head">
-              <div className="store-left">
-                <span className="store-icon">
-                  <Icon name="solid:store" size={14} />
-                </span>
-                <div>
-                  <div className="store-title-row">
-                    <h3 className="store-title">99 Store</h3>
-                    <span className="store-pro">PRO</span>
-                  </div>
-                  <p className="store-sub">Meals at ₹99 + Free Delivery</p>
-                </div>
+          <div className="filter-bar" id="filter-bar" role="group" aria-label="Restaurant filters">
+            <button
+              type="button"
+              className={`filter-pill filter-pill-sheet${filterSheetOpen ? ' active' : ''}`}
+              onClick={() => setFilterSheetOpen(true)}
+            >
+              <Icon name="solid:sliders" size={11} /> Filters
+            </button>
+            <button
+              type="button"
+              className={`filter-pill${nearFast ? ' active' : ''}`}
+              aria-pressed={nearFast}
+              onClick={() => setNearFast((value) => !value)}
+            >
+              <Icon name="solid:bolt-lightning" size={11} style={{ color: 'var(--ew-success,#23956D)' }} /> Near &amp; Fast
+            </button>
+            <button
+              type="button"
+              className={`filter-pill${rating4 ? ' active' : ''}`}
+              aria-pressed={rating4}
+              onClick={() => setRating4((value) => !value)}
+            >
+              Rating 4.0+
+            </button>
+            <button
+              type="button"
+              className={`filter-pill${under100 ? ' active' : ''}`}
+              aria-pressed={under100}
+              onClick={() => setUnder100((value) => !value)}
+            >
+              Items under ₹100
+            </button>
+            <button
+              type="button"
+              className={`filter-pill${under30 ? ' active' : ''}`}
+              aria-pressed={under30}
+              onClick={() => setUnder30((value) => !value)}
+            >
+              Under 30 min
+            </button>
+          </div>
+
+          <section className="section" id="restaurants-section">
+            <div className="sec-head">
+              <h2 className="sec-title" id="restaurants-title">
+                Restaurants near you
+              </h2>
+            </div>
+            {!ready ? (
+              <div id="restaurant-list">
+                <RestaurantSkeleton />
+                <RestaurantSkeleton />
               </div>
-              <button type="button" className="store-all tap" onClick={() => nav.push('/under99')}>
-                See All <Icon name="solid:arrow-right-long" size={10} />
-              </button>
-            </div>
+            ) : filteredRestaurants.length ? (
+              <div id="restaurant-list">
+                {filteredRestaurants.map((restaurant, index) => (
+                  <HomeRestaurantCard
+                    key={restaurant.id}
+                    restaurant={restaurant}
+                    index={index}
+                    cart={cart}
+                    onOpen={() => openRestaurant(restaurant)}
+                    onAdd={(menuItem) => addFromHome(restaurant, menuItem)}
+                    onIncrement={(menuItem) => addItem(menuItem, restaurant.id)}
+                    onDecrement={(menuItem) => decrementItem(menuItem.name)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="home-empty">
+                No restaurants match these filters. Try clearing a filter.
+              </div>
+            )}
+          </section>
 
-            <div className="store-rail">
-              {storeItems.map((entry) => (
-                <button
-                  key={entry.menu.id}
-                  type="button"
-                  className="store-item"
-                  onClick={() => nav.push('/under99')}
-                >
-                  <div className="store-img-wrap">
-                    <img className="store-img" src={entry.menu.image} alt={entry.menu.name} />
-                    <span className="store-price">{formatMoney(entry.price)}</span>
-                  </div>
-                  <div className="store-item-body">
-                    <div className="veg-label-row">
-                      <VegDot isVeg={entry.menu.isVeg} />
-                      <span className="veg-label">{entry.menu.isVeg ? 'Veg' : 'Non-Veg'}</span>
-                    </div>
-                    <p className="store-item-name">{entry.menu.name}</p>
-                    <p className="store-item-res">{entry.resName}</p>
-                    <div className="store-add">ADD +</div>
-                  </div>
-                </button>
-              ))}
-            </div>
+          <div className="ew-feed-end" id="home-feed-end" aria-label="End of restaurant list">
+            <h2 className="ew-feed-end__title">That&apos;s all we&apos;ve got!</h2>
+            <p className="ew-feed-end__sub">
+              A curated list of top-rated restaurants <span className="ew-feed-end__heart" aria-hidden="true" />
+            </p>
+            <p className="ew-feed-end__made">
+              Navereat <span className="ew-feed-end__sun" aria-hidden="true" />
+            </p>
           </div>
-        </section>
-
-        <section className="rest-section">
-          <h2 className="section-title">Restaurants to explore</h2>
-          {!ready ? (
-            <div className="res-list">
-              <div className="skeleton res-skeleton" />
-              <div className="skeleton res-skeleton" />
-              <div className="skeleton res-skeleton" />
-            </div>
-          ) : (
-            <div className="res-list">
-              {visibleRestaurants.map((restaurant) => (
-                <button
-                  key={restaurant.id}
-                  type="button"
-                  className="res-card"
-                  onClick={() => nav.push(`/restaurant/${restaurant.id}`)}
-                >
-                  <div className="res-img-wrap">
-                    <img className="res-img" src={restaurant.image} alt={restaurant.name} />
-                    <span className="res-offer">{restaurant.offer}</span>
-                  </div>
-                  <div className="res-body">
-                    <div className="res-top">
-                      <div>
-                        <h3 className="res-name">{restaurant.name}</h3>
-                        <p className="res-cuisine">{restaurant.cuisine}</p>
-                      </div>
-                      <span className="res-rating">
-                        <Icon name="solid:star" size={10} /> {restaurant.rating}
-                      </span>
-                    </div>
-                    <div className="res-meta">
-                      <span>
-                        <Icon name="regular:clock" size={12} className="accent" /> {restaurant.time}
-                      </span>
-                      <span className="sep">|</span>
-                      <span>
-                        <Icon name="solid:location-dot" size={12} className="accent" /> {restaurant.distance}
-                      </span>
-                    </div>
-                  </div>
-                </button>
-              ))}
-              {visibleRestaurants.length === 0 && (
-                <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--g400)', padding: '24px 0' }}>
-                  No pure-veg restaurants nearby. Turn off the VEG filter.
-                </p>
-              )}
-            </div>
-          )}
-        </section>
+        </main>
       </div>
 
-      <CartBar aboveNav />
       <BottomNav />
+
+      {filterSheetOpen && (
+        <div className="filter-sheet open" role="dialog" aria-modal="true" aria-label="Filters and sorting">
+          <div className="sheet-backdrop" onClick={() => setFilterSheetOpen(false)} />
+          <div className="sheet-panel">
+            <div className="sheet-grabber" />
+            <div className="sheet-head">
+              <h3 className="sheet-title">Filters &amp; sorting</h3>
+              <button type="button" className="sheet-clear" onClick={clearFilters}>
+                Clear all
+              </button>
+            </div>
+            <div className="filter-layout">
+              <nav className="filter-tabs" aria-label="Filter categories">
+                <button type="button" className="filter-tab active">
+                  <Icon name="solid:sliders" size={18} /> Quick
+                </button>
+                <button type="button" className="filter-tab">
+                  <Icon name="solid:star" size={18} /> Rating
+                </button>
+                <button type="button" className="filter-tab">
+                  <Icon name="regular:clock" size={18} /> Time
+                </button>
+              </nav>
+              <div className="filter-content">
+                <div className="home-filter-options">
+                  <button
+                    type="button"
+                    className={`sheet-option${nearFast ? ' selected' : ''}`}
+                    onClick={() => setNearFast((value) => !value)}
+                  >
+                    <Icon name="solid:bolt-lightning" size={17} /> Near &amp; Fast
+                  </button>
+                  <button
+                    type="button"
+                    className={`sheet-option${rating4 ? ' selected' : ''}`}
+                    onClick={() => setRating4((value) => !value)}
+                  >
+                    <Icon name="solid:star" size={17} /> Rating 4.0+
+                  </button>
+                  <button
+                    type="button"
+                    className={`sheet-option${under30 ? ' selected' : ''}`}
+                    onClick={() => setUnder30((value) => !value)}
+                  >
+                    <Icon name="regular:clock" size={17} /> Under 30 min
+                  </button>
+                  <button
+                    type="button"
+                    className={`sheet-option${vegOnly ? ' selected' : ''}`}
+                    onClick={() => setVegOnly((value) => !value)}
+                  >
+                    <Icon name="solid:leaf" size={17} /> Pure Veg
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="sheet-footer">
+              <button type="button" className="sheet-close-btn" onClick={() => setFilterSheetOpen(false)}>
+                Close
+              </button>
+              <button type="button" className="sheet-done" onClick={() => setFilterSheetOpen(false)}>
+                Show results
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

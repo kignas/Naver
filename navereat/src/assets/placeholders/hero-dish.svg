@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 460" role="img" aria-label="Food platter placeholder">
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <ellipse cx="322" cy="282" rx="206" ry="54" fill="#F6E7D4" opacity="0.9"/>
+    <ellipse cx="322" cy="270" rx="192" ry="44" fill="#FFF9F0"/>
+    <ellipse cx="322" cy="266" rx="160" ry="34" fill="#F3DDBF"/>
+    <path d="M206 246c22-44 60-70 108-70s88 26 110 70" fill="#EBCB8B" opacity="0.9"/>
+    <path d="M220 242c20-32 50-52 88-52s70 20 90 52" fill="#FFF4DE"/>
+    <circle cx="286" cy="228" r="15" fill="#D99A5B"/>
+    <circle cx="322" cy="218" r="13" fill="#C97B4A"/>
+    <circle cx="358" cy="230" r="16" fill="#E8B36B"/>
+    <path d="M270 204c10-14 26-20 42-16M336 196c12-6 26-2 34 8" stroke="#B98355" stroke-width="6"/>
+    <ellipse cx="176" cy="258" rx="54" ry="28" fill="#FFF7EA"/>
+    <ellipse cx="176" cy="252" rx="40" ry="19" fill="#F2C94C" opacity="0.75"/>
+    <ellipse cx="466" cy="252" rx="58" ry="30" fill="#FFF7EA"/>
+    <ellipse cx="466" cy="246" rx="43" ry="20" fill="#E7A7A0" opacity="0.8"/>
+    <path d="M148 300c30 16 74 24 126 24s98-8 128-24" stroke="#D8B98F" stroke-width="5"/>
+    <path d="M388 150c24-20 54-26 84-18" stroke="#EBCB8B" stroke-width="9"/>
+    <path d="M402 124c18-14 40-18 60-12" stroke="#EBCB8B" stroke-width="6" opacity="0.7"/>
+    <circle cx="446" cy="92" r="8" fill="#EBCB8B" opacity="0.8"/>
+    <circle cx="480" cy="112" r="5" fill="#EBCB8B" opacity="0.65"/>
+    <circle cx="414" cy="78" r="4" fill="#EBCB8B" opacity="0.55"/>
+  </g>
+</svg>

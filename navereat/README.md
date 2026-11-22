@@ -1,6 +1,6 @@
 # Navereat
 
-A fully static, demo-only Android app.
+A fully static, demo-only Android app rebuilt from the original Nearbite web UI.
 It uses React 18, Vite, TypeScript, React Router, Framer Motion, plain CSS, and
 Capacitor 6. There is no backend, no Firebase, no maps SDK, and no runtime
 network access — fonts, icons, images, and data are all bundled locally.
@@ -13,7 +13,7 @@ npm install
 npm run dev          # http://localhost:5173
 ```
 
-Login is a demo: enter any 10-digit phone number and any 4–6 digit OTP.
+Login is a demo: enter any 6–10 digit phone number and any 4–6 digit OTP.
 
 Quality gates:
 
@@ -53,6 +53,19 @@ Brand assets live in `assets/` and are regenerated with:
 npm run assets
 ```
 
+## Visual reference
+
+The original Eatswada frontend is kept outside this public repository as a
+read-only reference, for example `/workspace/reference/Nearbite-main/`. Run the
+screenshot comparison with:
+
+```bash
+ORIGINAL_DIR=/workspace/reference/Nearbite-main npm run visual
+```
+
+The script writes screenshots and diffs to `../verify/`; both `verify/` and
+`reference/` are gitignored, as are copies of the original HTML/JS/CSS files.
+
 ## GitHub Actions
 
 `.github/workflows/build-apk.yml` (repository root) runs on pushes to `main`
@@ -75,4 +88,5 @@ GitHub → **Releases** → open the latest `v1.0.*` release → download
 - App id `com.navereat.app`; app name **Navereat**.
 - The Android manifest requests no permissions, so the app cannot make network
   calls even by accident.
-- The app has no backend and makes no network requests.
+- Old pages and the old static site are kept only as a visual reference and are
+  not part of this app.

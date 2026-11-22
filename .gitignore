@@ -1,0 +1,18 @@
+# Local verification output and the read-only original frontend reference
+verify/
+reference/
+
+# Original Eatswada frontend copies must never be committed here.
+# The ported app lives under navereat/ and is not affected by these root patterns.
+/*.html
+/*.js
+/*.css
+/assets/
+/css/
+/js/
+
+# Tooling
+node_modules/
+dist/
+.DS_Store
+*.local

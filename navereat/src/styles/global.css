@@ -167,9 +167,9 @@ ol {
   flex-shrink: 0;
   height: calc(var(--nav-h) + var(--sab));
   padding-bottom: var(--sab);
-  background: #ffffff;
-  border-top: 1px solid #f0f0f0;
-  box-shadow: var(--sh-nav);
+  background: #fffdf8;
+  border-top: 1px solid rgba(93, 13, 24, 0.12);
+  box-shadow: 0 -6px 18px rgba(93, 13, 24, 0.07);
   display: flex;
   align-items: center;
   justify-content: space-around;
@@ -184,14 +184,27 @@ ol {
   gap: 3px;
   flex: 1;
   padding: 8px 0;
-  color: #9ca3af;
+  color: #9b8b84;
   transition: color 0.2s;
   background: none;
   border: 0;
+  position: relative;
 }
 
 .nav-item.active {
-  color: var(--brand);
+  color: var(--theme-burgundy);
+}
+
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 28px;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: var(--theme-gold);
+  transform: translateX(-50%);
 }
 
 .nav-item svg {

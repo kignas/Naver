@@ -5,6 +5,7 @@ import {
   coupons as demoCoupons,
   demoOrders,
   demoUser,
+  findRestaurant,
   type Coupon,
   type DemoUser,
   type MenuItem,
@@ -12,6 +13,14 @@ import {
   type OrderLine,
 } from '../data/demo';
 import { billFor, cartSubtotal, couponDiscount, type Cart } from '../lib/cart';
+
+const emitCartUpdated = (detail: Record<string, unknown>): void => {
+  try {
+    window.dispatchEvent(new CustomEvent('eatswada:cart-updated', { detail }));
+  } catch {
+    /* non-browser test environment */
+  }
+};
 
 export const STORAGE_KEYS = {
   token: 'nearbite_token',
@@ -93,17 +102,36 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   addItem: (item, resId) =>
     set((state) => {
-      const existing = state.cart[item.name];
+      const cart = Object.values(state.cart).some((line) => line.resId !== resId) ? {} : state.cart;
+      const existing = cart[item.name];
+      const restaurant = findRestaurant(resId);
       const line = existing
-        ? { ...existing, quantity: existing.quantity + 1 }
-        : { quantity: 1, price: item.price, resId };
-      return { cart: { ...state.cart, [item.name]: line } };
+        ? {
+            ...existing,
+            quantity: existing.quantity + 1,
+            isVeg: existing.isVeg ?? item.isVeg,
+            originalPrice: existing.originalPrice ?? item.originalPrice,
+            image: existing.image ?? item.image,
+            resName: existing.resName ?? restaurant?.name,
+          }
+        : {
+            quantity: 1,
+            price: item.price,
+            resId,
+            isVeg: item.isVeg,
+            originalPrice: item.originalPrice,
+            image: item.image,
+            resName: restaurant?.name,
+          };
+      emitCartUpdated({ source: 'addItem', itemName: item.name });
+      return { cart: { ...cart, [item.name]: line } };
     }),
 
   decrementItem: (name) =>
     set((state) => {
       const existing = state.cart[name];
       if (!existing) return state;
+      emitCartUpdated({ source: 'decrementItem', itemName: name });
       if (existing.quantity <= 1) {
         const next = { ...state.cart };
         delete next[name];
@@ -116,6 +144,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((state) => {
       const existing = state.cart[name];
       if (!existing) return state;
+      emitCartUpdated({ source: 'setQty', itemName: name });
       const next = { ...state.cart };
       if (qty <= 0) delete next[name];
       else next[name] = { ...existing, quantity: qty };
@@ -124,12 +153,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   removeItem: (name) =>
     set((state) => {
+      emitCartUpdated({ source: 'removeItem', itemName: name });
       const next = { ...state.cart };
       delete next[name];
       return { cart: next };
     }),
 
-  clearCart: () => set({ cart: {}, coupon: null }),
+  clearCart: () => {
+    emitCartUpdated({ source: 'clearCart', cleared: true });
+    set({ cart: {}, coupon: null });
+  },
 
   applyCoupon: (code) => {
     const normalized = code.trim().toUpperCase();
@@ -185,6 +218,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   selectRestaurant: (id) => set({ selectedRestaurantId: id }),
+
 }));
 
 export const currentBill = (): ReturnType<typeof billFor> =>

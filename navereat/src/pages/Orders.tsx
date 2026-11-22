@@ -1,13 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BottomNav } from '../components/BottomNav';
 import { Icon } from '../components/Icon';
 import { findRestaurant, type Order } from '../data/demo';
-import { cartCount, cartSubtotal } from '../lib/cart';
 import { formatMoney } from '../lib/money';
 import { useAppNav } from '../lib/navigation';
 import { useAppStore } from '../store/appStore';
 import { toast } from '../store/toastStore';
+import ordersBundleCss from '../styles/original/orders.bundle.css?raw';
+import ordersShellCss from '../styles/original/orders-shell.css?raw';
 import '../styles/pages/orders.css';
+
+const ACTIVE_STATUSES = new Set(['confirmed', 'preparing', 'picked_up', 'on_the_way']);
 
 const statusLabel = (order: Order): string => {
   switch (order.status) {
@@ -22,25 +25,194 @@ const statusLabel = (order: Order): string => {
     case 'delivered':
       return 'Delivered';
     case 'cancelled':
-      return 'Cancelled';
+      return 'Order cancelled';
     default:
       return order.status;
   }
 };
 
+const paymentShort = (order: Order): string =>
+  order.paymentMethod.toLowerCase().includes('cash') ? 'Cash on delivery' : 'Payment pending';
+
 const orderDate = (iso: string): string =>
-  new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  new Date(iso).toLocaleString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+const initial = (name: string): string => (name ? name.charAt(0).toUpperCase() : 'N');
+
+const navOverride = `
+.orders-page .bottom-nav{background:#fffdf8!important;height:calc(var(--nav-h) + var(--sab))!important;padding-bottom:var(--sab)!important;border-top:1px solid rgba(93,13,24,.12)!important;box-shadow:0 -6px 18px rgba(93,13,24,.07)!important}
+.orders-page .nav-item{color:#9b8b84!important}
+.orders-page .nav-item.active{color:var(--theme-burgundy)!important}
+.orders-page .nav-item.active::before{content:'';position:absolute;top:0;left:50%;width:28px;height:3px;border-radius:0 0 3px 3px;background:var(--theme-gold)}
+.orders-page .nav-item span{font-family:var(--font)!important}
+`;
+
+function PastCard({ order, onReorder }: { order: Order; onReorder: (order: Order) => void }) {
+  const nav = useAppNav();
+  const items = order.lines.slice(0, 3);
+  const rest = order.lines.length - items.length;
+  const active = ACTIVE_STATUSES.has(order.status);
+
+  return (
+    <article className="order-card ord-card" data-order-id={order.id}>
+      <div className="ord-card-head">
+        <div className="oc-logo" aria-hidden="true">
+          {initial(order.restaurantName)}
+        </div>
+        <div className="ord-title">
+          <h4 className="ord-name">{order.restaurantName}</h4>
+          <div className="ord-loc">Demo City</div>
+          <button
+            type="button"
+            className="ord-view-menu"
+            onClick={() => nav.push(`/restaurant/${order.restaurantId}`)}
+          >
+            View menu <Icon name="solid:chevron-right" size={11} />
+          </button>
+        </div>
+        <button
+          type="button"
+          className="ord-menu-btn tap"
+          aria-label="Order options"
+          onClick={() => toast('Order options are part of the demo')}
+        >
+          <Icon name="solid:ellipsis-vertical" size={16} />
+        </button>
+      </div>
+
+      <ul className="past-items">
+        {items.map((line) => (
+          <li key={line.name}>
+            <span className="ord-item-type unknown" role="img" aria-label="Food type not provided" />
+            <span className="q">{line.qty} ×</span>
+            <span className="n">{line.name}</span>
+          </li>
+        ))}
+        {rest > 0 && <li className="more">+ {rest} more item{rest > 1 ? 's' : ''}</li>}
+      </ul>
+
+      <button
+        type="button"
+        className="ord-meta"
+        onClick={() => nav.push(`/track/${order.id}`)}
+        aria-label="View order details"
+      >
+        <span className="ord-meta-left">
+          <span className="ord-when">Order placed on {orderDate(order.placedAt)}</span>
+          <span className={`ord-status ${order.status === 'delivered' ? 'delivered' : active ? '' : 'cancelled'}`}>
+            {statusLabel(order)} <small>· {paymentShort(order)}</small>
+          </span>
+        </span>
+        <span className="ord-total">
+          {formatMoney(order.total)} <Icon name="solid:chevron-right" size={11} />
+        </span>
+      </button>
+
+      <div className="ord-foot">
+        {order.status === 'delivered' && (
+          <button type="button" className="ghost-link tap" onClick={() => toast('Ratings are part of the demo')}>
+            <Icon name="solid:star" size={12} /> Rate
+          </button>
+        )}
+        <button type="button" className="ord-reorder tap" onClick={() => onReorder(order)}>
+          <Icon name="solid:rotate-left" size={13} /> Order again
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function LiveCard({ order }: { order: Order }) {
+  const nav = useAppNav();
+  const stage = order.status === 'confirmed' ? 1 : order.status === 'preparing' ? 2 : order.status === 'picked_up' ? 3 : 4;
+  const labels = ['Placed', 'Preparing', 'Partner', 'On the way'];
+  const itemSummary = `${order.lines[0]?.qty ?? 1} × ${order.lines[0]?.name ?? 'Item'}${
+    order.lines.length > 1 ? ` + ${order.lines.length - 1} more` : ''
+  }`;
+
+  return (
+    <div className="order-card track-card">
+      <div className="oc-head">
+        <div className="oc-logo" aria-hidden="true">
+          {initial(order.restaurantName)}
+        </div>
+        <div className="oc-title">
+          <h3 className="oc-name">{order.restaurantName}</h3>
+          <div className="oc-sub">
+            Order #{order.id} · {formatMoney(order.total)}
+          </div>
+        </div>
+      </div>
+
+      <button className="live-state" type="button" onClick={() => nav.push(`/track/${order.id}`)}>
+        <span className="live-state-ico">
+          <Icon name="solid:motorcycle" size={16} />
+        </span>
+        <span className="live-state-text">
+          <span className="live-state-title">{statusLabel(order)}</span>
+          <span className="live-state-detail">Arriving in {order.eta}</span>
+        </span>
+      </button>
+
+      <div className="mini-progress" aria-hidden="true">
+        {[1, 2, 3, 4].map((n) => (
+          <div className={`mini-seg${n <= stage ? ' on' : ''}`} key={n}>
+            <i />
+          </div>
+        ))}
+      </div>
+      <div className="mini-labels" aria-hidden="true">
+        {labels.map((label, index) => (
+          <span className={index < stage ? 'on' : ''} key={label}>
+            {label}
+          </span>
+        ))}
+      </div>
+
+      <div className="live-meta">
+        <div className="meta-row">
+          <Icon name="solid:bag-shopping" size={13} />
+          <span>{itemSummary}</span>
+        </div>
+        <div className="meta-row">
+          <Icon name="solid:location-dot" size={13} />
+          <span>{order.address}</span>
+        </div>
+      </div>
+
+      <div className="live-actions">
+        <button className="track-btn tap" type="button" onClick={() => nav.push(`/track/${order.id}`)}>
+          View live tracking <Icon name="solid:arrow-right" size={12} />
+        </button>
+        <button className="icon-btn tap" type="button" aria-label="Call delivery partner" onClick={() => toast('Calling the rider (demo)')}>
+          <Icon name="solid:phone" size={14} />
+        </button>
+        <button className="icon-btn tap" type="button" aria-label="Help with this order" onClick={() => toast('Help centre is not part of this demo')}>
+          <Icon name="solid:headset" size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function Orders() {
   const nav = useAppNav();
-  const cart = useAppStore((s) => s.cart);
   const orders = useAppStore((s) => s.orders);
   const addItem = useAppStore((s) => s.addItem);
   const [query, setQuery] = useState('');
 
-  const count = cartCount(cart);
-  const cartTotal = cartSubtotal(cart);
-  const cartRestaurant = findRestaurant(Object.values(cart)[0]?.resId);
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.dataset.navereatOrders = 'true';
+    style.textContent = `${ordersShellCss}\n${ordersBundleCss}\n${navOverride}`;
+    document.head.appendChild(style);
+    return () => style.remove();
+  }, []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -52,6 +224,9 @@ export function Orders() {
         order.lines.some((line) => line.name.toLowerCase().includes(q)),
     );
   }, [orders, query]);
+
+  const live = filtered.filter((order) => ACTIVE_STATUSES.has(order.status));
+  const past = filtered.filter((order) => !ACTIVE_STATUSES.has(order.status));
 
   const reorder = (order: Order) => {
     const restaurant = findRestaurant(order.restaurantId);
@@ -77,125 +252,80 @@ export function Orders() {
   return (
     <div className="page orders-page">
       <header className="orders-header">
-          <button type="button" className="orders-back tap" onClick={() => nav.tab('/')} aria-label="Back">
-            <Icon name="solid:arrow-left" size={14} />
-          </button>
-          <h1 className="orders-title">My Orders</h1>
-      </header>
-
-      <div className="page-scroll orders-scroll">
-        <div style={{ paddingTop: 20 }}>
-          <div className="orders-search">
-            <Icon name="solid:magnifying-glass" size={14} />
-            <input
-              type="text"
-              placeholder="Search your past orders..."
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              aria-label="Search past orders"
-            />
+        <div className="header-top">
+          <button className="header-back-btn tap" type="button" onClick={() => nav.tab('/')} aria-label="Go back" />
+          <div className="header-titles">
+            <h1>My Orders</h1>
           </div>
-
-          {count > 0 && (
-            <div>
-              <div className="orders-section-label">
-                <h2 className="orders-label">Current Order</h2>
-                <span className="orders-live-dot" />
-              </div>
-              <div className="bag-card">
-                <div className="bag-top">
-                  <div>
-                    <h3 className="bag-title">Items in your bag</h3>
-                    <p className="bag-sub">
-                      {cartRestaurant?.name ?? 'Your cart'} · {count} item{count === 1 ? '' : 's'} ·{' '}
-                      {formatMoney(cartTotal)}
-                    </p>
-                  </div>
-                  <div className="bag-icon">
-                    <Icon name="solid:bag-shopping" size={14} />
-                  </div>
-                </div>
-                <div className="bag-progress">
-                  <div className="bag-progress-fill" />
-                </div>
-                <div className="bag-steps">
-                  <span className="done">Added</span>
-                  <span className="todo">Confirmed</span>
-                  <span className="todo">Delivered</span>
-                </div>
-                <button type="button" className="bag-btn" onClick={() => nav.push('/cart')}>
-                  View Cart &amp; Checkout
-                </button>
-              </div>
-            </div>
-          )}
-
-          {orders.length === 0 && count === 0 ? (
-            <div className="orders-empty">
-              <div className="orders-empty-icon">
-                <Icon name="solid:bag-shopping" size={36} />
-              </div>
-              <h4>No orders yet</h4>
-              <p>
-                Your order history will appear here
-                <br />
-                after you place your first order
-              </p>
-              <button type="button" className="orders-empty-btn" onClick={() => nav.tab('/')}>
-                Explore Navereat
-              </button>
-            </div>
-          ) : (
-            <div>
-              <div className="orders-section-label">
-                <h2 className="orders-label" style={{ color: 'var(--g400)' }}>
-                  Past Orders
-                </h2>
-              </div>
-              {filtered.length === 0 ? (
-                <p style={{ textAlign: 'center', fontSize: 13, color: 'var(--g400)', padding: '32px 0' }}>
-                  No orders match &quot;{query}&quot;.
-                </p>
-              ) : (
-                filtered.map((order) => {
-                  const active = order.status !== 'delivered' && order.status !== 'cancelled';
-                  return (
-                    <div className="order-card" key={order.id}>
-                      <div className="order-top">
-                        <div>
-                          <h3 className="order-rest">{order.restaurantName}</h3>
-                          <p className="order-id">{order.id}</p>
-                        </div>
-                        <span className={`status-pill ${order.status === 'cancelled' ? 'cancelled' : active ? 'active' : 'delivered'}`}>
-                          {statusLabel(order)}
-                        </span>
-                      </div>
-                      <p className="order-items">
-                        {order.lines.map((line) => `${line.qty} × ${line.name}`).join(', ')}
-                      </p>
-                      <div className="order-bottom">
-                        <div>
-                          <p className="order-total">{formatMoney(order.total)}</p>
-                          <p className="order-date">{orderDate(order.placedAt)}</p>
-                        </div>
-                        {active ? (
-                          <button type="button" className="order-track tap" onClick={() => nav.push(`/track/${order.id}`)}>
-                            Track <Icon name="solid:chevron-right" size={9} />
-                          </button>
-                        ) : (
-                          <button type="button" className="order-track tap" onClick={() => reorder(order)}>
-                            Reorder <Icon name="solid:rotate-left" size={9} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+        </div>
+        <div className="header-stats">
+          <span>{orders.length} order{orders.length === 1 ? '' : 's'}</span>
+          {live.length > 0 && (
+            <span className="stat-live">
+              <span className="pulse-dot-sm" />
+              {live.length} live
+            </span>
           )}
         </div>
+        <div className={`search-bar${query ? ' has-value' : ''}`}>
+          <Icon name="solid:magnifying-glass" size={15} />
+          <input
+            type="search"
+            placeholder="Search by restaurant or dish"
+            autoComplete="off"
+            aria-label="Search orders"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          {query && (
+            <button className="search-clear tap" type="button" aria-label="Clear search" onClick={() => setQuery('')}>
+              <Icon name="solid:xmark" size={11} />
+            </button>
+          )}
+        </div>
+      </header>
+
+      <div className="orders-content">
+        {live.length > 0 && (
+          <>
+            <div className="section-title">
+              <div className="st-left">
+                Active orders <span className="pulse-dot-sm" />
+              </div>
+              <div className="st-count">{live.length} active</div>
+            </div>
+            {live.map((order) => (
+              <LiveCard order={order} key={order.id} />
+            ))}
+          </>
+        )}
+
+        {past.length > 0 && (
+          <>
+            <div className="section-title" style={{ marginTop: live.length ? 20 : 4 }}>
+              <div className="st-left">Past orders</div>
+              <div className="st-count">{past.length} total</div>
+            </div>
+            {past.map((order) => (
+              <PastCard order={order} onReorder={reorder} key={order.id} />
+            ))}
+          </>
+        )}
+
+        {filtered.length === 0 && (
+          <div className="empty-card">
+            <div className="empty-illustration">
+              <Icon name="solid:bag-shopping" size={56} />
+            </div>
+            <h4>{query ? 'No matching orders' : 'No orders found'}</h4>
+            <p>{query ? 'Try another restaurant or dish.' : "Looks like you haven't placed any orders yet."}</p>
+            <button className="explore-btn tap" type="button" onClick={() => nav.tab('/')}>
+              Explore restaurants
+            </button>
+          </div>
+        )}
       </div>
+
       <BottomNav />
     </div>
   );

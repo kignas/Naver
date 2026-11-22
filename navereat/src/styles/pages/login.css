@@ -1,56 +1,121 @@
-.login-page { background: #ffffff; }
-.login-scroll { padding-bottom: 32px; }
-.login-hero {
-  position: relative;
-  background: var(--hero-1);
-  border-bottom-left-radius: var(--r-hero);
-  border-bottom-right-radius: var(--r-hero);
-  overflow: hidden;
-  padding: 44px 24px 64px;
-  color: #fff;
+.login-page {
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100dvh;
+  padding-top: 0;
+  padding-bottom: 0;
+  background: var(--login-yellow, #ffd92f);
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
 }
-.login-gradient { position: absolute; inset: 0; background: linear-gradient(135deg, #8b0000 0%, #c0392b 50%, #e74c3c 100%); }
-.login-blob { position: absolute; border-radius: 50%; background: rgba(255,255,255,0.06); animation: blobPulse 6s ease-in-out infinite; }
-.login-hero-inner { position: relative; z-index: 2; }
-.login-logo {
-  width: 64px; height: 64px; border-radius: 20px; background: #fff; color: var(--brand);
-  font-size: 36px; font-weight: 900; display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.18); letter-spacing: -0.04em;
+
+.login-page .login-hero {
+  flex: 0 0 auto;
 }
-.login-brand { font-size: 30px; font-weight: 900; letter-spacing: -0.03em; margin-top: 18px; }
-.login-tag { font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.75); margin-top: 4px; }
-.login-card {
-  position: relative; z-index: 5; margin: -44px 16px 0; background: #fff;
-  border-radius: var(--r-5xl); border: 1px solid var(--line-soft);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.08); padding: 24px 20px;
+
+.login-page .bottom-sheet {
+  flex: 1 0 auto;
 }
-.login-title { font-size: 20px; font-weight: 900; color: var(--g900); }
-.login-sub { font-size: 12px; font-weight: 500; color: var(--g400); margin-top: 4px; margin-bottom: 20px; }
-.field-label { display: block; font-size: 10px; font-weight: 900; color: var(--g500); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
-.phone-field {
-  display: flex; align-items: center; gap: 10px; height: 54px; padding: 0 14px;
-  border: 1.5px solid var(--g200); border-radius: var(--r-xl); background: #fff;
-  transition: border-color 0.2s, box-shadow 0.2s;
+
+.login-page .btn-primary {
+  width: 100%;
+  margin-top: 14px;
+  font-size: 15px;
+  font-weight: 800;
 }
-.phone-field:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(252,128,25,0.12); }
-.phone-prefix { font-size: 14px; font-weight: 800; color: var(--g700); padding-right: 10px; border-right: 1px solid var(--g200); }
-.phone-input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-size: 15px; font-weight: 600; color: var(--g900); letter-spacing: 0.02em; }
-.otp-input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-size: 24px; font-weight: 900; letter-spacing: 0.55em; text-align: center; color: var(--g900); padding-left: 0.55em; }
-.login-btn {
-  width: 100%; margin-top: 16px; padding: 16px; border-radius: var(--r-xl); background: var(--brand);
-  color: #fff; font-size: 15px; font-weight: 900; display: flex; align-items: center; justify-content: center;
-  gap: 8px; box-shadow: var(--sh-orange); transition: transform 0.1s;
+
+.login-page .phone-box {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 54px !important;
+  flex: 0 0 54px !important;
+  min-height: 54px !important;
+  padding: 0 14px;
+  border: 1.5px solid rgba(143, 13, 42, 0.25);
+  border-radius: 15px;
+  background: #fffdf7;
 }
-.login-btn:active { transform: scale(0.98); }
-.login-btn:disabled { opacity: 0.55; }
-.login-demo { margin-top: 14px; font-size: 10.5px; font-weight: 500; color: var(--g400); text-align: center; line-height: 1.6; }
-.login-demo b { color: var(--brand-600); font-weight: 800; }
-.login-terms { margin-top: 18px; font-size: 9.5px; color: var(--g400); text-align: center; line-height: 1.7; }
-.login-terms b { color: var(--g600); font-weight: 700; }
-.login-back { width: 36px; height: 36px; border-radius: 50%; background: var(--g100); display: flex; align-items: center; justify-content: center; color: var(--g700); margin-bottom: 16px; }
-.login-change { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--g500); margin-bottom: 18px; }
-.otp-hint { font-size: 12px; color: var(--g500); margin-top: 12px; }
-.resend { color: var(--brand); font-weight: 800; }
-.spinner { width: 18px; height: 18px; border: 2.5px solid rgba(255,255,255,0.35); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-.login-footer { margin: 22px 24px 0; text-align: center; font-size: 10px; font-weight: 600; color: var(--g300); }
+
+.login-page .phone-box:focus-within {
+  border-color: var(--login-burgundy, #8f0d2a);
+  box-shadow: 0 0 0 3px rgba(143, 13, 42, 0.1);
+}
+
+.login-page .phone-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--login-ink, #3a1015);
+  font: 700 15px var(--font);
+}
+
+.login-page .phone-input::placeholder {
+  color: #aeb4bc;
+  font-weight: 500;
+}
+
+.login-page .auth-label {
+  display: block;
+  margin: 0 0 7px;
+  color: #633942;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.login-page .otp-grid {
+  grid-template-columns: repeat(6, 1fr);
+  max-width: 360px;
+  margin: 0 auto 16px;
+  gap: 8px;
+}
+
+.login-page .otp-box {
+  height: 54px;
+  min-width: 0;
+  border-radius: 12px;
+  font-size: 20px;
+}
+
+.login-page .verify-otp-btn {
+  width: 100%;
+}
+
+.login-page .resend-row {
+  margin-top: 13px;
+  text-align: center;
+}
+
+.login-page .legal-text {
+  margin-top: 18px;
+}
+
+.login-page .brand-mark {
+  display: none;
+}
+
+body.login-redesign .page-motion {
+  width: 100%;
+  min-height: 100dvh;
+}
+
+.login-page {
+  width: 100%;
+  position: relative !important;
+}
+
+body.login-redesign {
+  display: block !important;
+}
+
+body.login-redesign .app-viewport {
+  width: 100vw !important;
+  left: 0 !important;
+  right: 0 !important;
+}

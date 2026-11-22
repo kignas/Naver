@@ -1,0 +1,219 @@
+/* ============================================================================
+   EATSWADA — ORDER SHEET  (window.EWOrderSuccess)
+   ONE bottom sheet (centred card on wide screens) for both stages:
+     1. Processing  — paper plane flying, "Processing…"
+     2. Speed-up    — order confirmed: plane pulls back, then launches away
+     3. Placed      — GREEN wipes up the whole sheet, then badge pops, rings + confetti burst,
+                      same sheet, same size
+   The sheet never closes between stages; only what is inside it changes.
+   This file is the ONLY copy of these styles: js/order-success-sheet.js injects
+   it, so it is not part of any css bundle (a second copy in a bundle fights the
+   injected one). Change it here and in the JS string together.
+   ============================================================================ */
+.ew-os{
+  --os-green:#17B24F; --os-green-deep:#0B8238; --os-ink:#16191E;
+  --os-ease:cubic-bezier(.22,1,.36,1);
+  position:fixed; top:0; right:0; bottom:0; left:0; width:100%; margin:0; padding:0; box-sizing:border-box; z-index:100000;
+  display:flex; align-items:flex-end; justify-content:center;
+  font-family:'Manrope',system-ui,-apple-system,'Segoe UI',sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.ew-os[hidden]{ display:none; }
+.ew-os, .ew-os *{ -webkit-backdrop-filter:none !important; backdrop-filter:none !important; }
+.ew-os__scrim{ position:absolute; inset:0; background:rgba(16,24,40,.45); opacity:0; transition:opacity .35s ease; }
+
+/* ONE size for every stage: fixed min-height + fixed-height content slots. */
+.ew-os__sheet{
+  position:relative; box-sizing:border-box; width:100%; max-width:none; margin:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  min-height:min(46vh,380px);
+  padding:34px 24px calc(28px + env(safe-area-inset-bottom));
+  background:#fff; border-radius:32px 32px 0 0; text-align:center; box-shadow:none;
+  transform:translateY(105%); transition:transform .55s var(--os-ease); isolation:isolate;
+}
+.ew-os__sheet:focus{ outline:none; }
+.ew-os.is-open .ew-os__scrim{ opacity:1; }
+.ew-os.is-open .ew-os__sheet{ transform:none; }
+.ew-os.is-leaving .ew-os__scrim{ opacity:0; }
+.ew-os.is-leaving .ew-os__sheet{ transform:translateY(105%); transition-duration:.28s; transition-timing-function:ease-in; }
+.ew-os__grab{ position:absolute; top:10px; left:50%; width:38px; height:4px; margin-left:-19px; border-radius:99px; background:#E1E3E8; }
+@media (max-width:559.98px){
+  /* the white "fill" under the sheet means the spring overshoot never shows a gap */
+  .ew-os__sheet{ box-shadow:0 -12px 40px -16px rgba(16,24,40,.28), 0 56px 0 0 #fff; }
+  .ew-os.is-open:not(.is-leaving) .ew-os__sheet{ transition:transform .46s cubic-bezier(.34,1.32,.5,1); }
+}
+@media (min-width:560px){
+  .ew-os{ align-items:center; }
+  .ew-os__sheet{ width:min(100%,440px); border-radius:32px; transform:translateY(24px) scale(.97); opacity:0; transition:transform .5s var(--os-ease),opacity .3s ease; }
+  .ew-os.is-open .ew-os__sheet{ transform:none; opacity:1; }
+  .ew-os.is-leaving .ew-os__sheet{ transform:translateY(12px) scale(.98); opacity:0; }
+  .ew-os__grab{ display:none; }
+}
+
+/* ------------------------------------------------------------------ hero -- */
+.ew-os__hero{ position:relative; width:240px; height:184px; margin:4px auto 12px; display:grid; place-items:center; }
+
+/* Stage 1 — processing: paper plane, a soft shadow under it gives it weight */
+.ew-os__flyer{ position:absolute; inset:0; display:grid; place-items:center; }
+.ew-os__shadow{ position:absolute; left:50%; bottom:8px; width:116px; height:16px; margin-left:-58px; border-radius:50%;
+  background:radial-gradient(closest-side,rgba(10,40,22,.30),rgba(10,40,22,0));
+  animation:osShadow 1.7s ease-in-out infinite alternate; }
+@keyframes osShadow{ 0%{ transform:scale(1.08); opacity:.95; } 100%{ transform:scale(.76); opacity:.5; } }
+.ew-os__craft{ position:relative; display:block; }
+.ew-os__float{ display:block; animation:osFloat 1.7s ease-in-out infinite alternate; will-change:transform; }
+.ew-os__plane{ width:156px; height:auto; display:block; overflow:visible; }
+@keyframes osFloat{
+  0%  { transform:translate(-6px,7px) rotate(-3deg); }
+  100%{ transform:translate(6px,-8px) rotate(2deg); }
+}
+.ew-os__lines path{ animation:osStream 1.05s linear infinite; }
+.ew-os__lines path:nth-child(2){ animation-delay:-.35s; }
+.ew-os__lines path:nth-child(3){ animation-delay:-.7s; }
+@keyframes osStream{
+  0%  { transform:translate(16px,-8px); opacity:0; }
+  22% { opacity:1; }
+  70% { opacity:1; }
+  100%{ transform:translate(-30px,16px); opacity:0; }
+}
+.ew-os__title--proc::after{ content:'\2026'; clip-path:inset(0 100% 0 0); animation:osDotsClip 1.2s steps(4,end) infinite; }
+@keyframes osDotsClip{ to{ clip-path:inset(0 -2% 0 0); } }
+
+/* Stage 2 — speed-up: plane pulls back (anticipation), then launches up and away */
+.ew-os--speed .ew-os__float{ animation:osFloatFast .12s ease-in-out infinite alternate; }
+@keyframes osFloatFast{
+  0%  { transform:translate(-1.5px,1.5px) rotate(-1.5deg); }
+  100%{ transform:translate(1.5px,-1.5px) rotate(1.5deg); }
+}
+.ew-os--speed .ew-os__lines path{ animation:osStreamFast .26s linear infinite; }
+.ew-os--speed .ew-os__lines path:nth-child(2){ animation-delay:-.09s; }
+.ew-os--speed .ew-os__lines path:nth-child(3){ animation-delay:-.18s; }
+@keyframes osStreamFast{
+  0%  { transform:translate(22px,-11px); opacity:0; }
+  25% { opacity:1; }
+  100%{ transform:translate(-64px,33px); opacity:0; }
+}
+.ew-os--speed .ew-os__craft{ animation:osLaunch .64s linear forwards; }
+@keyframes osLaunch{
+  0%  { transform:none; opacity:1; animation-timing-function:cubic-bezier(.3,0,.35,1); }
+  26% { transform:translate(-16px,9px) rotate(-6deg) scale(1.07); opacity:1; animation-timing-function:cubic-bezier(.55,0,.95,.5); }
+  84% { transform:translate(262px,-140px) rotate(1deg) scale(.66); opacity:1; }
+  100%{ transform:translate(320px,-170px) rotate(2deg) scale(.5); opacity:0; }
+}
+.ew-os--speed .ew-os__shadow{ animation:osShadowOut .3s ease-in forwards; }
+@keyframes osShadowOut{ to{ transform:scale(.4); opacity:0; } }
+.ew-os--speed .ew-os__title--proc::after{ animation-duration:.45s; }
+.ew-os--speed .ew-os__title,.ew-os--speed .ew-os__msg{ animation:osTextOut .22s ease .18s forwards; }
+@keyframes osTextOut{ to{ opacity:0; transform:translateY(-6px); } }
+
+/* Stage 3 — order placed: badge pops with weight, rings and confetti burst once */
+.ew-os--done .ew-os__flyer{ display:none; }
+/* --wd = when the green starts wiping up; --od = when the badge/text start (green is mostly in by then) */
+.ew-os--done{ --wd:0s; --od:.3s; }
+.ew-os--direct{ --wd:.3s; --od:.6s; }   /* opened straight on "placed": wait for the slide-up first */
+
+/* Green layer: lives inside the sheet, wipes up from the bottom with a curved leading edge.
+   On phones it reaches 56px below the sheet so it also covers the white spring fill. */
+.ew-os__wash{ position:absolute; top:0; right:0; bottom:-56px; left:0; z-index:-1; overflow:hidden; border-radius:inherit; pointer-events:none; }
+.ew-os__wash-fill{ position:absolute; top:0; right:0; bottom:0; left:0; background:var(--os-green); transform:translate3d(0,calc(100% + 30px),0); will-change:transform; }
+.ew-os__wash-fill::before{ content:''; position:absolute; left:-12%; right:-12%; top:-28px; height:56px; background:var(--os-green); border-radius:50% 50% 0 0 / 100% 100% 0 0; }
+.ew-os--done .ew-os__wash-fill{ animation:osWash .62s cubic-bezier(.65,0,.15,1) var(--wd,0s) forwards; }
+@keyframes osWash{ to{ transform:none; } }
+@media (min-width:560px){ .ew-os__wash{ bottom:0; } }
+
+/* White-on-green look for the "placed" stage */
+.ew-os--done .ew-os__grab{ background:rgba(255,255,255,.5); }
+.ew-os--done .ew-os__title{ color:#fff; }
+.ew-os--done .ew-os__msg{ color:rgba(255,255,255,.9); }
+.ew-os--done .ew-os__badge{ width:120px; height:120px; }
+.ew-os--done .ew-os__bbody{ fill:#fff; }
+.ew-os--done .ew-os__bshadow{ fill:var(--os-green-deep); }
+.ew-os--done .ew-os__check{ stroke:var(--os-green); }
+.ew-os--done .ew-os__btn{ background:#fff; color:var(--os-green-deep); }
+.ew-os--done .ew-os__btn:focus-visible{ outline-color:#fff; }
+
+.ew-os__pulse{ position:absolute; left:50%; top:50%; width:160px; height:160px; margin:-80px 0 0 -80px; border-radius:50%;
+  background:radial-gradient(circle,rgba(255,255,255,.30),rgba(255,255,255,0) 68%); opacity:0; transform:scale(.6); }
+.ew-os--done .ew-os__pulse{ animation:osGlowIn .5s ease calc(var(--od,0s) + .1s) forwards, osGlow 2.8s ease-in-out calc(var(--od,0s) + .7s) infinite; }
+@keyframes osGlowIn{ to{ opacity:1; transform:scale(1); } }
+@keyframes osGlow{ 0%,100%{ transform:scale(.94); opacity:.8; } 50%{ transform:scale(1.1); opacity:1; } }
+
+.ew-os__ring{ position:absolute; left:50%; top:50%; width:92px; height:92px; margin:-46px 0 0 -46px; box-sizing:border-box;
+  border-radius:50%; border:3px solid rgba(255,255,255,.7); opacity:0; }
+.ew-os--done .ew-os__ring{ animation:osRing .85s cubic-bezier(.15,.7,.3,1) calc(var(--od,0s) + .14s) forwards; }
+.ew-os--done .ew-os__ring--2{ border-width:2px; animation-delay:calc(var(--od,0s) + .3s); }
+@keyframes osRing{ 0%{ transform:scale(.7); opacity:.9; } 100%{ transform:scale(2.5); opacity:0; } }
+
+.ew-os__confetti{ position:absolute; left:50%; top:50%; width:0; height:0; }
+.ew-os__confetti i{ position:absolute; left:0; top:0; width:var(--w,7px); height:var(--h,7px);
+  margin:calc(var(--h,7px)/-2) 0 0 calc(var(--w,7px)/-2); border-radius:var(--br,50%); background:var(--c); opacity:0; }
+.ew-os--done .ew-os__confetti i{ animation:osConf 1.5s linear calc(var(--od,0s) + .16s + var(--d,0s)) forwards; }
+@keyframes osConf{
+  0%  { transform:translate(0,0) rotate(0deg) scale(.3); opacity:1; animation-timing-function:cubic-bezier(.1,.75,.25,1); }
+  52% { transform:translate(var(--dx),var(--dy)) rotate(var(--r)) scale(1); opacity:1; animation-timing-function:cubic-bezier(.5,0,.9,.6); }
+  100%{ transform:translate(calc(var(--dx)*1.1),calc(var(--dy) + 40px)) rotate(calc(var(--r)*1.7)) scale(.85); opacity:0; }
+}
+
+.ew-os__badge{ position:relative; z-index:1; width:104px; height:104px; display:block; overflow:visible; transform:scale(.2) rotate(-28deg); opacity:0; }
+.ew-os--done .ew-os__badge{ animation:osBadgePop .78s linear calc(var(--od,0s) + .02s) forwards,
+  osBadgeShow .1s linear calc(var(--od,0s) + .02s) forwards,
+  osBob 3s ease-in-out calc(var(--od,0s) + 1s) infinite; }
+@keyframes osBadgePop{
+  0%  { transform:scale(.2) rotate(-28deg); animation-timing-function:cubic-bezier(.15,.9,.3,1); }
+  55% { transform:scale(1.16) rotate(5deg); animation-timing-function:ease-in-out; }
+  78% { transform:scale(.95) rotate(-1.5deg); animation-timing-function:ease-in-out; }
+  100%{ transform:scale(1) rotate(0deg); }
+}
+@keyframes osBadgeShow{ from{ opacity:0; } to{ opacity:1; } }
+@keyframes osBob{ 0%,100%{ translate:0 0; } 50%{ translate:0 -3px; } }
+.ew-os__bshadow{ transform:translate(0,0); }
+.ew-os--done .ew-os__bshadow{ animation:osBShadow .4s cubic-bezier(.2,.9,.3,1.3) calc(var(--od,0s) + .3s) forwards; }
+@keyframes osBShadow{ to{ transform:translate(-4.5px,4.5px); } }
+.ew-os__check{ stroke-dasharray:60; stroke-dashoffset:60; }
+.ew-os--done .ew-os__check{ animation:osDraw .42s cubic-bezier(.5,.1,.3,1) calc(var(--od,0s) + .36s) forwards; }
+@keyframes osDraw{ to{ stroke-dashoffset:0; } }
+.ew-os__checkg{ transform-box:fill-box; transform-origin:center; }
+.ew-os--done .ew-os__checkg{ animation:osCheckPop .4s ease calc(var(--od,0s) + .66s) both; }
+@keyframes osCheckPop{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.18); } }
+
+/* ------------------------------------------------------------------ text -- */
+.ew-os__title{ margin:0; color:var(--os-ink); font-size:23px; line-height:1.25; font-weight:800; letter-spacing:-.4px; }
+.ew-os__msg{ margin:8px auto 0; max-width:30ch; min-height:44px; color:#7A818C; font-size:15px; line-height:1.45; font-weight:500; }
+.ew-os__actions{ margin-top:22px; width:100%; }
+.ew-os--proc .ew-os__actions{ visibility:hidden; }          /* keeps the slot, so both stages are the same height */
+.ew-os--done .ew-os__title,.ew-os--done .ew-os__msg,.ew-os--done .ew-os__actions{ opacity:0; transform:translateY(10px); }
+.ew-os--done .ew-os__title  { animation:osUp .5s var(--os-ease) calc(var(--od,0s) + .40s) forwards; }
+.ew-os--done .ew-os__msg    { animation:osUp .5s var(--os-ease) calc(var(--od,0s) + .48s) forwards; }
+.ew-os--done .ew-os__actions{ animation:osBtn .55s var(--os-ease) calc(var(--od,0s) + .68s) forwards; }
+@keyframes osUp{ to{ opacity:1; transform:none; } }
+@keyframes osBtn{
+  0%  { opacity:0; transform:translateY(10px) scale(.88); }
+  60% { opacity:1; transform:translateY(-2px) scale(1.04); }
+  100%{ opacity:1; transform:none; }
+}
+
+.ew-os__btn{
+  width:auto; min-width:180px; min-height:50px; padding:0 30px; border:0; border-radius:999px; cursor:pointer;
+  background:#111; color:#fff; font:700 15.5px/1 'Manrope',system-ui,sans-serif; letter-spacing:-.1px;
+  transition:transform .16s var(--os-ease),filter .16s ease;
+}
+.ew-os__btn:hover{ filter:brightness(1.05); }
+.ew-os__btn:active{ transform:scale(.97); }
+.ew-os__btn:focus-visible{ outline:3px solid var(--hd-primary,#E9546B); outline-offset:2px; }
+@media (max-width:360px){ .ew-os__title{ font-size:21px; } }
+
+@media (prefers-reduced-motion:reduce){
+  .ew-os *,.ew-os{ transition-duration:.01ms !important; }
+  .ew-os__float,.ew-os__lines path,.ew-os__shadow,.ew-os__title--proc::after{ animation:none; }
+  .ew-os__title--proc::after{ clip-path:none; }
+  .ew-os--speed .ew-os__craft{ animation:none; opacity:0; }
+  .ew-os--speed .ew-os__shadow{ opacity:0; }
+  .ew-os--speed .ew-os__title,.ew-os--speed .ew-os__msg{ animation:none; }
+  .ew-os--done .ew-os__title,.ew-os--done .ew-os__msg,.ew-os--done .ew-os__actions{ animation-duration:.01ms; animation-delay:0s; }
+  .ew-os--done .ew-os__badge{ animation:osBadgeShow .01ms forwards !important; transform:none; }
+  .ew-os--done .ew-os__bshadow{ animation:none; transform:translate(-4.5px,4.5px); }
+  .ew-os--done .ew-os__check{ animation:osDraw .01ms forwards !important; }
+  .ew-os--done .ew-os__checkg{ animation:none; }
+  .ew-os--done .ew-os__wash-fill{ animation:osWash .01ms forwards; animation-delay:0s; }
+  .ew-os__pulse,.ew-os__ring,.ew-os__confetti{ display:none; }
+}
+
