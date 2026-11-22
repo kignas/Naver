@@ -407,13 +407,6 @@ body {
   outline-offset: 2px;
 }
 
-/* ---------- Filter sheet stays inside the app viewport ---------- */
-.home-screen .filter-sheet {
-  position: absolute;
-  inset: 0;
-  z-index: 900;
-}
-
 .home-filter-options {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -490,36 +490,6 @@ ol {
   color: #fca5a5;
 }
 
-/* ---------- Sheet ---------- */
-.sheet-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  z-index: 1500;
-}
-
-.sheet {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  max-width: var(--maxw);
-  margin: 0 auto;
-  background: #fff;
-  border-radius: 24px 24px 0 0;
-  padding: 20px 20px calc(20px + var(--sab));
-  z-index: 1600;
-  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.18);
-}
-
-.sheet-grabber {
-  width: 44px;
-  height: 5px;
-  border-radius: 99px;
-  background: var(--g200);
-  margin: 0 auto 16px;
-}
-
 /* ---------- Generic helpers ---------- */
 .row {
   display: flex;

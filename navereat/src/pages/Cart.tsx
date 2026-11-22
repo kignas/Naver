@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '../components/Icon';
+import { Sheet, type SheetHandle } from '../components/Sheet';
 import { coupons, DEMO_ADDRESS, findRestaurant, type Coupon } from '../data/demo';
 import { billFor, cartRestaurantId, type CartLine } from '../lib/cart';
 import { formatMoney } from '../lib/money';
@@ -62,35 +63,6 @@ function VegMark({ value }: { value?: boolean }) {
   );
 }
 
-function Sheet({
-  title,
-  onClose,
-  children,
-  footer,
-}: {
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-  footer?: React.ReactNode;
-}) {
-  return (
-    <div className="ct-sheet-root is-open" role="presentation">
-      <div className="ct-scrim" onClick={onClose} />
-      <div className="ct-sheet" role="dialog" aria-modal="true" aria-label={title}>
-        <div className="ct-sheet-grab" aria-hidden="true" />
-        <div className="ct-sheet-head">
-          <h2 className="ct-sheet-title">{title}</h2>
-          <button aria-label="Close" className="ct-sheet-x" type="button" onClick={onClose}>
-            <Icon name="solid:xmark" size={16} />
-          </button>
-        </div>
-        <div className="ct-sheet-body">{children}</div>
-        {footer && <div className="ct-sheet-foot">{footer}</div>}
-      </div>
-    </div>
-  );
-}
-
 export function Cart() {
   const nav = useAppNav();
   const cart = useAppStore((s) => s.cart);
@@ -102,6 +74,8 @@ export function Cart() {
   const placeOrder = useAppStore((s) => s.placeOrder);
 
   const [sheet, setSheet] = useState<SheetName>(null);
+  const sheetRef = useRef<SheetHandle>(null);
+  const closeSheet = () => sheetRef.current?.close();
   const [code, setCode] = useState('');
   const [note, setNote] = useState('');
   const [payment, setPayment] = useState<Payment>('upi');
@@ -159,7 +133,7 @@ export function Cart() {
     toast(result.message, result.ok ? 'success' : 'error');
     if (result.ok) {
       setCode('');
-      setSheet(null);
+      closeSheet();
     }
   };
 
@@ -169,7 +143,7 @@ export function Cart() {
       toast('Your cart is empty', 'error');
       return;
     }
-    setSheet(null);
+    closeSheet();
     toast(`Order ${order.id} placed`, 'success');
     nav.push('/success');
   };
@@ -481,10 +455,15 @@ export function Cart() {
 
       {sheet === 'coupon' && (
         <Sheet
+          ref={sheetRef}
+          id="ct-coupon-sheet"
           title="Apply coupon"
           onClose={() => setSheet(null)}
+          floatingClose
+          hideHeader
+          footerClassName="is-single"
           footer={
-            <button className="ct-btn ct-btn-ghost" type="button" onClick={() => setSheet(null)}>
+            <button className="ct-btn ct-btn-ghost" type="button" onClick={closeSheet}>
               Close
             </button>
           }
@@ -521,7 +500,7 @@ export function Cart() {
             value={code}
             onChange={(event) => setCode(event.target.value.toUpperCase())}
           />
-          <button className="ct-btn ct-btn-primary" type="button" onClick={() => handleApply(code)}>
+          <button className="ct-btn ct-btn-primary" id="coupon-apply" type="button" onClick={() => handleApply(code)}>
             Apply coupon
           </button>
           <div className="navereat-coupon-list">
@@ -548,7 +527,7 @@ export function Cart() {
       )}
 
       {sheet === 'bill' && (
-        <Sheet title="Bill summary" onClose={() => setSheet(null)}>
+        <Sheet ref={sheetRef} title="Bill summary" onClose={() => setSheet(null)}>
           <div className="ct-bill">
             <div className="ct-bill-rows">
               <div className="ct-bill-row">
@@ -588,7 +567,7 @@ export function Cart() {
       )}
 
       {sheet === 'pay' && (
-        <Sheet title="Select payment method" onClose={() => setSheet(null)}>
+        <Sheet ref={sheetRef} title="Select payment method" onClose={() => setSheet(null)}>
           <div className="ct-pay-opts" role="radiogroup" aria-label="Payment method">
             {[
               { id: 'upi' as const, title: 'UPI / Online Payment', sub: 'GPay, PhonePe, Paytm and more', icon: 'solid:wallet' as const },
@@ -621,18 +600,19 @@ export function Cart() {
 
       {sheet === 'note' && (
         <Sheet
+          ref={sheetRef}
           title="Add a note for the restaurant"
           onClose={() => setSheet(null)}
           footer={
             <>
-              <button className="ct-btn ct-btn-ghost" type="button" onClick={() => setSheet(null)}>
+              <button className="ct-btn ct-btn-ghost" type="button" onClick={closeSheet}>
                 Cancel
               </button>
               <button
                 className="ct-btn ct-btn-primary"
                 type="button"
                 onClick={() => {
-                  setSheet(null);
+                  closeSheet();
                   toast(note ? 'Cooking request saved' : 'Cooking request removed');
                 }}
               >

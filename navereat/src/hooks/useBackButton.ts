@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { useNavStore } from '../store/navStore';
+import { closeTopSheet } from '../lib/sheetStack';
 
 const atRoot = (): boolean => {
   const hash = window.location.hash.replace(/^#/, '') || '/';
@@ -19,6 +20,7 @@ export function useBackButton(): void {
     let remove: (() => void) | undefined;
     if (Capacitor.isNativePlatform()) {
       void CapApp.addListener('backButton', () => {
+        if (closeTopSheet()) return;
         if (atRoot()) {
           void CapApp.exitApp();
           return;

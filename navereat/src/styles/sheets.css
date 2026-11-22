@@ -1,0 +1,54 @@
+/* Shared bottom-sheet controller styles. The look and motion live in the
+   original ew-sheet.css / ew-sheet-motion.css / filter-sheet.css files. */
+body.nb-sheet-open,
+body.ct-sheet-open,
+body.filter-sheet-open {
+  overflow: hidden;
+}
+
+.sheet-drag-handle,
+.filter-sheet .sheet-grabber,
+.filter-sheet .sheet-head,
+.ct-sheet-grab,
+.ct-sheet-head {
+  touch-action: none;
+}
+
+.filter-tab .icon {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+}
+
+.filter-tab .icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.filter-tab i,
+.sheet-option i,
+.sort-option i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The app loads every page bundle globally; keep the shared shell anchored
+   to the viewport regardless of page-specific sheet rules. */
+.filter-sheet.nb-sheet {
+  position: fixed !important;
+  inset: 0 !important;
+  max-height: none !important;
+  height: auto !important;
+  transform: none !important;
+  overflow: visible !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  z-index: 100001 !important;
+}
+
+.ct-sheet-root.nb-sheet {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 1200 !important;
+}

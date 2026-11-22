@@ -428,6 +428,47 @@ async function main(): Promise<void> {
   console.log('App boxes:', (await boxes(app)).join(' | '));
   await app.screenshot({ path: path.join(verifyRoot, 'navereat/home.png') });
 
+  await original.click('#filter-sheet-btn');
+  await original.waitForSelector('#filter-sheet.open', { timeout: 5000 });
+  await app.getByRole('button', { name: 'Filters' }).click();
+  await app.waitForSelector('.filter-sheet.open', { timeout: 5000 });
+  await original.waitForTimeout(550);
+  await app.waitForTimeout(550);
+  await writePairDiff('home-filter', original, app, 844);
+  await original.click('#filter-sheet .sheet-done');
+  await app.locator('.filter-sheet .sheet-done').click();
+  await original.waitForTimeout(300);
+  await app.waitForTimeout(300);
+
+  const originalCart = await context.newPage();
+  await originalCart.route(originalApiRoute, mockApi);
+  await originalCart.goto(`http://127.0.0.1:${originalPort}/cart.html`, { waitUntil: 'domcontentloaded' });
+  await originalCart.waitForSelector('#coupon-card', { timeout: 20000 });
+  await originalCart.evaluate(() => document.querySelector('#ct-location-modal')?.remove());
+  const appCart = await context.newPage();
+  await appCart.goto(`http://127.0.0.1:${appPort}/#/cart`, { waitUntil: 'networkidle' });
+  await appCart.waitForSelector('#coupon-card', { timeout: 20000 });
+  await originalCart.click('#coupon-card');
+  await appCart.click('#coupon-card');
+  await originalCart.waitForSelector('#ct-coupon-sheet.is-open', { timeout: 5000 });
+  await appCart.waitForSelector('.ct-sheet-root.is-open', { timeout: 5000 });
+  await originalCart.waitForTimeout(550);
+  await appCart.waitForTimeout(550);
+  await writePairDiff('cart-coupon', originalCart, appCart, 844);
+  await originalCart.locator('#ct-coupon-sheet .ct-cook-x').click();
+  await appCart.locator('#ct-coupon-sheet .ct-cook-x').click();
+  await originalCart.waitForTimeout(350);
+  await appCart.waitForTimeout(350);
+  await originalCart.getByText('Cooking requests', { exact: true }).first().click();
+  await appCart.getByText('Cooking requests', { exact: true }).first().click();
+  await originalCart.waitForSelector('#ct-note-sheet.is-open', { timeout: 5000 });
+  await appCart.waitForSelector('.ct-sheet-root.is-open', { timeout: 5000 });
+  await originalCart.waitForTimeout(550);
+  await appCart.waitForTimeout(550);
+  await writePairDiff('cart-note', originalCart, appCart, 844);
+  await originalCart.close();
+  await appCart.close();
+
   await original.click('#wc-close-btn');
   await app.click('#wc-close-btn');
   await original.waitForTimeout(200);

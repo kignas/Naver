@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import heroDish from '../assets/placeholders/hero-dish.svg';
 import { BottomNav } from '../components/BottomNav';
 import { HomeRestaurantCard } from '../components/HomeRestaurantCard';
 import { Icon } from '../components/Icon';
+import type { IconName } from '../components/icons';
+import { Sheet, type SheetHandle } from '../components/Sheet';
 import {
   categories,
   DEMO_ADDRESS_LINE,
@@ -23,6 +25,18 @@ import '../styles/original/home-base.css';
 import '../styles/original/home.bundle.css';
 import '../styles/original/home-final.css';
 import '../styles/pages/home.css';
+
+type FilterTab = 'SORT' | 'DELIVERY TIME' | 'RATING' | 'PRICE' | 'OFFERS' | 'FOOD TYPE';
+type SortKey = 'recommended' | 'rating' | 'delivery' | 'distance';
+
+const FILTER_TABS: Array<{ id: FilterTab; label: string; icon: IconName }> = [
+  { id: 'SORT', label: 'Sort By', icon: 'solid:sliders' },
+  { id: 'RATING', label: 'Rating', icon: 'solid:star' },
+  { id: 'PRICE', label: 'Price', icon: 'solid:indian-rupee-sign' },
+  { id: 'DELIVERY TIME', label: 'Time', icon: 'regular:clock' },
+  { id: 'OFFERS', label: 'Offers', icon: 'solid:tag' },
+  { id: 'FOOD TYPE', label: 'Food Type', icon: 'solid:leaf' },
+];
 
 const SEARCH_DISHES = [
   'Chowmein',
@@ -99,6 +113,10 @@ export function Home() {
   const [under30, setUnder30] = useState(false);
   const [under100, setUnder100] = useState(false);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const filterSheetRef = useRef<SheetHandle>(null);
+  const closeFilterSheet = () => filterSheetRef.current?.close();
+  const [activeFilterTab, setActiveFilterTab] = useState<FilterTab>('SORT');
+  const [sortBy, setSortBy] = useState<SortKey>('recommended');
   const [dishIndex, setDishIndex] = useState(0);
 
   const initial = (user?.name ?? demoUser.name).charAt(0).toUpperCase();
@@ -120,18 +138,20 @@ export function Home() {
     };
   }, []);
 
-  const filteredRestaurants = useMemo(
-    () =>
-      restaurants.filter((restaurant) => {
-        if (vegOnly && !(restaurant.pureVeg ?? restaurant.menu.every((item) => item.isVeg))) return false;
-        if (nearFast && (restaurant.deliveryMax ?? 999) > 30) return false;
-        if (rating4 && Number(restaurant.rating) < 4) return false;
-        if (under100 && !restaurant.menu.some((item) => item.price < 100)) return false;
-        if (under30 && (restaurant.deliveryMax ?? 999) > 30) return false;
-        return true;
-      }),
-    [vegOnly, nearFast, rating4, under30, under100],
-  );
+  const filteredRestaurants = useMemo(() => {
+    const list = restaurants.filter((restaurant) => {
+      if (vegOnly && !(restaurant.pureVeg ?? restaurant.menu.every((item) => item.isVeg))) return false;
+      if (nearFast && (restaurant.deliveryMax ?? 999) > 30) return false;
+      if (rating4 && Number(restaurant.rating) < 4) return false;
+      if (under100 && !restaurant.menu.some((item) => item.price < 100)) return false;
+      if (under30 && (restaurant.deliveryMax ?? 999) > 30) return false;
+      return true;
+    });
+    if (sortBy === 'rating') list.sort((a, b) => Number(b.rating) - Number(a.rating));
+    if (sortBy === 'delivery') list.sort((a, b) => (a.deliveryMax ?? 999) - (b.deliveryMax ?? 999));
+    if (sortBy === 'distance') list.sort((a, b) => (a.distanceKm ?? 999) - (b.distanceKm ?? 999));
+    return list;
+  }, [vegOnly, nearFast, rating4, under30, under100, sortBy]);
 
   const openRestaurant = (restaurant: Restaurant) => {
     selectRestaurant(restaurant.id);
@@ -149,6 +169,7 @@ export function Home() {
   };
 
   const clearFilters = () => {
+    setSortBy('recommended');
     setNearFast(false);
     setRating4(false);
     setUnder30(false);
@@ -415,71 +436,121 @@ export function Home() {
       <BottomNav />
 
       {filterSheetOpen && (
-        <div className="filter-sheet open" role="dialog" aria-modal="true" aria-label="Filters and sorting">
-          <div className="sheet-backdrop" onClick={() => setFilterSheetOpen(false)} />
-          <div className="sheet-panel">
-            <div className="sheet-grabber" />
-            <div className="sheet-head">
-              <h3 className="sheet-title">Filters &amp; sorting</h3>
-              <button type="button" className="sheet-clear" onClick={clearFilters}>
-                Clear all
-              </button>
-            </div>
-            <div className="filter-layout">
-              <nav className="filter-tabs" aria-label="Filter categories">
-                <button type="button" className="filter-tab active">
-                  <Icon name="solid:sliders" size={18} /> Quick
-                </button>
-                <button type="button" className="filter-tab">
-                  <Icon name="solid:star" size={18} /> Rating
-                </button>
-                <button type="button" className="filter-tab">
-                  <Icon name="regular:clock" size={18} /> Time
-                </button>
-              </nav>
-              <div className="filter-content">
-                <div className="home-filter-options">
-                  <button
-                    type="button"
-                    className={`sheet-option${nearFast ? ' selected' : ''}`}
-                    onClick={() => setNearFast((value) => !value)}
-                  >
-                    <Icon name="solid:bolt-lightning" size={17} /> Near &amp; Fast
-                  </button>
-                  <button
-                    type="button"
-                    className={`sheet-option${rating4 ? ' selected' : ''}`}
-                    onClick={() => setRating4((value) => !value)}
-                  >
-                    <Icon name="solid:star" size={17} /> Rating 4.0+
-                  </button>
-                  <button
-                    type="button"
-                    className={`sheet-option${under30 ? ' selected' : ''}`}
-                    onClick={() => setUnder30((value) => !value)}
-                  >
-                    <Icon name="regular:clock" size={17} /> Under 30 min
-                  </button>
-                  <button
-                    type="button"
-                    className={`sheet-option${vegOnly ? ' selected' : ''}`}
-                    onClick={() => setVegOnly((value) => !value)}
-                  >
-                    <Icon name="solid:leaf" size={17} /> Pure Veg
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="sheet-footer">
-              <button type="button" className="sheet-close-btn" onClick={() => setFilterSheetOpen(false)}>
+        <Sheet
+          ref={filterSheetRef}
+          variant="filter"
+          title="Filters & sorting"
+          onClose={() => setFilterSheetOpen(false)}
+          ariaLabel="Filters and sorting"
+          headerAction={
+            <button type="button" className="sheet-clear" onClick={clearFilters}>
+              Clear all
+            </button>
+          }
+          tabs={FILTER_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={`filter-tab${activeFilterTab === tab.id ? ' active' : ''}`}
+              onClick={() => setActiveFilterTab(tab.id)}
+            >
+              <i className="filter-tab-icon" aria-hidden="true">
+                <Icon name={tab.icon} size={18} />
+              </i>
+              <span>{tab.label}</span>
+            </button>
+          ))}
+          footer={
+            <>
+              <button type="button" className="sheet-close-btn" onClick={closeFilterSheet}>
                 Close
               </button>
-              <button type="button" className="sheet-done" onClick={() => setFilterSheetOpen(false)}>
+              <button type="button" className="sheet-done" onClick={closeFilterSheet}>
                 Show results
               </button>
-            </div>
-          </div>
-        </div>
+            </>
+          }
+        >
+          {activeFilterTab === 'SORT' ? (
+            <section className="filter-section">
+              <h4 className="filter-section-title">Sort by</h4>
+              <div className="sort-list">
+                {[
+                  { id: 'recommended' as const, label: 'Relevance' },
+                  { id: 'rating' as const, label: 'Rating: High to Low' },
+                  { id: 'delivery' as const, label: 'Delivery Time: Fast to Slow' },
+                  { id: 'distance' as const, label: 'Distance: Near to Far' },
+                ].map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={`sort-option${sortBy === option.id ? ' selected' : ''}`}
+                    onClick={() => setSortBy(option.id)}
+                  >
+                    <span>{option.label}</span>
+                    <i className="check-icon" aria-hidden="true">
+                      <Icon name="solid:check" size={12} />
+                    </i>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : (
+            <section className="filter-section">
+              <h4 className="filter-section-title">
+                {activeFilterTab === 'DELIVERY TIME'
+                  ? 'Time'
+                  : activeFilterTab === 'FOOD TYPE'
+                    ? 'Food type'
+                    : activeFilterTab.charAt(0) + activeFilterTab.slice(1).toLowerCase()}
+              </h4>
+              <div className="filter-grid">
+                {activeFilterTab === 'DELIVERY TIME' && (
+                  <>
+                    <button type="button" className={`sheet-option${nearFast ? ' selected' : ''}`} onClick={() => setNearFast((value) => !value)}>
+                      <i className="option-icon" aria-hidden="true"><Icon name="solid:bolt-lightning" size={17} /></i>
+                      <span>Near &amp; Fast</span>
+                      <i className="check-icon" aria-hidden="true"><Icon name="solid:check" size={11} /></i>
+                    </button>
+                    <button type="button" className={`sheet-option${under30 ? ' selected' : ''}`} onClick={() => setUnder30((value) => !value)}>
+                      <i className="option-icon" aria-hidden="true"><Icon name="regular:clock" size={17} /></i>
+                      <span>Under 30 min</span>
+                      <i className="check-icon" aria-hidden="true"><Icon name="solid:check" size={11} /></i>
+                    </button>
+                  </>
+                )}
+                {activeFilterTab === 'RATING' && (
+                  <button type="button" className={`sheet-option${rating4 ? ' selected' : ''}`} onClick={() => setRating4((value) => !value)}>
+                    <i className="option-icon" aria-hidden="true"><Icon name="solid:star" size={17} /></i>
+                    <span>Rating 4.0+</span>
+                    <i className="check-icon" aria-hidden="true"><Icon name="solid:check" size={11} /></i>
+                  </button>
+                )}
+                {activeFilterTab === 'PRICE' && (
+                  <button type="button" className={`sheet-option${under100 ? ' selected' : ''}`} onClick={() => setUnder100((value) => !value)}>
+                    <i className="option-icon" aria-hidden="true"><Icon name="solid:indian-rupee-sign" size={17} /></i>
+                    <span>Items under ₹100</span>
+                    <i className="check-icon" aria-hidden="true"><Icon name="solid:check" size={11} /></i>
+                  </button>
+                )}
+                {activeFilterTab === 'OFFERS' && (
+                  <button type="button" className="sheet-option">
+                    <i className="option-icon" aria-hidden="true"><Icon name="solid:tag" size={17} /></i>
+                    <span>Offers</span>
+                    <i className="check-icon" aria-hidden="true"><Icon name="solid:check" size={11} /></i>
+                  </button>
+                )}
+                {activeFilterTab === 'FOOD TYPE' && (
+                  <button type="button" className={`sheet-option${vegOnly ? ' selected' : ''}`} onClick={() => setVegOnly((value) => !value)}>
+                    <i className="option-icon" aria-hidden="true"><Icon name="solid:leaf" size={17} /></i>
+                    <span>Pure Veg</span>
+                    <i className="check-icon" aria-hidden="true"><Icon name="solid:check" size={11} /></i>
+                  </button>
+                )}
+              </div>
+            </section>
+          )}
+        </Sheet>
       )}
     </div>
   );

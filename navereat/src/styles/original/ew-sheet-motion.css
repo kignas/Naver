@@ -1,0 +1,77 @@
+/* ==========================================================
+   ew-sheet-motion.css - ONE entrance/exit motion for every
+   Eatswada bottom sheet. Load LAST in a bundle.
+
+   Motion only: no sizes, colours, layout or behaviour change.
+   - Open : slides up from the bottom, overshoots slightly,
+            settles (same spring the dish-details sheet uses).
+   - Close: quick ease-in slide down, no bounce.
+   - Dim background fades in at the same moment.
+   - Only transform + opacity animate (GPU-friendly on low-end Android).
+   - The small "fill" box-shadow below each sheet is the sheet's own
+     colour, so the overshoot never shows a gap under it.
+   ========================================================== */
+:root {
+  --ews-spring: cubic-bezier(.34, 1.32, .5, 1);   /* peaks ~3% past the end, then settles */
+  --ews-spring-t: .46s;
+  --ews-out: cubic-bezier(.4, 0, 1, 1);
+  --ews-out-t: .24s;
+  --ews-fade-in: .3s;
+  --ews-fade-out: .2s;
+  --ews-fill: 0 56px 0 0;                         /* + colour, appended to each sheet's shadow */
+}
+
+/* ---- Customise sheet (.ewcs-*) ---- */
+.ewcs-backdrop { transition: opacity var(--ews-fade-out) ease-in; }
+.ewcs-backdrop.show { transition: opacity var(--ews-fade-in) ease-out; }
+.ewcs-sheet {
+  box-shadow: 0 -10px 40px rgba(16, 20, 28, .22), var(--ews-fill) #fff;
+  transition: transform var(--ews-out-t) var(--ews-out), visibility 0s linear var(--ews-out-t);
+}
+.ewcs-sheet.show {
+  will-change: transform;
+  transition: transform var(--ews-spring-t) var(--ews-spring), visibility 0s linear 0s;
+}
+
+/* ---- Filter sheet ---- */
+.filter-sheet-backdrop { transition: opacity var(--ews-fade-out) ease-in, visibility var(--ews-fade-out) linear; }
+.filter-sheet-backdrop.open { transition: opacity var(--ews-fade-in) ease-out, visibility 0s linear; }
+.filter-sheet {
+  box-shadow: var(--ews-shadow, 0 -10px 35px rgba(16, 24, 40, .16)), var(--ews-fill) #F7F8FA;
+  transition: transform var(--ews-out-t) var(--ews-out);
+}
+.filter-sheet-backdrop.open .filter-sheet {
+  will-change: transform;
+  transition: transform var(--ews-spring-t) var(--ews-spring);
+}
+
+/* ---- Dish details (.ds-*) - already springs; only the gap fill is added ---- */
+.ds-sheet { box-shadow: 0 -10px 40px rgba(23, 27, 36, .22), var(--ews-fill) #fff; }
+
+/* ---- Cart sheets (note / coupon / cutlery ...) ---- */
+.ct-scrim { transition: opacity var(--ews-fade-out) ease-in; }
+.ct-sheet-root.is-open .ct-scrim { transition: opacity var(--ews-fade-in) ease-out; }
+.ct-sheet {
+  box-shadow: 0 -14px 40px rgba(16, 20, 24, .22), var(--ews-fill) var(--ct-surface, #fff);
+  transition: transform var(--ews-out-t) var(--ews-out);
+}
+.ct-sheet-root.is-open .ct-sheet {
+  will-change: transform;
+  transition: transform var(--ews-spring-t) var(--ews-spring);
+}
+
+/* ---- Order-success sheet (phones; the centred card on wide screens is untouched) ---- */
+@media (max-width: 559.98px) {
+  .ew-os__sheet { box-shadow: 0 -12px 40px -16px rgba(16, 24, 40, .28), var(--ews-fill) #fff; }
+  .ew-os.is-open:not(.is-leaving) .ew-os__sheet {
+    will-change: transform;
+    transition: transform var(--ews-spring-t) var(--ews-spring);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ewcs-backdrop, .ewcs-backdrop.show, .ewcs-sheet, .ewcs-sheet.show,
+  .filter-sheet-backdrop, .filter-sheet-backdrop.open, .filter-sheet, .filter-sheet-backdrop.open .filter-sheet,
+  .ct-scrim, .ct-sheet-root.is-open .ct-scrim, .ct-sheet, .ct-sheet-root.is-open .ct-sheet,
+  .ew-os.is-open:not(.is-leaving) .ew-os__sheet { transition: none !important; }
+}

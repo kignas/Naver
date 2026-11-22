@@ -9,6 +9,10 @@ import '@fontsource/caveat/700.css';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles/global.css';
+import './styles/original/ew-sheet-motion.css';
+import './styles/original/ew-sheet.css';
+import './styles/original/filter-sheet.css';
+import './styles/sheets.css';
 
 // StrictMode double-mounts in dev, which prevents AnimatePresence from cleaning
 // up exited routes (pages stack up). The app is verified without it.
