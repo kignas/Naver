@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" role="img" aria-label="Mumbai Dosa Plaza">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eafbf0"/><stop offset="1" stop-color="#d2f5e0"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="400" rx="32" fill="url(#g)"/>
+  <circle cx="491.99999999999994" cy="64" r="88" fill="#ffffff" opacity="0.35"/>
+  <circle cx="72" cy="360" r="64" fill="#ffffff" opacity="0.3"/>
+  <g transform="translate(300 176) scale(2.1052631578947367)" color="#15803d">undefined</g>
+  <text x="300" y="340" text-anchor="middle" font-family="Poppins, Arial, sans-serif" font-size="54" font-weight="800" fill="#15803d" opacity="0.9">MD</text>
+</svg>

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Navereat</string>
+    <string name="title_activity_main">Navereat</string>
+    <string name="package_name">com.navereat.app</string>
+    <string name="custom_url_scheme">com.navereat.app</string>
+</resources>

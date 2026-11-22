@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220" role="img" aria-label="Pizzas">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fdebf1"/><stop offset="1" stop-color="#fad2e2"/>
+    </linearGradient>
+  </defs>
+  <rect width="220" height="220" rx="110" fill="url(#g)"/>
+  <circle cx="180.39999999999998" cy="35.2" r="48.4" fill="#ffffff" opacity="0.35"/>
+  <circle cx="26.4" cy="198" r="35.2" fill="#ffffff" opacity="0.3"/>
+  <g transform="translate(110 96.8) scale(1.1578947368421053)" color="#be185d"><path d="M0-52 52 40c-32 14-72 14-104 0z" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round"/><circle cx="-14" cy="10" r="8" fill="currentColor"/><circle cx="16" cy="6" r="8" fill="currentColor"/><circle cx="0" cy="34" r="7" fill="currentColor"/></g>
+  <text x="110" y="187" text-anchor="middle" font-family="Poppins, Arial, sans-serif" font-size="17" font-weight="800" fill="#be185d" opacity="0.9">Pizzas</text>
+</svg>

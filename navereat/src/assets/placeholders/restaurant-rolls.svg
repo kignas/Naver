@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" role="img" aria-label="Rolls Mania">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff0f0"/><stop offset="1" stop-color="#ffdada"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="400" rx="32" fill="url(#g)"/>
+  <circle cx="491.99999999999994" cy="64" r="88" fill="#ffffff" opacity="0.35"/>
+  <circle cx="72" cy="360" r="64" fill="#ffffff" opacity="0.3"/>
+  <g transform="translate(300 176) scale(2.1052631578947367)" color="#b91c1c"><rect x="-30" y="-46" width="60" height="92" rx="30" fill="none" stroke="currentColor" stroke-width="7"/><path d="M-18-30c12 8 24 8 36 0M-18-10c12 8 24 8 36 0M-18 10c12 8 24 8 36 0" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/></g>
+  <text x="300" y="340" text-anchor="middle" font-family="Poppins, Arial, sans-serif" font-size="54" font-weight="800" fill="#b91c1c" opacity="0.9">RM</text>
+</svg>

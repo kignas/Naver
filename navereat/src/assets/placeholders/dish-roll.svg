@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-label="Roll">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#eaf4ff"/><stop offset="1" stop-color="#d3e8ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="320" rx="36" fill="url(#g)"/>
+  <circle cx="262.4" cy="51.2" r="70.4" fill="#ffffff" opacity="0.35"/>
+  <circle cx="38.4" cy="288" r="51.2" fill="#ffffff" opacity="0.3"/>
+  <g transform="translate(160 140.8) scale(1.6842105263157894)" color="#1d4ed8"><rect x="-30" y="-46" width="60" height="92" rx="30" fill="none" stroke="currentColor" stroke-width="7"/><path d="M-18-30c12 8 24 8 36 0M-18-10c12 8 24 8 36 0M-18 10c12 8 24 8 36 0" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/></g>
+  <text x="160" y="272" text-anchor="middle" font-family="Poppins, Arial, sans-serif" font-size="24" font-weight="800" fill="#1d4ed8" opacity="0.9">Roll</text>
+</svg>

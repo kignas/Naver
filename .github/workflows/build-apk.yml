@@ -1,0 +1,113 @@
+name: Build Navereat APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'navereat/**'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    working-directory: navereat
+
+jobs:
+  build:
+    name: Assemble debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: navereat/package-lock.json
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform and build tools
+        run: |
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('navereat/android/**/*.gradle*', 'navereat/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: Assemble debug APK
+        working-directory: navereat/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk Navereat.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Navereat-debug-apk
+          path: navereat/Navereat.apk
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Navereat v1.0.${{ github.run_number }}
+          files: navereat/Navereat.apk
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+
+      # ------------------------------------------------------------------
+      # OPTIONAL: signed release build.
+      # Add these repository secrets, then uncomment this step:
+      #   KEYSTORE_BASE64  - base64 of your .keystore file
+      #   KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
+      # Also add a signingConfig to android/app/build.gradle first.
+      # ------------------------------------------------------------------
+      # - name: Build signed release APK
+      #   working-directory: navereat/android
+      #   env:
+      #     KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      #     KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      #     KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      #     KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      #   run: |
+      #     echo "$KEYSTORE_BASE64" | base64 -d > app/navereat-release.keystore
+      #     ./gradlew assembleRelease \
+      #       -Pandroid.injected.signing.store.file="$PWD/app/navereat-release.keystore" \
+      #       -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
+      #       -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+      #       -Pandroid.injected.signing.key.password="$KEY_PASSWORD"

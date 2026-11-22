@@ -1,0 +1,107 @@
+/* ============================================================
+   Navereat — design tokens
+   Extracted from the original Nearbite stylesheets (values kept
+   byte-for-byte where the original used Tailwind/hex values).
+   ============================================================ */
+:root {
+  /* Brand */
+  --brand: #fc8019;
+  --brand-600: #ea580c;
+  --brand-400: #fb923c;
+  --brand-300: #fdba74;
+  --brand-200: #fed7aa;
+  --brand-100: #ffedd5;
+  --brand-50: #fff7ed;
+
+  /* Semantic */
+  --green: #16a34a;
+  --green-700: #15803d;
+  --green-50: #f0fdf4;
+  --red: #dc2626;
+  --red-500: #ef4444;
+  --red-50: #fef2f2;
+  --pink: #ff2d78;
+  --yellow: #ffc107;
+  --yellow-400: #facc15;
+  --purple-500: #a855f7;
+  --purple-50: #faf5ff;
+
+  /* Hero gradient (home / profile / login) */
+  --hero-1: #8b0000;
+  --hero-2: #c0392b;
+  --hero-3: #e74c3c;
+
+  /* Cart bar */
+  --cart-1: #00813d;
+  --cart-2: #00a34d;
+
+  /* ₹99 Store */
+  --navy: #002b5b;
+  --blue: #2563eb;
+  --blue-500: #3b82f6;
+  --blue-400: #60a5fa;
+  --blue-200: #bfdbfe;
+  --blue-100: #dbeafe;
+  --blue-50: #eff6ff;
+
+  /* Grays (Tailwind palette used by the original) */
+  --ink: #1a1a1a;
+  --g900: #111827;
+  --g800: #1f2937;
+  --g700: #374151;
+  --g600: #4b5563;
+  --g500: #6b7280;
+  --g400: #9ca3af;
+  --g300: #d1d5db;
+  --g200: #e5e7eb;
+  --g100: #f3f4f6;
+  --g50: #f9fafb;
+
+  /* Surfaces */
+  --page: #ffffff;
+  --page-alt: #f8f8f8;
+  --page-alt2: #f8f9fa;
+  --card: #ffffff;
+  --line: #f0f0f0;
+  --line-soft: #f3f4f6;
+
+  /* Typography */
+  --font: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* Radii */
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-2xl: 18px;
+  --r-3xl: 20px;
+  --r-4xl: 22px;
+  --r-5xl: 24px;
+  --r-6xl: 28px;
+  --r-7xl: 32px;
+  --r-hero: 36px;
+  --r-full: 9999px;
+
+  /* Shadows */
+  --sh-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --sh-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.03);
+  --sh-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --sh-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --sh-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  --sh-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  --sh-cart: 0 8px 32px rgba(0, 129, 61, 0.35);
+  --sh-orange: 0 4px 6px -1px rgba(252, 128, 25, 0.2), 0 2px 4px -2px rgba(252, 128, 25, 0.2);
+  --sh-nav: 0 -2px 12px rgba(0, 0, 0, 0.06);
+
+  /* Layout */
+  --nav-h: 64px;
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --maxw: 480px;
+
+  /* Motion */
+  --ease-toing: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --dur-push: 300ms;
+  --dur-tab: 200ms;
+}
