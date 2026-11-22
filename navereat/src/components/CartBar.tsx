@@ -3,6 +3,7 @@ import { findRestaurant } from '../data/demo';
 import { cartCount, cartSubtotal, type Cart } from '../lib/cart';
 import { useAppNav } from '../lib/navigation';
 import { useAppStore } from '../store/appStore';
+import { registerSheet } from '../lib/sheetStack';
 import { Icon } from './Icon';
 import '../styles/original/cart-bar.css';
 import '../styles/original/cart-bar-overrides.css';
@@ -89,6 +90,11 @@ function CartDrawer({
   onCheckout: () => void;
 }) {
   const [shown, setShown] = useState(false);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) {
@@ -97,6 +103,20 @@ function CartDrawer({
     }
     const frame = window.requestAnimationFrame(() => setShown(true));
     return () => window.cancelAnimationFrame(frame);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => onCloseRef.current();
+    const unregister = registerSheet(close);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      unregister();
+      document.removeEventListener('keydown', onKeyDown);
+    };
   }, [open]);
 
   useBodyLock(shown);
