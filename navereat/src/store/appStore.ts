@@ -3,6 +3,7 @@ import {
   DEMO_ADDRESS,
   PLATFORM_FEE,
   coupons as demoCoupons,
+  demoOffersFor,
   demoOrders,
   demoUser,
   findRestaurant,
@@ -12,7 +13,7 @@ import {
   type Order,
   type OrderLine,
 } from '../data/demo';
-import { billFor, cartSubtotal, couponDiscount, type Cart } from '../lib/cart';
+import { billFor, cartSubtotal, couponDiscount, offerDiscountFor, type Cart } from '../lib/cart';
 
 const emitCartUpdated = (detail: Record<string, unknown>): void => {
   try {
@@ -69,7 +70,7 @@ interface AppState {
   clearCart: () => void;
   applyCoupon: (code: string) => ApplyCouponResult;
   removeCoupon: () => void;
-  placeOrder: (paymentMethod: string) => Order | null;
+  placeOrder: (paymentMethod: string, options?: { keepCart?: boolean; tip?: number }) => Order | null;
   selectRestaurant: (id: number | null) => void;
 }
 
@@ -161,6 +162,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   clearCart: () => {
     emitCartUpdated({ source: 'clearCart', cleared: true });
+    try {
+      localStorage.removeItem('nearbite_cart_extras');
+    } catch {
+      /* storage may be unavailable */
+    }
     set({ cart: {}, coupon: null });
   },
 
@@ -178,7 +184,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   removeCoupon: () => set({ coupon: null }),
 
-  placeOrder: (paymentMethod) => {
+  placeOrder: (paymentMethod, options) => {
     const { cart, coupon } = get();
     const lines: OrderLine[] = Object.entries(cart).map(([name, line]) => ({
       name,
@@ -187,7 +193,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
     if (lines.length === 0) return null;
     const subtotal = cartSubtotal(cart);
-    const discount = couponDiscount(coupon, subtotal);
+    const couponOff = couponDiscount(coupon, subtotal);
+    const offerOff = offerDiscountFor(demoOffersFor(subtotal));
+    const tip = Math.max(0, Math.round(options?.tip ?? 0));
+    const discount = couponOff + offerOff;
     const firstLine = Object.values(cart)[0];
     const restaurantId = firstLine?.resId ?? 0;
     const restaurantName =
@@ -201,17 +210,23 @@ export const useAppStore = create<AppState>((set, get) => ({
       subtotal,
       platformFee: PLATFORM_FEE,
       discount,
-      total: Math.max(0, subtotal + PLATFORM_FEE - discount),
+      total: Math.max(0, subtotal + PLATFORM_FEE - discount + tip),
       status: 'confirmed',
       placedAt: new Date().toISOString(),
       eta: '30 mins',
       paymentMethod,
       address: DEMO_ADDRESS,
     };
+    if (!options?.keepCart) {
+      try {
+        localStorage.removeItem('nearbite_cart_extras');
+      } catch {
+        /* storage may be unavailable */
+      }
+    }
     set((state) => ({
       orders: [order, ...state.orders],
-      cart: {},
-      coupon: null,
+      ...(options?.keepCart ? {} : { cart: {}, coupon: null }),
       lastOrderId: order.id,
     }));
     return order;

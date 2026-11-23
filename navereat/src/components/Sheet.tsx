@@ -29,6 +29,7 @@ interface SheetProps {
   headerAction?: ReactNode;
   ariaLabel?: string;
   id?: string;
+  rootClassName?: string;
   sheetClassName?: string;
   bodyClassName?: string;
   floatingClose?: boolean;
@@ -56,6 +57,7 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
     headerAction,
     ariaLabel,
     id,
+    rootClassName = '',
     sheetClassName = '',
     bodyClassName = '',
     floatingClose = false,
@@ -110,6 +112,7 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
       const root = sheetRef.current;
       if (!root) return;
       const target =
+        root.querySelector<HTMLElement>('input[data-autofocus], textarea[data-autofocus]') ??
         root.querySelector<HTMLElement>('[data-autofocus]') ??
         root.querySelector<HTMLElement>('.ct-sheet-x') ??
         root.querySelector<HTMLElement>('.sheet-done') ??
@@ -231,7 +234,11 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
         </div>
     </div>
   ) : (
-    <div id={id} className={`ct-sheet-root nb-sheet${visible ? ' is-open' : ''}`} role="presentation">
+    <div
+      id={id}
+      className={`ct-sheet-root nb-sheet${visible ? ' is-open' : ''}${rootClassName ? ` ${rootClassName}` : ''}`}
+      role="presentation"
+    >
       <div className="ct-scrim" onClick={requestClose} />
       {floatingClose && (
         <button aria-label="Close" className="ct-cook-x" data-autofocus type="button" onClick={requestClose}>

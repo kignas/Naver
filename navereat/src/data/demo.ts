@@ -118,6 +118,17 @@ export interface Coupon {
   minOrder: number;
 }
 
+export interface DemoOffer {
+  id: string;
+  kind: 'delivery' | 'discount';
+  threshold: number;
+  amount: number;
+  big: string;
+  sub: string;
+  row: string;
+  chip?: string;
+}
+
 export const DEMO_LOCATION = 'Home – Demo Street, Demo City';
 export const DEMO_ADDRESS_LINE = 'Demo Street, Demo City…';
 export const DEMO_ADDRESS = 'Home · 42 Demo Street, Demo City, 735101';
@@ -471,6 +482,32 @@ export const coupons: Coupon[] = [
   { code: 'FLAT75', title: '₹75 OFF', subtitle: 'On orders above ₹299', type: 'flat', value: 75, minOrder: 299 },
   { code: 'TASTY40', title: '₹40 OFF', subtitle: 'On orders above ₹149', type: 'flat', value: 40, minOrder: 149 },
 ];
+
+export const demoOffers: DemoOffer[] = [
+  {
+    id: 'free-delivery-399',
+    kind: 'delivery',
+    threshold: 399,
+    amount: 0,
+    big: 'Hurray! Free delivery unlocked!',
+    sub: 'Applied directly on bill, above ₹399',
+    row: 'Free delivery applied',
+    chip: 'You saved ₹30 on delivery',
+  },
+  {
+    id: 'flat-100-499',
+    kind: 'discount',
+    threshold: 499,
+    amount: 100,
+    big: 'Instant ₹100 off!',
+    sub: 'Extra discount applied to your bill',
+    row: '₹100 extra off',
+    chip: 'You saved ₹100',
+  },
+];
+
+export const demoOffersFor = (subtotal: number): DemoOffer[] =>
+  demoOffers.filter((offer) => subtotal >= offer.threshold);
 
 export const paymentMethods = ['Cash on Delivery', 'UPI · demo@upi', 'Card · **** 4242'];
 

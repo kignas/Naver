@@ -18,7 +18,6 @@ import { Under99 } from './pages/Under99';
 import { Search } from './pages/Search';
 import { Category } from './pages/Category';
 import { Cart } from './pages/Cart';
-import { Success } from './pages/Success';
 import { Orders } from './pages/Orders';
 import { Track } from './pages/Track';
 import { Profile } from './pages/Profile';
@@ -71,7 +70,6 @@ function AppRoutes() {
               <Route path="/category/:type" element={<Category />} />
               <Route path="/restaurant/:id" element={<Restaurant />} />
               <Route path="/cart" element={<Cart />} />
-              <Route path="/success" element={<Success />} />
               <Route path="/orders" element={<Orders />} />
               <Route path="/track/:id" element={<Track />} />
               <Route path="/profile" element={<Profile />} />

@@ -1,4 +1,4 @@
-import type { Coupon } from '../data/demo';
+import type { Coupon, DemoOffer } from '../data/demo';
 import { PLATFORM_FEE } from '../data/demo';
 
 export interface CartLine {
@@ -19,6 +19,7 @@ export interface Bill {
   deliveryFee: number;
   platformFee: number;
   discount: number;
+  offerDiscount: number;
   total: number;
   freeDelivery: boolean;
 }
@@ -28,6 +29,9 @@ export const cartCount = (cart: Cart): number =>
 
 export const cartSubtotal = (cart: Cart): number =>
   Object.values(cart).reduce((sum, line) => sum + line.quantity * line.price, 0);
+
+export const offerDiscountFor = (offers: DemoOffer[]): number =>
+  offers.reduce((sum, offer) => sum + (offer.kind === 'discount' ? offer.amount : 0), 0);
 
 export const couponDiscount = (coupon: Coupon | null, subtotal: number): number => {
   if (!coupon || subtotal < coupon.minOrder) return 0;
@@ -40,16 +44,18 @@ export const couponDiscount = (coupon: Coupon | null, subtotal: number): number 
  * Legacy cart behaviour: delivery is free and checkout charges no platform fee,
  * matching the original cart bill (item total + delivery only).
  */
-export const billFor = (cart: Cart, coupon: Coupon | null = null): Bill => {
+export const billFor = (cart: Cart, coupon: Coupon | null = null, offers: DemoOffer[] = []): Bill => {
   const subtotal = cartSubtotal(cart);
   const discount = couponDiscount(coupon, subtotal);
+  const offerDiscount = offerDiscountFor(offers);
   return {
     items: cartCount(cart),
     subtotal,
     deliveryFee: 0,
     platformFee: PLATFORM_FEE,
     discount,
-    total: Math.max(0, subtotal + PLATFORM_FEE - discount),
+    offerDiscount,
+    total: Math.max(0, subtotal + PLATFORM_FEE - discount - offerDiscount),
     freeDelivery: true,
   };
 };

@@ -1,17 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '../components/Icon';
+import { OfferPopup } from '../components/OfferPopup';
+import { OrderSuccessSheet, type OrderSuccessHandle } from '../components/OrderSuccessSheet';
 import { Sheet, type SheetHandle } from '../components/Sheet';
-import { coupons, DEMO_ADDRESS, findRestaurant, type Coupon } from '../data/demo';
+import {
+  coupons,
+  DEMO_ADDRESS,
+  demoOffersFor,
+  findRestaurant,
+  type Coupon,
+  type DemoOffer,
+} from '../data/demo';
 import { billFor, cartRestaurantId, type CartLine } from '../lib/cart';
 import { formatMoney } from '../lib/money';
 import { useAppNav } from '../lib/navigation';
 import { useAppStore } from '../store/appStore';
 import { toast } from '../store/toastStore';
 import cartBundleCss from '../styles/original/cart.bundle.css?raw';
+import '../styles/original/cart-popups.css';
 import '../styles/pages/cart.css';
 
 type Payment = 'upi' | 'cod';
-type SheetName = 'coupon' | 'bill' | 'pay' | 'note' | null;
+type SheetName = 'coupon' | 'bill' | 'pay' | 'note' | 'tip' | null;
+const TIP_PRESETS = [10, 20, 30] as const;
+const NOTE_MAX = 100;
 
 interface Group {
   resId: number;
@@ -54,6 +66,9 @@ const trashIcon = (
   </svg>
 );
 
+const cleanNote = (value: string): string =>
+  value.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, NOTE_MAX);
+
 function VegMark({ value }: { value?: boolean }) {
   if (value === undefined) return null;
   return (
@@ -71,15 +86,25 @@ export function Cart() {
   const setQty = useAppStore((s) => s.setQty);
   const applyCoupon = useAppStore((s) => s.applyCoupon);
   const removeCoupon = useAppStore((s) => s.removeCoupon);
+  const clearCart = useAppStore((s) => s.clearCart);
   const placeOrder = useAppStore((s) => s.placeOrder);
 
   const [sheet, setSheet] = useState<SheetName>(null);
   const sheetRef = useRef<SheetHandle>(null);
   const closeSheet = () => sheetRef.current?.close();
+  const orderSuccessRef = useRef<OrderSuccessHandle>(null);
+  const pendingOrderRef = useRef<ReturnType<typeof placeOrder>>(null);
   const [code, setCode] = useState('');
+  const [couponError, setCouponError] = useState('');
   const [note, setNote] = useState('');
+  const [noteWasSet, setNoteWasSet] = useState(false);
+  const [tip, setTip] = useState(0);
+  const [tipInput, setTipInput] = useState('');
+  const [tipError, setTipError] = useState('');
   const [payment, setPayment] = useState<Payment>('upi');
   const [cutlery, setCutlery] = useState(false);
+  const [placing, setPlacing] = useState(false);
+  const [offerPopup, setOfferPopup] = useState<DemoOffer[] | null>(null);
 
   useEffect(() => {
     const style = document.createElement('style');
@@ -115,37 +140,172 @@ export function Cart() {
   }, [cart]);
 
   const restaurant = findRestaurant(cartRestaurantId(cart) ?? undefined);
-  const bill = billFor(cart, coupon);
+  const subtotal = groups[0]?.subtotal ?? 0;
+  const offers = useMemo(() => demoOffersFor(subtotal), [subtotal]);
+  const bill = useMemo(() => billFor(cart, coupon, offers), [cart, coupon, offers]);
   const lines = Object.values(cart);
   const savings = lines.reduce(
     (sum, line) => sum + Math.max(0, (line.originalPrice ?? line.price) - line.price) * line.quantity,
     0,
   );
+  const totalSavings = savings + bill.offerDiscount;
   const freeAbove = restaurant?.freeDeliveryAbove ?? 399;
-  const freeDelivery = (groups[0]?.subtotal ?? 0) >= freeAbove;
+  const freeDelivery = subtotal >= freeAbove;
   const restaurantName = groups.length > 1 ? `${groups.length} restaurants` : groups[0]?.name ?? restaurant?.name ?? 'Your cart';
   const eta = restaurant ? `${restaurant.deliveryMin}–${restaurant.deliveryMax} mins` : '30–40 mins';
   const displayName = user?.name ?? 'Demo Foodie';
   const phone = user?.phone ?? '+91 98765 43210';
+  const payTotal = bill.total + tip;
+  const hashParams = new URLSearchParams(window.location.hash.split('?')[1] ?? '');
+  const couponSheetEmpty = hashParams.get('coupons') === 'empty';
+  const offerMode = hashParams.get('offers');
+  const holdOrderPopup = hashParams.get('hold') === '1';
+
+  useEffect(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem('nearbite_cart_extras') || '{}') as {
+        restaurantNote?: string;
+        tipAmount?: number;
+      };
+      const savedNote = cleanNote(String(raw.restaurantNote ?? ''));
+      if (savedNote) {
+        setNote(savedNote);
+        setNoteWasSet(true);
+      }
+      const savedTip = Math.max(0, Math.min(1000, Math.round(Number(raw.tipAmount) || 0)));
+      if (savedTip > 0) setTip(savedTip);
+    } catch {
+      /* no saved extras */
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        'nearbite_cart_extras',
+        JSON.stringify({ restaurantNote: note, tipAmount: tip }),
+      );
+    } catch {
+      /* storage may be unavailable */
+    }
+  }, [note, tip]);
+
+  useEffect(() => {
+    if (!offers.length || sheet !== null || placing || offerPopup || offerMode === 'none') return;
+    const popupOffers = offerMode === 'single' ? offers.slice(0, 1) : offers;
+    const key = `cart|${offers.map((offer) => offer.id).join('+')}|${subtotal}`;
+    let seen: string[] = [];
+    try {
+      seen = JSON.parse(sessionStorage.getItem('ew_offers_seen_v1') || '[]') as string[];
+    } catch {
+      seen = [];
+    }
+    if (seen.includes(key)) return;
+    const timer = window.setTimeout(() => {
+      setOfferPopup(popupOffers);
+      try {
+        sessionStorage.setItem('ew_offers_seen_v1', JSON.stringify([...seen, key].slice(-60)));
+      } catch {
+        /* session storage may be unavailable */
+      }
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [offers, sheet, placing, offerPopup, subtotal, offerMode]);
 
   const handleApply = (value: string) => {
     const result = applyCoupon(value);
-    toast(result.message, result.ok ? 'success' : 'error');
     if (result.ok) {
+      setCouponError('');
+      toast(result.message, 'success');
       setCode('');
       closeSheet();
+    } else {
+      setCouponError(result.message);
+      toast(result.message, 'error');
     }
   };
 
+  const openTipSheet = () => {
+    setTipError('');
+    setTipInput(tip > 0 && !TIP_PRESETS.includes(tip as (typeof TIP_PRESETS)[number]) ? String(tip) : '');
+    setSheet('tip');
+  };
+
+  const saveTip = () => {
+    const raw = tipInput.trim();
+    if (!raw) {
+      setTipError('Enter a tip amount, or choose Remove tip.');
+      return;
+    }
+    const value = Number(raw);
+    if (!Number.isFinite(value)) {
+      setTipError('Enter a valid amount in rupees.');
+      return;
+    }
+    if (!Number.isInteger(value)) {
+      setTipError('Enter a whole rupee amount, with no paise.');
+      return;
+    }
+    if (value < 1) {
+      setTipError('The smallest tip is ₹1. Choose Remove tip if you would rather not tip.');
+      return;
+    }
+    if (value > 1000) {
+      setTipError('The largest tip you can add here is ₹1000.');
+      return;
+    }
+    setTip(value);
+    setTipError('');
+    closeSheet();
+    toast(`₹${value} tip added for your delivery partner`);
+  };
+
+  const removeTip = () => {
+    setTip(0);
+    closeSheet();
+    toast('Tip removed');
+  };
+
+  const saveNote = () => {
+    const value = cleanNote(note);
+    setNote(value);
+    closeSheet();
+    if (value) {
+      setNoteWasSet(true);
+      toast('Cooking request saved');
+    } else if (noteWasSet) {
+      setNoteWasSet(false);
+      toast('Cooking request removed');
+    }
+  };
+
+  const removeNote = () => {
+    setNote('');
+    setNoteWasSet(false);
+    closeSheet();
+    toast('Cooking request removed');
+  };
+
   const handlePlace = () => {
-    const order = placeOrder(payment === 'cod' ? 'Cash on Delivery' : 'UPI');
+    if (placing) return;
+    const order = placeOrder(payment === 'cod' ? 'Cash on Delivery' : 'UPI', { keepCart: true, tip });
     if (!order) {
       toast('Your cart is empty', 'error');
       return;
     }
-    closeSheet();
-    toast(`Order ${order.id} placed`, 'success');
-    nav.push('/success');
+    pendingOrderRef.current = order;
+    setPlacing(true);
+    setSheet(null);
+    orderSuccessRef.current?.processing();
+  };
+
+  const handleOrderContinue = () => {
+    const order = pendingOrderRef.current;
+    pendingOrderRef.current = null;
+    clearCart();
+    setPlacing(false);
+    if (order) nav.push(`/track/${order.id}`);
+    else nav.tab('/orders');
   };
 
   if (lines.length === 0) {
@@ -351,7 +511,24 @@ export function Cart() {
                 <Icon name="solid:motorcycle" size={22} />
               </span>
               <span className="ct-sav-copy">
-                <span className="ct-sav-title">Free delivery applied</span>
+                <span className="ct-sav-title" id="ct-sav-delivery-text">
+                  Free delivery applied
+                </span>
+              </span>
+              <span className="ct-sav-flag is-static">
+                <Icon name="solid:check" size={13} /> Applied
+              </span>
+            </div>
+          )}
+          {bill.offerDiscount > 0 && (
+            <div className="ct-sav-row ct-sav-static" id="ct-sav-discount">
+              <span aria-hidden="true" className="ct-sav-ic ct-sav-ic--pct">
+                <Icon name="solid:percent" size={22} />
+              </span>
+              <span className="ct-sav-copy">
+                <span className="ct-sav-title" id="ct-sav-discount-text">
+                  ₹{bill.offerDiscount} extra off
+                </span>
               </span>
               <span className="ct-sav-flag is-static">
                 <Icon name="solid:check" size={13} /> Applied
@@ -413,8 +590,8 @@ export function Cart() {
             </span>
             <div className="ct-oi-copy">
               <span className="ct-oi-line">
-                Total Bill <b>{formatMoney(bill.total)}</b>
-                {savings > 0 && <span className="ct-oi-saved">You saved ₹{savings}</span>}
+                Total Bill <b>{formatMoney(payTotal)}</b>
+                {totalSavings > 0 && <span className="ct-oi-saved">You saved ₹{totalSavings}</span>}
               </span>
               <span className="ct-oi-sub">Incl. taxes and charges</span>
             </div>
@@ -430,16 +607,16 @@ export function Cart() {
         </section>
 
         <div className="ct-footer" id="checkout-footer">
-          {savings > 0 && (
+          {totalSavings > 0 && (
             <button className="ct-footer-save ct-save-strip show" id="ct-footer-save" type="button" onClick={() => setSheet('bill')}>
               <span className="ct-save-text" id="ct-footer-save-text">
-                ₹{savings} saved on this order with Navereat!
+                ₹{totalSavings} saved on this order with Navereat!
               </span>
             </button>
           )}
           <div className="ct-paybar">
-            <button className="ct-paybar-left tap" type="button" onClick={() => setSheet('bill')}>
-              <span className="ct-paybar-amt">{formatMoney(bill.total)}</span>
+            <button className="ct-paybar-left tap" id="ct-view-bill" type="button" onClick={() => setSheet('bill')}>
+              <span className="ct-paybar-amt">{formatMoney(payTotal)}</span>
               <span className="ct-paybar-link">View detailed bill</span>
             </button>
             <button className="ct-cta" type="button" onClick={() => setSheet('pay')}>
@@ -469,13 +646,16 @@ export function Cart() {
           }
         >
           {coupon && (
-            <div className="ct-coupon-applied">
+            <div className="ct-coupon-applied" id="coupon-applied-box">
               <span className="ct-coupon-applied-copy">
                 <span className="ct-coupon-applied-label">Applied coupon</span>
-                <strong>{coupon.code} · {coupon.title}</strong>
+                <strong id="coupon-applied-text">
+                  {coupon.code} · {coupon.title}
+                </strong>
               </span>
               <button
                 className="ct-coupon-remove"
+                id="coupon-remove"
                 type="button"
                 onClick={() => {
                   removeCoupon();
@@ -486,43 +666,60 @@ export function Cart() {
               </button>
             </div>
           )}
-          <label className="ct-field-label" htmlFor="navereat-coupon-input">
+          <label className="ct-field-label" htmlFor="coupon-input">
             Coupon code
           </label>
           <input
             autoCapitalize="characters"
             autoComplete="off"
             className="ct-input"
-            id="navereat-coupon-input"
+            id="coupon-input"
             placeholder="Enter coupon code"
             spellCheck={false}
             type="text"
             value={code}
-            onChange={(event) => setCode(event.target.value.toUpperCase())}
+            onChange={(event) => {
+              setCode(event.target.value.toUpperCase());
+              setCouponError('');
+            }}
           />
+          <p className="ct-sheet-err" id="coupon-error" role="alert" hidden={!couponError}>
+            {couponError}
+          </p>
           <button className="ct-btn ct-btn-primary" id="coupon-apply" type="button" onClick={() => handleApply(code)}>
             Apply coupon
           </button>
-          <div className="navereat-coupon-list">
-            {coupons.map((entry: Coupon) => (
-              <button
-                key={entry.code}
-                type="button"
-                className={`navereat-coupon-card${coupon?.code === entry.code ? ' is-applied' : ''}`}
-                onClick={() => handleApply(entry.code)}
-              >
-                <span className="navereat-coupon-tag">
-                  <Icon name="solid:percent" size={14} />
-                </span>
-                <span className="navereat-coupon-copy">
-                  <strong>{entry.code}</strong>
-                  <span>{entry.title}</span>
-                  <small>{entry.subtitle}</small>
-                </span>
-                <span className="navereat-coupon-action">{coupon?.code === entry.code ? 'APPLIED' : 'APPLY'}</span>
-              </button>
-            ))}
-          </div>
+          {couponSheetEmpty || coupons.length === 0 ? (
+            <div className="ct-empty-mini">
+              <div aria-hidden="true" className="ct-empty-mini-ic">
+                <Icon name="solid:ticket" size={18} />
+              </div>
+              <div className="ct-empty-mini-title">No coupons available</div>
+              <p className="ct-empty-mini-sub">We don’t have any active coupons for this order right now.</p>
+            </div>
+          ) : (
+            <div className="ct-coupon-list">
+              {coupons.map((entry: Coupon) => (
+                <button
+                  key={entry.code}
+                  type="button"
+                  className={`ct-sav-row${coupon?.code === entry.code ? ' is-applied' : ''}`}
+                  onClick={() => handleApply(entry.code)}
+                >
+                  <span aria-hidden="true" className="ct-sav-ic ct-sav-ic--offer">
+                    <Icon name="solid:tag" size={22} />
+                  </span>
+                  <span className="ct-sav-copy">
+                    <span className="ct-sav-title">
+                      {entry.code} · {entry.title}
+                    </span>
+                    <span className="ct-sav-sub">{entry.subtitle}</span>
+                  </span>
+                  <span className="ct-sav-flag is-static">{coupon?.code === entry.code ? 'APPLIED' : 'APPLY'}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </Sheet>
       )}
 
@@ -556,11 +753,55 @@ export function Cart() {
                   <span className="ct-bill-val is-save">-{formatMoney(bill.discount)}</span>
                 </div>
               )}
+              {bill.offerDiscount > 0 && (
+                <div className="ct-bill-row">
+                  <span className="ct-bill-label">Extra discount for you</span>
+                  <span className="ct-bill-val is-save">-{formatMoney(bill.offerDiscount)}</span>
+                </div>
+              )}
+              {tip > 0 && (
+                <div className="ct-bill-row">
+                  <span className="ct-bill-label">Delivery partner tip</span>
+                  <span className="ct-bill-val">{formatMoney(tip)}</span>
+                </div>
+              )}
             </div>
             <div className="ct-bill-band">THAT'S IT. No unnecessary fees. Ever!</div>
+            <div className="ctp-label">Gratitude corner</div>
+            <div className="ctp-card ctp-card--pad">
+              <div className="ctp-chips">
+                <button
+                  type="button"
+                  aria-pressed={tip === 0}
+                  className={`ctp-chip${tip === 0 ? ' is-on' : ''}`}
+                  onClick={() => setTip(0)}
+                >
+                  No tip
+                </button>
+                {TIP_PRESETS.map((amount) => (
+                  <button
+                    key={amount}
+                    type="button"
+                    aria-pressed={tip === amount}
+                    className={`ctp-chip${tip === amount ? ' is-on' : ''}`}
+                    onClick={() => setTip(amount)}
+                  >
+                    ₹{amount}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  aria-pressed={tip > 0 && !TIP_PRESETS.includes(tip as (typeof TIP_PRESETS)[number])}
+                  className={`ctp-chip${tip > 0 && !TIP_PRESETS.includes(tip as (typeof TIP_PRESETS)[number]) ? ' is-on' : ''}`}
+                  onClick={openTipSheet}
+                >
+                  {tip > 0 && !TIP_PRESETS.includes(tip as (typeof TIP_PRESETS)[number]) ? `₹${tip} · Edit` : 'Other'}
+                </button>
+              </div>
+            </div>
             <div className="ct-bill-total">
               <span className="ct-total-label">To Pay</span>
-              <span className="ct-total-val">{formatMoney(bill.total)}</span>
+              <span className="ct-total-val">{formatMoney(payTotal)}</span>
             </div>
           </div>
         </Sheet>
@@ -592,17 +833,73 @@ export function Cart() {
               </button>
             ))}
           </div>
-          <button className="ct-btn ct-btn-primary navereat-place-order" type="button" onClick={handlePlace}>
-            Place Order · {formatMoney(bill.total)}
+          <button className="ct-btn ct-btn-primary navereat-place-order" id="btn-checkout" type="button" onClick={handlePlace}>
+            Place Order · {formatMoney(payTotal)}
           </button>
+        </Sheet>
+      )}
+
+      {sheet === 'tip' && (
+        <Sheet
+          ref={sheetRef}
+          id="ct-tip-sheet"
+          title="Custom tip"
+          onClose={() => setSheet(null)}
+          footer={
+            <>
+              <button className="ct-btn ct-btn-ghost" type="button" onClick={closeSheet}>
+                Cancel
+              </button>
+              <button className="ct-btn ct-btn-primary" id="tip-save" type="button" onClick={saveTip}>
+                Save tip
+              </button>
+            </>
+          }
+        >
+          <label className="ct-field-label" htmlFor="tip-input">
+            Tip amount (₹)
+          </label>
+          <input
+            aria-describedby="tip-help tip-error"
+            className="ct-input"
+            data-autofocus
+            id="tip-input"
+            inputMode="numeric"
+            max={1000}
+            min={1}
+            step={1}
+            type="number"
+            value={tipInput}
+            onChange={(event) => {
+              setTipInput(event.target.value);
+              setTipError('');
+            }}
+          />
+          <div className="ct-field-foot">
+            <span className="ct-field-help" id="tip-help">
+              Whole rupees, between ₹1 and ₹1000.
+            </span>
+          </div>
+          <p className="ct-sheet-err" id="tip-error" role="alert" hidden={!tipError}>
+            {tipError}
+          </p>
+          {tip > 0 && (
+            <button className="ct-btn-remove" id="tip-remove" type="button" onClick={removeTip}>
+              Remove tip
+            </button>
+          )}
         </Sheet>
       )}
 
       {sheet === 'note' && (
         <Sheet
           ref={sheetRef}
-          title="Add a note for the restaurant"
+          id="ct-note-sheet"
+          rootClassName="is-cooking"
+          title="Add cooking requests"
           onClose={() => setSheet(null)}
+          floatingClose
+          hideHeader
           footer={
             <>
               <button className="ct-btn ct-btn-ghost" type="button" onClick={closeSheet}>
@@ -610,35 +907,64 @@ export function Cart() {
               </button>
               <button
                 className="ct-btn ct-btn-primary"
+                id="note-save"
                 type="button"
-                onClick={() => {
-                  closeSheet();
-                  toast(note ? 'Cooking request saved' : 'Cooking request removed');
-                }}
+                disabled={!note.trim()}
+                onClick={saveNote}
               >
-                Save note
+                Add request
               </button>
             </>
           }
         >
-          <label className="ct-field-label" htmlFor="navereat-note-input">
-            Your note
+          <label className="ct-field-label" id="note-field-label" htmlFor="note-input">
+            Your cooking request or note
           </label>
           <textarea
+            aria-describedby="note-help note-count"
             className="ct-textarea"
-            id="navereat-note-input"
-            maxLength={250}
-            rows={3}
-            placeholder="Example: Please make it less spicy"
+            data-autofocus
+            id="note-input"
+            maxLength={NOTE_MAX}
+            placeholder="Add cooking requests"
+            rows={1}
             value={note}
-            onChange={(event) => setNote(event.target.value)}
+            onChange={(event) => setNote(event.target.value.slice(0, NOTE_MAX))}
           />
           <div className="ct-field-foot">
-            <span className="ct-field-help">The restaurant will see this with your order.</span>
-            <span className="ct-count">{note.length}/250</span>
+            <span className="ct-field-help" id="note-help">
+              Restaurant will try their best to fulfil your requests, but refund requests in this regard will not be
+              possible.
+            </span>
+            <span className="ct-count" id="note-count">
+              {note.length}/{NOTE_MAX}
+            </span>
           </div>
+          <div className="ct-sug-row" id="note-suggestions">
+            {['Less spicy', 'No onion', 'Extra napkins, please', 'Pack the sauces separately', 'Make it fresh'].map(
+              (suggestion) => (
+                <button
+                  key={suggestion}
+                  className="ct-sug"
+                  data-suggest={suggestion}
+                  type="button"
+                  onClick={() => setNote(suggestion)}
+                >
+                  {suggestion}
+                </button>
+              ),
+            )}
+          </div>
+          {note && (
+            <button className="ct-btn-remove" id="note-remove" type="button" onClick={removeNote}>
+              Remove
+            </button>
+          )}
         </Sheet>
       )}
+
+      <OfferPopup offers={offerPopup} onClose={() => setOfferPopup(null)} />
+      <OrderSuccessSheet ref={orderSuccessRef} onContinue={handleOrderContinue} autoMs={holdOrderPopup ? 0 : 2000} />
     </div>
   );
 }

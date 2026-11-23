@@ -440,34 +440,138 @@ async function main(): Promise<void> {
   await original.waitForTimeout(300);
   await app.waitForTimeout(300);
 
+  const dismissOverlays = async (page: import('playwright-core').Page) => {
+    await page.evaluate(() => {
+      document.querySelector('#ct-location-modal')?.remove();
+      try {
+        (window as unknown as { EWOffers?: { close?: () => void } }).EWOffers?.close?.();
+      } catch {
+        /* offer popup is optional */
+      }
+      document.querySelector('.ew-offer')?.remove();
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+    });
+  };
+
   const originalCart = await context.newPage();
   await originalCart.route(originalApiRoute, mockApi);
   await originalCart.goto(`http://127.0.0.1:${originalPort}/cart.html`, { waitUntil: 'domcontentloaded' });
   await originalCart.waitForSelector('#coupon-card', { timeout: 20000 });
-  await originalCart.evaluate(() => document.querySelector('#ct-location-modal')?.remove());
+  await dismissOverlays(originalCart);
+  await originalCart.waitForTimeout(700);
+
   const appCart = await context.newPage();
-  await appCart.goto(`http://127.0.0.1:${appPort}/#/cart`, { waitUntil: 'networkidle' });
+  await appCart.goto(`http://127.0.0.1:${appPort}/#/cart?offers=none`, { waitUntil: 'networkidle' });
   await appCart.waitForSelector('#coupon-card', { timeout: 20000 });
+  await appCart.waitForTimeout(500);
+  await writePairDiff('cart-page', originalCart, appCart, 844);
+
   await originalCart.click('#coupon-card');
-  await appCart.click('#coupon-card');
   await originalCart.waitForSelector('#ct-coupon-sheet.is-open', { timeout: 5000 });
-  await appCart.waitForSelector('.ct-sheet-root.is-open', { timeout: 5000 });
+  const appCouponEmpty = await context.newPage();
+  await appCouponEmpty.goto(`http://127.0.0.1:${appPort}/#/cart?coupons=empty&offers=none`, { waitUntil: 'networkidle' });
+  await appCouponEmpty.waitForSelector('#coupon-card', { timeout: 20000 });
+  await appCouponEmpty.click('#coupon-card');
+  await appCouponEmpty.waitForSelector('#ct-coupon-sheet.is-open', { timeout: 5000 });
   await originalCart.waitForTimeout(550);
+  await appCouponEmpty.waitForTimeout(550);
+  await writePairDiff('cart-coupon-empty', originalCart, appCouponEmpty, 844);
+  await appCouponEmpty.close();
+
+  await appCart.click('#coupon-card');
+  await appCart.waitForSelector('#ct-coupon-sheet.is-open', { timeout: 5000 });
   await appCart.waitForTimeout(550);
-  await writePairDiff('cart-coupon', originalCart, appCart, 844);
+  await writePairDiff('cart-coupon-list', originalCart, appCart, 844);
   await originalCart.locator('#ct-coupon-sheet .ct-cook-x').click();
   await appCart.locator('#ct-coupon-sheet .ct-cook-x').click();
   await originalCart.waitForTimeout(350);
   await appCart.waitForTimeout(350);
+
   await originalCart.getByText('Cooking requests', { exact: true }).first().click();
   await appCart.getByText('Cooking requests', { exact: true }).first().click();
   await originalCart.waitForSelector('#ct-note-sheet.is-open', { timeout: 5000 });
-  await appCart.waitForSelector('.ct-sheet-root.is-open', { timeout: 5000 });
+  await appCart.waitForSelector('#ct-note-sheet.is-open', { timeout: 5000 });
   await originalCart.waitForTimeout(550);
   await appCart.waitForTimeout(550);
-  await writePairDiff('cart-note', originalCart, appCart, 844);
+  await writePairDiff('cart-cooking', originalCart, appCart, 844);
+  await originalCart.locator('#ct-note-sheet .ct-cook-x').click();
+  await appCart.locator('#ct-note-sheet .ct-cook-x').click();
+  await originalCart.waitForTimeout(350);
+  await appCart.waitForTimeout(350);
+
+  await originalCart.evaluate(() => {
+    (window as unknown as { openSheet?: (id: string) => void }).openSheet?.('ct-tip-sheet');
+  });
+  await originalCart.waitForSelector('#ct-tip-sheet.is-open', { timeout: 5000 });
+  await appCart.click('#ct-view-bill');
+  await appCart.waitForSelector('.ct-sheet-root.is-open', { timeout: 5000 });
+  await appCart.getByRole('button', { name: 'Other' }).click();
+  await appCart.waitForSelector('#ct-tip-sheet.is-open', { timeout: 5000 });
+  await originalCart.waitForTimeout(550);
+  await appCart.waitForTimeout(550);
+  await writePairDiff('cart-tip', originalCart, appCart, 844);
   await originalCart.close();
   await appCart.close();
+
+  const originalOffer = await context.newPage();
+  await originalOffer.goto(`http://127.0.0.1:${originalPort}/offer-popup-preview.html`, { waitUntil: 'domcontentloaded' });
+  await originalOffer.click('#d-delivery');
+  await originalOffer.waitForSelector('.ew-offer.is-open', { timeout: 5000 });
+  const appOffer = await context.newPage();
+  await appOffer.goto(`http://127.0.0.1:${appPort}/#/cart?offers=single`, { waitUntil: 'networkidle' });
+  await appOffer.waitForSelector('.ew-offer.is-open', { timeout: 7000 });
+  await originalOffer.waitForTimeout(500);
+  await appOffer.waitForTimeout(500);
+  await writePairDiff('cart-offer-popup', originalOffer, appOffer, 844);
+  await originalOffer.close();
+  await appOffer.close();
+
+  const originalProcessing = await context.newPage();
+  await originalProcessing.route(originalApiRoute, mockApi);
+  await originalProcessing.goto(`http://127.0.0.1:${originalPort}/cart.html`, { waitUntil: 'domcontentloaded' });
+  await originalProcessing.waitForSelector('#coupon-card', { timeout: 20000 });
+  await dismissOverlays(originalProcessing);
+  await originalProcessing.addScriptTag({ path: path.join(originalDir, 'js/order-success-sheet.js') });
+  await originalProcessing.evaluate(() => {
+    (window as unknown as { EWOrderSuccess?: { processing?: (options?: object) => void } }).EWOrderSuccess?.processing?.({
+      title: 'Processing',
+      message: 'Placing your order',
+    });
+  });
+  await originalProcessing.waitForSelector('.ew-os.is-open', { timeout: 5000 });
+  await originalProcessing.waitForTimeout(600);
+
+  const appProcessing = await context.newPage();
+  await appProcessing.goto(`http://127.0.0.1:${appPort}/#/cart?offers=none&hold=1`, { waitUntil: 'networkidle' });
+  await appProcessing.waitForSelector('#coupon-card', { timeout: 20000 });
+  await appProcessing.getByRole('button', { name: 'Proceed to Pay' }).click();
+  await appProcessing.waitForSelector('#btn-checkout', { timeout: 5000 });
+  await appProcessing.click('#btn-checkout');
+  await appProcessing.waitForSelector('.ew-os.is-open', { timeout: 5000 });
+  await appProcessing.waitForTimeout(100);
+  await writePairDiff('cart-processing', originalProcessing, appProcessing, 844);
+  await originalProcessing.close();
+
+  const originalPlaced = await context.newPage();
+  await originalPlaced.route(originalApiRoute, mockApi);
+  await originalPlaced.goto(`http://127.0.0.1:${originalPort}/cart.html`, { waitUntil: 'domcontentloaded' });
+  await originalPlaced.waitForSelector('#coupon-card', { timeout: 20000 });
+  await dismissOverlays(originalPlaced);
+  await originalPlaced.addScriptTag({ path: path.join(originalDir, 'js/order-success-sheet.js') });
+  await originalPlaced.evaluate(() => {
+    (window as unknown as { EWOrderSuccess?: { show?: (options?: object) => void } }).EWOrderSuccess?.show?.({
+      autoMs: 0,
+    });
+  });
+  await originalPlaced.waitForSelector('.ew-os.is-open', { timeout: 5000 });
+  await originalPlaced.waitForTimeout(1000);
+
+  await appProcessing.waitForTimeout(2350);
+  await appProcessing.waitForSelector('.ew-os--done.is-open', { timeout: 5000 });
+  await writePairDiff('cart-order-placed', originalPlaced, appProcessing, 844);
+  await originalPlaced.close();
+  await appProcessing.close();
 
   await original.click('#wc-close-btn');
   await app.click('#wc-close-btn');

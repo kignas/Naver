@@ -29,73 +29,19 @@
   z-index: 200;
 }
 
-.navereat-coupon-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 18px;
-}
-
-.navereat-coupon-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 12px;
-  border: 1px solid #e3e6ec;
-  border-radius: 14px;
-  background: #fff;
-  text-align: left;
-}
-
-.navereat-coupon-card.is-applied {
-  border-color: #0b7a2a;
-  background: #f3fbf5;
-}
-
-.navereat-coupon-tag {
+.ct-coupon-list {
   display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: #e7f5ec;
-  color: #0b7a2a;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.ct-coupon-list .ct-sav-row {
+  min-height: 58px;
+}
+
+.ct-coupon-list .ct-sav-flag {
   flex: 0 0 auto;
-}
-
-.navereat-coupon-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.navereat-coupon-copy strong {
-  font-size: 13px;
-  font-weight: 800;
-  color: #1f2937;
-  letter-spacing: 0.04em;
-}
-
-.navereat-coupon-copy span {
-  font-size: 12px;
-  font-weight: 600;
-  color: #4b5563;
-}
-
-.navereat-coupon-copy small {
-  font-size: 11px;
-  color: #6b7280;
-}
-
-.navereat-coupon-action {
-  flex: 0 0 auto;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  color: #0b7a2a;
+  letter-spacing: .04em;
 }
 
 .navereat-place-order {
