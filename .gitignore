@@ -20,8 +20,9 @@ dist/
 # Agent workspace notes
 .openhands/
 
-# Local signing material must never be committed
+# Signing material; only the committed debug key is allowed
 *.keystore
+!navereat/android/app/navereat-debug.keystore
 *.jks
 .secrets/
 

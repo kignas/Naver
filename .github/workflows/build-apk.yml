@@ -69,78 +69,16 @@ jobs:
       - name: Sync Capacitor Android
         run: npx cap sync android
 
-      - name: Validate signing secrets
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: |
-          set -u
-          missing=0
-          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
-            eval "value=\${$name:-}"
-            if [ -n "$value" ]; then
-              echo "$name: set"
-            else
-              echo "$name: MISSING"
-              missing=1
-            fi
-          done
-          if [ "$missing" -ne 0 ]; then
-            echo "::error::Required signing secret is missing. Add KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, and KEY_PASSWORD as repository Actions secrets."
-            exit 1
-          fi
-
-          if ! echo "$KEYSTORE_BASE64" | tr -d '\n\r ' | base64 -d > android/app/keystore.jks 2>/tmp/base64.err; then
-            echo "::error::KEYSTORE_BASE64 is not valid base64."
-            cat /tmp/base64.err
-            exit 1
-          fi
-          echo "KEYSTORE_BASE64: decoded"
-
-          if ! keytool -list -keystore android/app/keystore.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/tmp/keytool-list.txt 2>&1; then
-            echo "::error::KEYSTORE_PASSWORD or KEY_ALIAS is wrong; keytool could not open the keystore."
-            sed -n '1,20p' /tmp/keytool-list.txt
-            exit 1
-          fi
-          echo "KEYSTORE_PASSWORD and KEY_ALIAS: OK"
-
-          fingerprint=$(keytool -list -v -keystore android/app/keystore.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" 2>/dev/null | sed -n 's/.*SHA256: //p' | head -1)
-          if [ -z "$fingerprint" ]; then
-            echo "::error::Could not read the certificate SHA-256 fingerprint from KEYSTORE_BASE64."
-            exit 1
-          fi
-          echo "Keystore SHA-256: $fingerprint"
-
-          rm -f /tmp/navereat-keycheck.p12
-          if ! keytool -importkeystore \
-            -srckeystore android/app/keystore.jks \
-            -srcstorepass "$KEYSTORE_PASSWORD" \
-            -srcalias "$KEY_ALIAS" \
-            -srckeypass "$KEY_PASSWORD" \
-            -destkeystore /tmp/navereat-keycheck.p12 \
-            -deststoretype PKCS12 \
-            -deststorepass "$KEYSTORE_PASSWORD" \
-            -destkeypass "$KEY_PASSWORD" \
-            -noprompt >/tmp/keytool-key.txt 2>&1; then
-            echo "::error::KEY_PASSWORD is wrong; keytool could not open the private key."
-            sed -n '1,20p' /tmp/keytool-key.txt
-            exit 1
-          fi
-          rm -f /tmp/navereat-keycheck.p12
-          echo "KEY_PASSWORD: OK"
-
       - name: Assemble debug APK
         working-directory: navereat/android
-        env:
-          NAVEREAT_KEYSTORE_FILE: ${{ github.workspace }}/navereat/android/app/keystore.jks
-          NAVEREAT_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          NAVEREAT_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          NAVEREAT_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           chmod +x ./gradlew
           ./gradlew assembleDebug -PversionCode=${{ github.run_number }} --no-daemon
+
+      - name: Verify APK signature
+        run: |
+          APKSIGNER="$ANDROID_HOME/build-tools/34.0.0/apksigner"
+          "$APKSIGNER" verify --print-certs android/app/build/outputs/apk/debug/app-debug.apk | grep 'SHA-256 digest'
 
       - name: Rename APK
         run: cp android/app/build/outputs/apk/debug/app-debug.apk Navereat.apk
@@ -161,25 +99,3 @@ jobs:
           generate_release_notes: true
           draft: false
           prerelease: false
-
-      # ------------------------------------------------------------------
-      # OPTIONAL: signed release build.
-      # Add these repository secrets, then uncomment this step:
-      #   KEYSTORE_BASE64  - base64 of your .keystore file
-      #   KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
-      # Also add a signingConfig to android/app/build.gradle first.
-      # ------------------------------------------------------------------
-      # - name: Build signed release APK
-      #   working-directory: navereat/android
-      #   env:
-      #     KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-      #     KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-      #     KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-      #     KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-      #   run: |
-      #     echo "$KEYSTORE_BASE64" | base64 -d > app/navereat-release.keystore
-      #     ./gradlew assembleRelease \
-      #       -Pandroid.injected.signing.store.file="$PWD/app/navereat-release.keystore" \
-      #       -Pandroid.injected.signing.store.password="$KEYSTORE_PASSWORD" \
-      #       -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
-      #       -Pandroid.injected.signing.key.password="$KEY_PASSWORD"

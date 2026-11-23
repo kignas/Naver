@@ -1,6 +1,5 @@
 apply plugin: 'com.android.application'
 
-def ciKeystore = System.getenv('NAVEREAT_KEYSTORE_FILE')
 def ciVersionCode = (project.findProperty('versionCode') ?: '1').toString().toInteger()
 
 android {
@@ -20,18 +19,17 @@ android {
         }
     }
     signingConfigs {
-        if (ciKeystore) {
-            debug {
-                storeFile file(ciKeystore)
-                storePassword System.getenv('NAVEREAT_KEYSTORE_PASSWORD')
-                keyAlias System.getenv('NAVEREAT_KEY_ALIAS')
-                keyPassword System.getenv('NAVEREAT_KEY_PASSWORD')
-            }
+        debug {
+            // Debug-only key committed for reproducible CI APKs. Never use for a Play Store release.
+            storeFile file('navereat-debug.keystore')
+            storePassword 'android'
+            keyAlias 'navereat'
+            keyPassword 'android'
         }
     }
     buildTypes {
         debug {
-            if (ciKeystore) signingConfig signingConfigs.debug
+            signingConfig signingConfigs.debug
         }
         release {
             minifyEnabled true

@@ -55,19 +55,13 @@ and copies of the original HTML/JS/CSS files.
 `.github/workflows/build-apk.yml` builds the debug APK on every push to `main`
 that touches `navereat/**`, and on manual dispatch. It publishes a release
 tagged `v1.0.<run_number>` with the APK renamed to `Navereat.apk`.
-README/docs-only pushes are ignored by `paths-ignore`.
+README/docs-only pushes are excluded by the workflow path filters.
 
-Every CI build uses one fixed debug keystore so a new APK installs over the
-previous build. The keystore is supplied through repository secrets:
+Every CI build uses the committed debug keystore at
+`navereat/android/app/navereat-debug.keystore`, so a new APK installs over the
+previous build. Its debug-only credentials are `android` / `android`, alias
+`navereat`. It must never be used for a Play Store release.
 
-| Secret | Purpose |
-| --- | --- |
-| `KEYSTORE_BASE64` | base64 of `navereat-debug.keystore` |
-| `KEYSTORE_PASSWORD` | keystore password |
-| `KEY_ALIAS` | key alias (`navereat`) |
-| `KEY_PASSWORD` | key password |
-
-The keystore is never committed. Local signing material is written to
-`.secrets/`, which is gitignored.
-
-`versionName` is `1.0.0`; `versionCode` is the GitHub Actions run number.
+`versionName` is `1.0.0`; `versionCode` is the GitHub Actions run number. The
+workflow runs `apksigner verify --print-certs` and prints the signing
+certificate SHA-256 fingerprint.

@@ -121,11 +121,12 @@ workflow**. It installs Node 22, Java 17, and the Android SDK, runs
 uploads the `Navereat-debug-apk` artifact, and publishes a GitHub Release tagged
 `v1.0.<run_number>` with the APK renamed to `Navereat.apk`.
 
-Every CI build is signed with one fixed debug keystore supplied through the
-`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, and `KEY_PASSWORD` repository
-secrets, so a new APK installs over the previous build. The keystore is never
-committed. `versionName` is `1.0.0`; `versionCode` is the Actions run number.
-A commented signed-release section is included in the workflow for later use.
+Every CI build is signed with the committed debug keystore
+`android/app/navereat-debug.keystore` (password `android`, alias `navereat`), so
+a new APK installs over the previous build. It is debug-only and must never be
+used for a Play Store release. `versionName` is `1.0.0`; `versionCode` is the
+Actions run number. The workflow runs `apksigner verify --print-certs` and
+prints the signing certificate SHA-256 fingerprint.
 
 `.github/workflows/perf.yml` runs the unthrottled push/pop FPS gate on pushes
 and pull requests that touch `navereat/**`, using a downloaded Chromium and
