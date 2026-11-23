@@ -6,10 +6,9 @@ on:
     paths:
       - 'navereat/**'
       - '.github/workflows/build-apk.yml'
-    paths-ignore:
-      - '**/*.md'
-      - 'navereat/docs/**'
-      - 'verify/**'
+      - '!**/*.md'
+      - '!navereat/docs/**'
+      - '!verify/**'
   workflow_dispatch:
 
 permissions:
