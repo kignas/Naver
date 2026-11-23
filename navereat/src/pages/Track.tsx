@@ -207,7 +207,7 @@ export function Track() {
             <Icon name={order.status === 'on_the_way' || order.status === 'picked_up' ? 'solid:motorcycle' : 'solid:receipt'} size={19} />
           </div>
           <div className="status-text">
-            <div className="status-title">{titleFor(order.status)}</div>
+            <div className="status-title" id="status-title">{titleFor(order.status)}</div>
             <div className="status-sub">{subFor(order.status)}</div>
           </div>
           <div className="hero-foot">

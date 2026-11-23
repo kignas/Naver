@@ -29,7 +29,7 @@ import homeBundleCss from '../styles/original/home.bundle.css?raw';
 import homeFinalCss from '../styles/original/home-final.css?raw';
 import homePageCss from '../styles/pages/home.css?raw';
 
-const homeStyle = createRouteStyleSheet(`${homeBaseCss}\n${homeBundleCss}\n${homeFinalCss}\n${homePageCss}`, 'navereatHome');
+const homeStyle = createRouteStyleSheet(`${homeBaseCss}\n${homeBundleCss}\n${homeFinalCss}\n${homePageCss}`, 'navereatHome', '/');
 
 type FilterTab = 'SORT' | 'DELIVERY TIME' | 'RATING' | 'PRICE' | 'OFFERS' | 'FOOD TYPE';
 type SortKey = 'recommended' | 'rating' | 'delivery' | 'distance';

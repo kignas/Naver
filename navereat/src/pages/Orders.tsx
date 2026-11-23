@@ -193,7 +193,7 @@ function LiveCard({ order }: { order: Order }) {
   );
 }
 
-const ordersStyle = createRouteStyleSheet(`${ordersShellCss}\n${ordersBundleCss}`, 'navereatOrders');
+const ordersStyle = createRouteStyleSheet(`${ordersShellCss}\n${ordersBundleCss}`, 'navereatOrders', '/orders');
 
 export function Orders() {
   const nav = useAppNav();

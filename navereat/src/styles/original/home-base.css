@@ -445,7 +445,9 @@
   }
 
   body{
-    font-size:var(--ew-text-body);
+    /* The reference leaves body at the 16px default; the 15px scale below is
+       only for labelled UI text. */
+    font-size:16px;
     line-height:1.45;
   }
 

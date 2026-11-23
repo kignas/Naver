@@ -65,7 +65,7 @@ function Row({
   );
 }
 
-const profileStyle = createRouteStyleSheet(`${profileShellCss}\n${profileBundleCss}`, 'navereatProfile');
+const profileStyle = createRouteStyleSheet(`${profileShellCss}\n${profileBundleCss}`, 'navereatProfile', '/profile');
 
 export function Profile() {
   const nav = useAppNav();

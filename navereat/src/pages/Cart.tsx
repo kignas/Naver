@@ -903,7 +903,7 @@ export function Cart() {
 
       {sheet === 'bill' && (
         <Sheet ref={sheetRef} title="Bill summary" onClose={() => setSheet(null)}>
-          <div className="ct-bill">
+          <div className="ct-bill" id="ct-bill">
             <div className="ct-bill-rows">
               <div className="ct-bill-row">
                 <span className="ct-bill-label">Item total</span>
@@ -1021,6 +1021,7 @@ export function Cart() {
         <Sheet
           ref={sheetRef}
           id="ct-tip-sheet"
+          titleId="tip-sheet-title"
           title="Custom tip"
           onClose={() => setSheet(null)}
           footer={
@@ -1074,10 +1075,10 @@ export function Cart() {
           ref={sheetRef}
           id="ct-note-sheet"
           rootClassName="is-cooking"
+          titleId="note-sheet-title"
           title="Add cooking requests"
           onClose={() => setSheet(null)}
           floatingClose
-          hideHeader
           footer={
             <>
               <button className="ct-btn ct-btn-ghost" type="button" onClick={closeSheet}>

@@ -304,9 +304,46 @@ const compareProbes = (selector: string, original: string, app: string): ProbeRe
 interface Capture {
   name: string;
   diffPct: number;
+  diffPctRaw: number;
   probes: ProbeResult[];
   note?: string;
 }
+
+// The floating bottom nav is this app's own design and it sits higher than the
+// original's fixed bar, which drags the cart bar up with it. Both are excluded from
+// the diff so the number reflects design work, not that intentional offset. The
+// unmasked number is kept alongside.
+const CHROME_SELECTORS = '.bottom-nav, #white-cart-root, #cart-bar';
+
+const chromeRects = (page: Page): Promise<Array<{ x: number; y: number; w: number; h: number }>> =>
+  page.evaluate((selector) => {
+    const rects: Array<{ x: number; y: number; w: number; h: number }> = [];
+    document.querySelectorAll(selector).forEach((element) => {
+      const rect = element.getBoundingClientRect();
+      if (rect.width > 1 && rect.height > 1) {
+        rects.push({ x: rect.x, y: rect.y, w: rect.width, h: rect.height });
+      }
+    });
+    return rects;
+  }, CHROME_SELECTORS);
+
+const maskPng = (png: PNG, rects: Array<{ x: number; y: number; w: number; h: number }>, scale: number): void => {
+  for (const rect of rects) {
+    const left = Math.max(0, Math.floor(rect.x * scale));
+    const top = Math.max(0, Math.floor(rect.y * scale));
+    const right = Math.min(png.width, Math.ceil((rect.x + rect.w) * scale));
+    const bottom = Math.min(png.height, Math.ceil((rect.y + rect.h) * scale));
+    for (let y = top; y < bottom; y += 1) {
+      for (let x = left; x < right; x += 1) {
+        const index = (y * png.width + x) * 4;
+        png.data[index] = 0;
+        png.data[index + 1] = 0;
+        png.data[index + 2] = 0;
+        png.data[index + 3] = 255;
+      }
+    }
+  }
+};
 
 const results: Capture[] = [];
 
@@ -339,10 +376,31 @@ async function capture(
   const b = await shot(app, 'navereat');
   const width = Math.min(a.width, b.width);
   const height = Math.min(a.height, b.height);
+  const rawA = cropPng(a, width, height);
+  const rawB = cropPng(b, width, height);
+
   const diff = new PNG({ width, height });
-  const pixels = pixelmatch(cropPng(a, width, height).data, cropPng(b, width, height).data, diff.data, width, height, {
-    threshold: 0.12,
-  });
+  const pixelsRaw = pixelmatch(rawA.data, rawB.data, diff.data, width, height, { threshold: 0.12 });
+
+  let pixels = pixelsRaw;
+  let usableArea = width * height;
+  if (!element) {
+    const [originalRects, appRects] = await Promise.all([chromeRects(original), chromeRects(app)]);
+    const rects = [...originalRects, ...appRects];
+    const scale = width / viewport.width;
+    let maskedArea = 0;
+    const maskedA = cropPng(a, width, height);
+    const maskedB = cropPng(b, width, height);
+    for (const rect of rects) {
+      const w = Math.min(rect.w, viewport.width - rect.x);
+      const h = Math.min(rect.h, height / scale - rect.y);
+      if (w > 0 && h > 0) maskedArea += w * h;
+    }
+    maskPng(maskedA, rects, scale);
+    maskPng(maskedB, rects, scale);
+    pixels = pixelmatch(maskedA.data, maskedB.data, diff.data, width, height, { threshold: 0.12 });
+    usableArea = Math.max(1, width * height - Math.round(maskedArea * scale * scale));
+  }
   await fs.writeFile(path.join(outRoot, 'diff', `${name}.png`), PNG.sync.write(diff));
 
   // Side-by-side strip for quick human review.
@@ -360,10 +418,13 @@ async function capture(
       if (result.diff.length) probeResults.push(result);
     }
   }
-  const diffPct = Number(((pixels / (width * height)) * 100).toFixed(2));
-  results.push({ name, diffPct, probes: probeResults, note });
+  const diffPct = Number(((pixels / usableArea) * 100).toFixed(2));
+  const diffPctRaw = Number(((pixelsRaw / (width * height)) * 100).toFixed(2));
+  results.push({ name, diffPct, diffPctRaw, probes: probeResults, note });
   const changed = probeResults.map((entry) => `${entry.selector}(${entry.diff.join('; ')})`).join(' | ');
-  console.log(`[parity] ${name.padEnd(28)} ${String(diffPct).padStart(6)}%  ${changed.slice(0, 220)}`);
+  console.log(
+    `[parity] ${name.padEnd(28)} ${String(diffPct).padStart(6)}% raw ${String(diffPctRaw).padStart(6)}%  ${changed.slice(0, 200)}`,
+  );
 }
 
 const seedStorage = () => {
@@ -1153,11 +1214,11 @@ async function main(): Promise<void> {
   previewServer.httpServer.close();
 
   await fs.writeFile(path.join(outRoot, 'report.json'), JSON.stringify(results, null, 2));
-  console.log('\n| screen/state | diff % | probe differences |');
+  console.log('\n| screen/state | diff % (raw) | probe differences |');
   console.log('| --- | --- | --- |');
   for (const entry of results) {
     const detail = entry.probes.map((p) => `${p.selector}: ${p.diff.join(', ')}`).join('; ') || '—';
-    console.log(`| ${entry.name} | ${entry.diffPct}% | ${detail} |`);
+    console.log(`| ${entry.name} | ${entry.diffPct}% (${entry.diffPctRaw}%) | ${detail} |`);
   }
 }
 

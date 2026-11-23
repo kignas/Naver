@@ -12,7 +12,7 @@ import { useSearchStore } from '../store/searchStore';
 import under99BundleCss from '../styles/original/under99.bundle.css?raw';
 import under99PageCss from '../styles/pages/under99.css?raw';
 
-const under99Styles = createRouteStyleSheet(`${under99BundleCss}\n${under99PageCss}`, 'navereatUnder99');
+const under99Styles = createRouteStyleSheet(`${under99BundleCss}\n${under99PageCss}`, 'navereatUnder99', '/under99');
 
 type Band = '99' | '100' | '150';
 type FoodType = 'all' | 'veg' | 'nonveg';

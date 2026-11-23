@@ -5,6 +5,7 @@
 }
 .u99-page .u99-scroll{
   padding-bottom: calc(var(--nav-reserve) + 16px);
+  overflow-anchor: none;
 }
 
 body.has-cart-bar .u99-page .u99-scroll{

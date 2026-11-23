@@ -31,6 +31,7 @@ interface SheetProps {
   headerContent?: ReactNode;
   ariaLabel?: string;
   id?: string;
+  titleId?: string;
   rootClassName?: string;
   sheetClassName?: string;
   bodyClassName?: string;
@@ -60,6 +61,7 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
     headerContent,
     ariaLabel,
     id,
+    titleId,
     rootClassName = '',
     sheetClassName = '',
     bodyClassName = '',
@@ -255,7 +257,7 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
         <div className="sheet-panel" style={panelStyle}>
           <div className="sheet-grabber sheet-drag-handle" aria-hidden="true" {...dragProps} />
           <div className="sheet-head sheet-drag-handle" {...dragProps}>
-            <h3 className="sheet-title">{title}</h3>
+            <h3 className="sheet-title" id={titleId}>{title}</h3>
             {headerAction}
           </div>
           <div className="filter-layout">
@@ -286,7 +288,7 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
           <>
             <div className="ct-sheet-grab sheet-drag-handle" aria-hidden="true" {...dragProps} />
             <div className="ct-sheet-head sheet-drag-handle" {...dragProps}>
-              <h2 className="ct-sheet-title">{title}</h2>
+              <h2 className="ct-sheet-title" id={titleId}>{title}</h2>
               <button aria-label="Close" className="ct-sheet-x" data-autofocus type="button" onClick={requestClose}>
                 <Icon name="solid:xmark" size={16} />
               </button>

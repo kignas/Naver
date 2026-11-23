@@ -5,6 +5,7 @@ import { applyLayout, captureLayout, type LayoutSnapshot } from '../lib/layoutSn
 import { RouteShell } from './RouteShell';
 import { waitForRouteReady } from '../lib/routeReady';
 import { routeKeyFor } from '../lib/routeLoaders';
+import { syncRouteStyleSheets } from '../lib/routeStyles';
 import { useNavDirection, useNavStore, type NavDirection } from '../store/navStore';
 
 const PUSH_DURATION = 300;
@@ -77,6 +78,10 @@ export function PageTransition({ location, swipeBack = false, render }: PageTran
   const tabLayersRef = useRef(tabLayers);
   const activeTabRef = useRef(activeTab);
   activeTabRef.current = displayTab;
+  // Tab layers stay mounted, so route css must follow the visible layer.
+  useLayoutEffect(() => {
+    syncRouteStyleSheets();
+  }, [displayTab, location.key]);
   const stageRef = useRef(stage);
   const historyRef = useRef<Location[]>([location]);
   const skipNextPopRef = useRef(false);
@@ -535,6 +540,7 @@ export function PageTransition({ location, swipeBack = false, render }: PageTran
                   if (element) tabRefs.current.set(tab.pathname, element);
                   else tabRefs.current.delete(tab.pathname);
                 }}
+                data-route={tab.pathname}
                 className={`route-layer route-tab-cache${isActive ? ' is-active' : ''}`}
                 style={{ visibility: isActive ? 'visible' : 'hidden', pointerEvents: isActive ? 'auto' : 'none' }}
                 aria-hidden={!isActive}

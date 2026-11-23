@@ -1,5 +1,6 @@
 .orders-page {
   display: block !important;
+  overflow-anchor: none;
   overflow-y: auto !important;
   overflow-x: hidden !important;
   padding-top: 0;
