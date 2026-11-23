@@ -148,6 +148,8 @@ const apiRestaurants = restaurants.map((restaurant) => ({
     description: item.desc,
     image: placeholderUrl(item.image),
     inStock: true,
+    customizations: item.customizationGroups ?? item.customizations ?? [],
+    customisable: Boolean(item.customizationGroups?.length || item.customizations?.length),
   })),
   pricing: {
     serviceable: true,
@@ -285,6 +287,29 @@ async function writePairDiff(
   console.log(`Saved: ${path.join(verifyRoot, `diff/${name}.png`)}`);
   console.log(`${name} full diff: ${((pixels / (width * height)) * 100).toFixed(2)}%`);
   console.log(`${name} content diff (top ${contentHeightCss}px): ${((contentPixels / (width * contentHeight)) * 100).toFixed(2)}%`);
+}
+
+async function writeElementPairDiff(
+  name: string,
+  originalPage: import('playwright-core').Page,
+  appPage: import('playwright-core').Page,
+  selector: string,
+): Promise<void> {
+  const originalPng = PNG.sync.read(await originalPage.locator(selector).first().screenshot());
+  const appPng = PNG.sync.read(await appPage.locator(selector).first().screenshot());
+  await fs.writeFile(path.join(verifyRoot, `original/${name}.png`), PNG.sync.write(originalPng));
+  await fs.writeFile(path.join(verifyRoot, `navereat/${name}.png`), PNG.sync.write(appPng));
+  const width = Math.min(originalPng.width, appPng.width);
+  const height = Math.min(originalPng.height, appPng.height);
+  const originalCrop = cropPng(originalPng, width, height);
+  const appCrop = cropPng(appPng, width, height);
+  const diff = new PNG({ width, height });
+  const pixels = pixelmatch(originalCrop.data, appCrop.data, diff.data, width, height, { threshold: 0.12 });
+  await fs.writeFile(path.join(verifyRoot, `diff/${name}.png`), PNG.sync.write(diff));
+  console.log(`Saved: ${path.join(verifyRoot, `original/${name}.png`)}`);
+  console.log(`Saved: ${path.join(verifyRoot, `navereat/${name}.png`)}`);
+  console.log(`Saved: ${path.join(verifyRoot, `diff/${name}.png`)}`);
+  console.log(`${name} element diff: ${((pixels / (width * height)) * 100).toFixed(2)}%`);
 }
 
 async function main(): Promise<void> {
@@ -661,6 +686,107 @@ async function main(): Promise<void> {
   );
 
 
+
+  const originalPizza = await context.newPage();
+  await originalPizza.route(originalApiRoute, mockApi);
+  await originalPizza.goto(`http://127.0.0.1:${originalPort}/restaurant-shell.html?id=3`, {
+    waitUntil: 'domcontentloaded',
+  });
+  await originalPizza.waitForFunction(() => document.querySelector('#res-name')?.textContent?.includes('Pizza Palace'), {
+    timeout: 20000,
+  });
+  await originalPizza.evaluate(() => document.fonts.ready);
+  await originalPizza.waitForTimeout(700);
+  await originalPizza.evaluate(() => {
+    document.querySelectorAll(
+      '.ew-gate,.loc-sheet,.theme-intro,.ew-theme-intro,.new-user-location-prompt,.welcome-prompt,.ps-banner,.eg-banner,.service-closed,.closed-overlay,.ew-pr,.ew-pr-scrim,.ew-pr-sheet,.ew-offer-popup,.ew-free-delivery-toast,#ew-sticky-search',
+    ).forEach((element) => element.remove());
+  });
+
+  const appPizza = await context.newPage();
+  await appPizza.goto(`http://127.0.0.1:${appPort}/#/restaurant/3`, { waitUntil: 'networkidle' });
+  await appPizza.waitForFunction(() => document.querySelector('#res-name')?.textContent?.includes('Pizza Palace'), {
+    timeout: 20000,
+  });
+  await appPizza.waitForTimeout(600);
+
+  await originalRestaurant.locator('.nb-add-btn--cust').first().scrollIntoViewIfNeeded();
+  await appRestaurant.locator('.nb-add-btn--cust').first().scrollIntoViewIfNeeded();
+  await originalRestaurant.waitForTimeout(300);
+  await appRestaurant.waitForTimeout(300);
+  await writePairDiff('restaurant-custom-menu', originalRestaurant, appRestaurant, 844);
+
+  await originalRestaurant.locator('.nb-add-btn--cust').first().click();
+  await appRestaurant.locator('.nb-add-btn--cust').first().click();
+  await originalRestaurant.waitForSelector('#ewcs-sheet.show', { timeout: 5000 });
+  await appRestaurant.waitForSelector('#ewcs-sheet.show', { timeout: 5000 });
+  await originalRestaurant.waitForTimeout(500);
+  await appRestaurant.waitForTimeout(500);
+  await writePairDiff('restaurant-custom-sheet', originalRestaurant, appRestaurant, 844);
+
+  await originalRestaurant.locator('.ewcs-opt', { hasText: 'Extra chutney' }).click();
+  await appRestaurant.locator('.ewcs-opt', { hasText: 'Extra chutney' }).click();
+  await originalRestaurant.waitForTimeout(300);
+  await appRestaurant.waitForTimeout(300);
+  await writePairDiff('restaurant-custom-selected', originalRestaurant, appRestaurant, 844);
+
+  await originalRestaurant.locator('.ewcs-close').click();
+  await appRestaurant.locator('.ewcs-close').click();
+  await originalRestaurant.waitForTimeout(400);
+  await appRestaurant.waitForTimeout(400);
+
+  await originalRestaurant.locator('.nb-add-btn--cust').first().click();
+  await appRestaurant.locator('.nb-add-btn--cust').first().click();
+  await originalRestaurant.waitForSelector('#ewcs-sheet.show', { timeout: 5000 });
+  await appRestaurant.waitForSelector('#ewcs-sheet.show', { timeout: 5000 });
+  await originalRestaurant.locator('.ewcs-add').click();
+  await appRestaurant.locator('.ewcs-add').click();
+  await originalRestaurant.waitForTimeout(700);
+  await appRestaurant.waitForTimeout(700);
+  await originalRestaurant.locator('.nb-add-btn--cust').first().scrollIntoViewIfNeeded();
+  await appRestaurant.locator('.nb-add-btn--cust').first().scrollIntoViewIfNeeded();
+  await originalRestaurant.waitForTimeout(300);
+  await appRestaurant.waitForTimeout(300);
+  await writePairDiff('restaurant-custom-quantity', originalRestaurant, appRestaurant, 844);
+
+  await originalPizza.locator('.nb-add-btn--cust').first().scrollIntoViewIfNeeded();
+  await appPizza.locator('.nb-add-btn--cust').first().scrollIntoViewIfNeeded();
+  await originalPizza.waitForTimeout(300);
+  await appPizza.waitForTimeout(300);
+  await originalPizza.locator('.nb-add-btn--cust').first().click();
+  await appPizza.locator('.nb-add-btn--cust').first().click();
+  await originalPizza.waitForSelector('#ewcs-sheet.show', { timeout: 5000 });
+  await appPizza.waitForSelector('#ewcs-sheet.show', { timeout: 5000 });
+  await originalPizza.waitForTimeout(500);
+  await appPizza.waitForTimeout(500);
+  await writePairDiff('restaurant-custom-error', originalPizza, appPizza, 844);
+  await originalPizza.close();
+  await appPizza.close();
+
+  await original.evaluate(() => localStorage.removeItem('nearbite_cart'));
+  await app.evaluate(() => localStorage.removeItem('nearbite_cart'));
+  await original.reload({ waitUntil: 'domcontentloaded' });
+  await app.reload({ waitUntil: 'networkidle' });
+  await original.waitForSelector('.u99-add-cust', { timeout: 20000 });
+  await app.waitForSelector('.u99-add-cust', { timeout: 20000 });
+  await original.waitForTimeout(800);
+  await app.waitForTimeout(800);
+  const alignFirstCard = async (page: import('playwright-core').Page, isApp: boolean) => {
+    await page.evaluate((native) => {
+      const card = document.querySelector('.u99-card-host');
+      if (!card) return;
+      const scroller = native ? document.querySelector<HTMLElement>('.home-scroll') : null;
+      const delta = card.getBoundingClientRect().top - 80;
+      if (scroller) scroller.scrollTop += delta;
+      else window.scrollBy(0, delta);
+    }, isApp);
+  };
+  await alignFirstCard(original, false);
+  await alignFirstCard(app, true);
+  await original.waitForTimeout(300);
+  await app.waitForTimeout(300);
+  await writeElementPairDiff('home-custom-rail', original, app, '.u99-card-host');
+  await writeElementPairDiff('home-custom-add', original, app, '.u99-add-cust');
 
   const originalSearch = await context.newPage();
   await originalSearch.route(originalApiRoute, mockApi);

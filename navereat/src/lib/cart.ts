@@ -1,6 +1,14 @@
 import type { Coupon, DemoOffer } from '../data/demo';
 import { PLATFORM_FEE } from '../data/demo';
 
+export interface CartCustomization {
+  title: string;
+  label: string;
+  extraPrice: number;
+  pricingMode: 'extra' | 'portion';
+  isVeg: boolean;
+}
+
 export interface CartLine {
   quantity: number;
   price: number;
@@ -9,6 +17,10 @@ export interface CartLine {
   originalPrice?: number;
   image?: string;
   resName?: string;
+  restaurantName?: string;
+  menuItem?: string;
+  name?: string;
+  customizations?: CartCustomization[];
 }
 
 export type Cart = Record<string, CartLine>;

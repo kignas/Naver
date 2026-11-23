@@ -14,6 +14,7 @@ import {
 import { billFor, cartRestaurantId, type CartLine } from '../lib/cart';
 import { formatMoney } from '../lib/money';
 import { useAppNav } from '../lib/navigation';
+import { customTextFor, displayNameFor } from '../lib/customization';
 import { useAppStore } from '../store/appStore';
 import { toast } from '../store/toastStore';
 import cartBundleCss from '../styles/original/cart.bundle.css?raw';
@@ -373,6 +374,8 @@ export function Cart() {
                 </div>
                 <div className="ct-restaurant-items">
                   {group.lines.map(({ name, line }) => {
+                    const customText = customTextFor(line.customizations);
+                    const shownName = displayNameFor(name, customText);
                     const original = Number(line.originalPrice ?? 0);
                     const hasDiscount = original > line.price;
                     const discountPct = hasDiscount ? Math.round(((original - line.price) / original) * 100) : 0;
@@ -390,8 +393,9 @@ export function Cart() {
                         <div className="ct-info">
                           <div className="ct-name-row">
                             <VegMark value={line.isVeg} />
-                            <span className="ct-name">{name}</span>
+                            <span className="ct-name">{shownName}</span>
                           </div>
+                          {customText && <div className="ct-custom">{customText}</div>}
                           <div className="ct-price-line">
                             <span className="ct-unit-price ct-num">₹{line.price}</span>
                             {hasDiscount && (

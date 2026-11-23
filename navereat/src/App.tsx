@@ -5,6 +5,7 @@ import { Capacitor } from '@capacitor/core';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { CartBar } from './components/CartBar';
+import { CustomizeProvider } from './components/CustomizeSheet';
 import { PageTransition } from './components/PageTransition';
 import { ToastHost } from './components/ToastHost';
 import { useBackButton } from './hooks/useBackButton';
@@ -94,7 +95,9 @@ export default function App() {
 
   return (
     <HashRouter>
-      <AppRoutes />
+      <CustomizeProvider>
+        <AppRoutes />
+      </CustomizeProvider>
     </HashRouter>
   );
 }

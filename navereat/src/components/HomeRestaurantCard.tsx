@@ -1,6 +1,7 @@
 import type { CSSProperties, KeyboardEvent } from 'react';
 import type { MenuItem, Restaurant } from '../data/demo';
 import type { Cart } from '../lib/cart';
+import { customizedQtyFor, isCustomisable } from '../lib/customization';
 
 interface HomeRestaurantCardProps {
   restaurant: Restaurant;
@@ -8,6 +9,7 @@ interface HomeRestaurantCardProps {
   cart: Cart;
   onOpen: () => void;
   onAdd: (item: MenuItem) => void;
+  onCustomize: (item: MenuItem) => void;
   onIncrement: (item: MenuItem) => void;
   onDecrement: (item: MenuItem) => void;
 }
@@ -119,6 +121,7 @@ export function HomeRestaurantCard({
   cart,
   onOpen,
   onAdd,
+  onCustomize,
   onIncrement,
   onDecrement,
 }: HomeRestaurantCardProps) {
@@ -218,13 +221,29 @@ export function HomeRestaurantCard({
           <div className="u99-carousel" tabIndex={0} aria-label={`${restaurant.name} menu`}>
             {menu.map((menuItem) => {
               const quantity = cart[menuItem.name]?.quantity ?? 0;
+              const customisable = isCustomisable(menuItem);
+              const customQty = customisable ? customizedQtyFor(cart, menuItem) : 0;
               return (
                 <article className="u99-item" data-item-id={menuItem.id} key={menuItem.id}>
                   <div className="u99-item-image">
                     <img className="ew-img-fade is-loaded" src={menuItem.image} alt={`${menuItem.name} from ${restaurant.name}`} loading="lazy" decoding="async" />
                     {menuItem.bestseller && <span className="u99-popular">Popular</span>}
                     <div className="u99-item-action">
-                      {quantity > 0 ? (
+                      {customisable ? (
+                        <button
+                          type="button"
+                          className="u99-add u99-add-cust"
+                          onClick={() => onCustomize(menuItem)}
+                          aria-label={`Customise ${menuItem.name}${customQty > 0 ? `, ${customQty} in cart` : ''}`}
+                        >
+                          +
+                          {customQty > 0 && (
+                            <span className="u99-cust-qty" aria-hidden="true">
+                              {customQty}
+                            </span>
+                          )}
+                        </button>
+                      ) : quantity > 0 ? (
                         <div className="u99-stepper">
                           <button type="button" onClick={() => onDecrement(menuItem)} aria-label={`Remove one ${menuItem.name}`}>
                             −

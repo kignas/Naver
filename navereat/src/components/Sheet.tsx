@@ -16,7 +16,7 @@ export interface SheetHandle {
   close: () => void;
 }
 
-export type SheetVariant = 'ct' | 'filter';
+export type SheetVariant = 'ct' | 'filter' | 'customize';
 
 interface SheetProps {
   title: string;
@@ -27,6 +27,7 @@ interface SheetProps {
   variant?: SheetVariant;
   tabs?: ReactNode;
   headerAction?: ReactNode;
+  headerContent?: ReactNode;
   ariaLabel?: string;
   id?: string;
   rootClassName?: string;
@@ -55,6 +56,7 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
     variant = 'ct',
     tabs,
     headerAction,
+    headerContent,
     ariaLabel,
     id,
     rootClassName = '',
@@ -98,9 +100,11 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
 
   useEffect(() => {
     const body = document.body;
-    body.classList.add('nb-sheet-open', variant === 'filter' ? 'filter-sheet-open' : 'ct-sheet-open');
+    const variantClass =
+      variant === 'filter' ? 'filter-sheet-open' : variant === 'customize' ? 'u99-cust-open ewcs-custom-open' : 'ct-sheet-open';
+    body.classList.add('nb-sheet-open', ...variantClass.split(' '));
     return () => {
-      body.classList.remove('nb-sheet-open', 'filter-sheet-open', 'ct-sheet-open');
+      body.classList.remove('nb-sheet-open', 'filter-sheet-open', 'ct-sheet-open', 'u99-cust-open', 'ewcs-custom-open');
     };
   }, [variant]);
 
@@ -116,6 +120,7 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
         root.querySelector<HTMLElement>('[data-autofocus]') ??
         root.querySelector<HTMLElement>('.ct-sheet-x') ??
         root.querySelector<HTMLElement>('.sheet-done') ??
+        root.querySelector<HTMLElement>('.ewcs-close') ??
         root.querySelector<HTMLElement>(FOCUSABLE);
       target?.focus({ preventScroll: true });
     }, 80);
@@ -204,10 +209,38 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
 
   const panelStyle =
     dragY > 0
-      ? { transform: `translateY(${dragY}px)`, transition: dragging ? 'none' : undefined }
+      ? {
+          transform: variant === 'customize' ? `translate(-50%, ${dragY}px)` : `translateY(${dragY}px)`,
+          transition: dragging ? 'none' : undefined,
+        }
       : undefined;
 
-  const content = variant === 'filter' ? (
+  const content = variant === 'customize' ? (
+    <>
+      <div className={`ewcs-backdrop${visible ? ' show' : ''}`} onClick={requestClose} />
+      <div
+        id={id}
+        className={`ewcs-sheet${visible ? ' show' : ''}${sheetClassName ? ` ${sheetClassName}` : ''}`}
+        style={panelStyle}
+        role="dialog"
+        aria-modal="true"
+        aria-label={ariaLabel ?? title}
+        ref={sheetRef}
+      >
+        <div className="ewcs-handle sheet-drag-handle" aria-hidden="true" {...dragProps} />
+        <div className="ewcs-head sheet-drag-handle" {...dragProps}>
+          <div className="ewcs-htitle">
+            {headerContent ?? <h3>{title}</h3>}
+          </div>
+          <button className="ewcs-close" type="button" aria-label="Close" onClick={requestClose}>
+            ✕
+          </button>
+        </div>
+        <div className="ewcs-body">{children}</div>
+        {footer && <div className="ewcs-foot">{footer}</div>}
+      </div>
+    </>
+  ) : variant === 'filter' ? (
     <div
       className={`filter-sheet nb-sheet${visible ? ' open' : ''}`}
       role="dialog"

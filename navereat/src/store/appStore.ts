@@ -13,11 +13,26 @@ import {
   type Order,
   type OrderLine,
 } from '../data/demo';
-import { billFor, cartSubtotal, couponDiscount, offerDiscountFor, type Cart } from '../lib/cart';
+import { billFor, cartSubtotal, couponDiscount, offerDiscountFor, type Cart, type CartLine } from '../lib/cart';
+import {
+  compositeNameFor,
+  flatCustomizationsFor,
+  labelsFor,
+  unitPriceFor,
+  type CustomizationSelection,
+} from '../lib/customization';
 
 const emitCartUpdated = (detail: Record<string, unknown>): void => {
   try {
     window.dispatchEvent(new CustomEvent('eatswada:cart-updated', { detail }));
+  } catch {
+    /* non-browser test environment */
+  }
+};
+
+const notifyGlobalCart = (): void => {
+  try {
+    (window as Window & { updateGlobalCart?: () => void }).updateGlobalCart?.();
   } catch {
     /* non-browser test environment */
   }
@@ -64,6 +79,14 @@ interface AppState {
   login: (phone: string) => void;
   logout: () => void;
   addItem: (item: MenuItem, resId: number) => void;
+  addCustomizedItem: (
+    item: MenuItem,
+    resId: number,
+    selections: CustomizationSelection[],
+    qty: number,
+    editKey?: string | null,
+  ) => void;
+  removeCustomizedUnit: (item: MenuItem) => void;
   decrementItem: (name: string) => void;
   setQty: (name: string, qty: number) => void;
   removeItem: (name: string) => void;
@@ -114,6 +137,9 @@ export const useAppStore = create<AppState>((set, get) => ({
             originalPrice: existing.originalPrice ?? item.originalPrice,
             image: existing.image ?? item.image,
             resName: existing.resName ?? restaurant?.name,
+            restaurantName: existing.restaurantName ?? restaurant?.name,
+            menuItem: existing.menuItem ?? item.id,
+            name: existing.name ?? item.name,
           }
         : {
             quantity: 1,
@@ -123,9 +149,97 @@ export const useAppStore = create<AppState>((set, get) => ({
             originalPrice: item.originalPrice,
             image: item.image,
             resName: restaurant?.name,
+            restaurantName: restaurant?.name,
+            menuItem: item.id,
+            name: item.name,
           };
       emitCartUpdated({ source: 'addItem', itemName: item.name });
       return { cart: { ...cart, [item.name]: line } };
+    }),
+
+  addCustomizedItem: (item, resId, selections, qty, editKey = null) =>
+    set((state) => {
+      const cart: Cart = Object.values(state.cart).some((line) => line.resId !== resId)
+        ? {}
+        : { ...state.cart };
+      const labels = labelsFor(selections);
+      const composite = compositeNameFor(item, selections);
+      const unit = unitPriceFor(item, selections);
+      const restaurant = findRestaurant(resId);
+      const hasPortion = selections.some((selection) => selection.pricingMode === 'portion');
+      const originalPrice =
+        !hasPortion && Number(item.originalPrice) > Number(item.price)
+          ? Number(item.originalPrice) + (unit - Number(item.price))
+          : undefined;
+      const entry: CartLine = {
+        quantity: Math.max(0, Math.round(qty)),
+        price: unit,
+        originalPrice,
+        resId,
+        menuItem: item.id,
+        image: item.image,
+        name: composite,
+        isVeg: item.isVeg,
+        resName: restaurant?.name,
+        restaurantName: restaurant?.name,
+        customizations: flatCustomizationsFor(selections),
+      };
+
+      if (entry.quantity <= 0) {
+        if (editKey && cart[editKey]) delete cart[editKey];
+        emitCartUpdated({ source: 'addCustomizedItem', customized: true, removed: true, itemName: item.name });
+        notifyGlobalCart();
+        return { cart };
+      }
+
+      if (editKey && cart[editKey]) {
+        delete cart[editKey];
+        if (editKey === composite) {
+          cart[composite] = { ...entry };
+        } else if (cart[composite]) {
+          cart[composite] = {
+            ...cart[composite],
+            quantity: Number(cart[composite].quantity) + entry.quantity,
+            price: unit,
+            customizations: entry.customizations,
+          };
+        } else {
+          cart[composite] = entry;
+        }
+      } else if (cart[composite]) {
+        cart[composite] = {
+          ...cart[composite],
+          quantity: Number(cart[composite].quantity) + entry.quantity,
+          price: unit,
+          customizations: entry.customizations,
+        };
+      } else {
+        cart[composite] = entry;
+      }
+
+      emitCartUpdated({ source: 'addCustomizedItem', customized: true, itemName: item.name, labels });
+      notifyGlobalCart();
+      return { cart };
+    }),
+
+  removeCustomizedUnit: (item) =>
+    set((state) => {
+      const cart = { ...state.cart };
+      const keys = Object.keys(cart);
+      for (let index = keys.length - 1; index >= 0; index -= 1) {
+        const key = keys[index];
+        const line = cart[key];
+        if (!line || Number(line.quantity) <= 0) continue;
+        const sameId = String(line.menuItem ?? '') === item.id;
+        const composite = key === item.name || key.startsWith(`${item.name} (`);
+        if (!sameId && !composite) continue;
+        if (Number(line.quantity) <= 1) delete cart[key];
+        else cart[key] = { ...line, quantity: Number(line.quantity) - 1 };
+        emitCartUpdated({ source: 'removeCustomizedUnit', customized: true, itemName: item.name });
+        notifyGlobalCart();
+        return { cart };
+      }
+      return state;
     }),
 
   decrementItem: (name) =>
@@ -238,6 +352,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
 export const currentBill = (): ReturnType<typeof billFor> =>
   billFor(useAppStore.getState().cart, useAppStore.getState().coupon);
+
+if (typeof window !== 'undefined') {
+  (window as Window & { updateGlobalCart?: () => void }).updateGlobalCart = () => {
+    useAppStore.setState({ cart: { ...useAppStore.getState().cart } });
+  };
+}
 
 useAppStore.subscribe((state) => {
   try {

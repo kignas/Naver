@@ -18,6 +18,7 @@ import {
 } from '../data/demo';
 import { useSkeleton } from '../hooks/useSkeleton';
 import { useAppNav } from '../lib/navigation';
+import { useCustomize } from '../lib/customizeContext';
 import { useAppStore } from '../store/appStore';
 import { toast } from '../store/toastStore';
 import '../styles/original/header-theme.css';
@@ -157,6 +158,8 @@ export function Home() {
     selectRestaurant(restaurant.id);
     nav.push(`/restaurant/${restaurant.id}`);
   };
+
+  const { openCustomize } = useCustomize();
 
   const addFromHome = (restaurant: Restaurant, menuItem: MenuItem) => {
     selectRestaurant(restaurant.id);
@@ -409,6 +412,7 @@ export function Home() {
                     cart={cart}
                     onOpen={() => openRestaurant(restaurant)}
                     onAdd={(menuItem) => addFromHome(restaurant, menuItem)}
+                    onCustomize={(menuItem) => openCustomize(menuItem, restaurant.id, { editExisting: true })}
                     onIncrement={(menuItem) => addItem(menuItem, restaurant.id)}
                     onDecrement={(menuItem) => decrementItem(menuItem.name)}
                   />

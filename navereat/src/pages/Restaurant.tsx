@@ -5,6 +5,8 @@ import { findRestaurant } from '../data/demo';
 import type { MenuItem } from '../data/demo';
 import { useSkeleton } from '../hooks/useSkeleton';
 import { useAppNav } from '../lib/navigation';
+import { useCustomize } from '../lib/customizeContext';
+import { customizedQtyFor, isCustomisable } from '../lib/customization';
 import { useAppStore } from '../store/appStore';
 import { toast } from '../store/toastStore';
 import restaurantBundleCss from '../styles/original/restaurant.bundle.css?raw';
@@ -63,6 +65,8 @@ export function Restaurant() {
   const cart = useAppStore((s) => s.cart);
   const addItem = useAppStore((s) => s.addItem);
   const decrementItem = useAppStore((s) => s.decrementItem);
+  const removeCustomizedUnit = useAppStore((s) => s.removeCustomizedUnit);
+  const { openCustomize } = useCustomize();
   const selectRestaurant = useAppStore((s) => s.selectRestaurant);
 
   const [tab, setTab] = useState<MenuTab>('menu');
@@ -528,6 +532,8 @@ export function Restaurant() {
                     <div className={`menu-cat-items${groupCollapsed ? ' collapsed' : ''}`}>
                       {group.items.map((menuItem, itemIndex) => {
                         const qty = cart[menuItem.name]?.quantity ?? 0;
+                        const customisable = isCustomisable(menuItem);
+                        const customQty = customisable ? customizedQtyFor(cart, menuItem) : 0;
                         const originalPrice =
                           menuItem.originalPrice && menuItem.originalPrice > menuItem.price
                             ? menuItem.originalPrice
@@ -611,7 +617,40 @@ export function Restaurant() {
                                 )}
                               </div>
                               <div className="nb-item-cta" id={`btn-container-${menuItem.id}`}>
-                                {qty > 0 ? (
+                                {customisable ? (
+                                  customQty > 0 ? (
+                                    <div className="nb-custom-cart-control">
+                                      <button
+                                        type="button"
+                                        className="nb-custom-remove"
+                                        onClick={() => removeCustomizedUnit(menuItem)}
+                                        aria-label={`Remove one ${menuItem.name} from cart`}
+                                      >
+                                        −
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="nb-add-btn nb-add-btn--cust has-cart-qty"
+                                        data-menu-item-id={menuItem.id}
+                                        aria-label={`Customise ${menuItem.name}, ${customQty} in cart`}
+                                        onClick={() => openCustomize(menuItem, restaurant.id)}
+                                      >
+                                        ADD <span className="nb-add-plus" aria-hidden="true">+</span>
+                                        <span className="nb-custom-qty" aria-hidden="true">{customQty}</span>
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className="nb-add-btn nb-add-btn--cust"
+                                      data-menu-item-id={menuItem.id}
+                                      aria-label={`Customise ${menuItem.name}`}
+                                      onClick={() => openCustomize(menuItem, restaurant.id)}
+                                    >
+                                      ADD <span className="nb-add-plus" aria-hidden="true">+</span>
+                                    </button>
+                                  )
+                                ) : qty > 0 ? (
                                   <div className="nb-qty" role="group" aria-label="Quantity">
                                     <button
                                       type="button"
@@ -642,7 +681,9 @@ export function Restaurant() {
                                   </button>
                                 )}
                               </div>
-                              <div className="nb-item-customisable nb-item-customisable-spacer" />
+                              <div className={customisable ? 'nb-item-customisable' : 'nb-item-customisable nb-item-customisable-spacer'}>
+                                {customisable ? 'Customisable' : ''}
+                              </div>
                             </div>
                           </div>
                         );
