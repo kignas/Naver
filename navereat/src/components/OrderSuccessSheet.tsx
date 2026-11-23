@@ -82,14 +82,13 @@ export const OrderSuccessSheet = forwardRef<OrderSuccessHandle, OrderSuccessShee
       if (stageRef.current !== 'placed' || continuedRef.current) return;
       continuedRef.current = true;
       clearTimers();
-      setLeaving(true);
-      // Start the route while the sheet slides out, not 260 ms later.
+      // Remove the sheet and start the route in the same task: an exit
+      // animation here would race the route transition and register layout
+      // shifts while the tracking page is being laid out.
+      setStage(null);
+      setEntered(false);
+      setLeaving(false);
       onContinueRef.current();
-      window.setTimeout(() => {
-        setStage(null);
-        setEntered(false);
-        setLeaving(false);
-      }, 260);
     }, [clearTimers]);
 
     const open = useCallback(() => {
