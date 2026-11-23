@@ -407,3 +407,84 @@ body {
 .home-screen .hero-header .search-mic {
   color: var(--hd-on-light);
 }
+
+/* ── Item 11A: header collapse, pinned search row, hero parallax ──────────
+   --hp (0–1) and --hsy (px) are written once per frame by
+   src/lib/scrollHeaderMotion.ts. Everything below is transform/opacity only:
+   no size, offset or font property changes, so the header's flow height is
+   identical at every scroll position. */
+.home-screen {
+  --hp: 0;
+  --hsy: 0;
+}
+
+.hero-header.is-header-collapsed .loc-row {
+  transform: translate3d(0, calc(var(--hp) * -100%), 0);
+  opacity: calc(1 - var(--hp));
+}
+
+.hero-header.is-header-collapsed .header-slide__art {
+  transform: translate3d(0, min(calc(var(--hsy) * 0.32px), 70px), 0);
+}
+
+@media (max-width: 599px) {
+  /* Sticky only while the header is collapsing: at rest the row keeps its
+     original box, so the page rasterises exactly like the original. */
+  .hero-header.is-header-collapsed .search-row {
+    position: sticky;
+    top: 0;
+    transform: translate3d(0, calc(var(--hp) * 8px), 0);
+  }
+
+  /* Compact the controls, not the row: the row keeps its exact box so the
+     sticky backdrop never shows a seam at the viewport edge. */
+  .hero-header.is-header-collapsed .search-row .search-box {
+    transform-origin: top left;
+    transform: scale(calc(1 - 0.06 * var(--hp)));
+  }
+
+  .hero-header.is-header-collapsed .search-row .veg-box {
+    transform-origin: top right;
+    transform: scale(calc(1 - 0.08 * var(--hp)));
+  }
+
+  /* The pinned row paints the status-bar burgundy itself, so the seam between
+     the webview top and the header can never show a gap. */
+  .hero-header.is-header-collapsed .search-row::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    top: -10px;
+    right: -20px;
+    bottom: -8px;
+    left: -20px;
+    background: var(--hd-primary, #5D0D18);
+    opacity: var(--hp);
+    pointer-events: none;
+  }
+}
+
+/* Only while the finger is moving. */
+.hero-header.is-header-motion .loc-row {
+  will-change: transform, opacity;
+}
+.hero-header.is-header-motion .search-row,
+.hero-header.is-header-motion .header-slide__art {
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-header.is-header-collapsed .loc-row,
+  .hero-header.is-header-collapsed .search-row,
+  .hero-header.is-header-collapsed .search-row .search-box,
+  .hero-header.is-header-collapsed .search-row .veg-box,
+  .hero-header.is-header-collapsed .header-slide__art {
+    transform: none;
+  }
+  .hero-header.is-header-collapsed .loc-row {
+    opacity: 1;
+  }
+  .hero-header.is-header-collapsed .search-row::before {
+    opacity: 0;
+  }
+}

@@ -17,7 +17,8 @@
     "perf-transitions": "node scripts/transition-check.mjs after",
     "statusbar-check": "vite-node scripts/statusbar-check.ts",
     "nav-check": "node scripts/nav-check.mjs",
-    "transitions:frames": "node scripts/transition-frames.mjs after"
+    "transitions:frames": "node scripts/transition-frames.mjs after",
+    "motion:evidence": "node scripts/motion-evidence.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.0",

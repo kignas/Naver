@@ -14,6 +14,7 @@ import {
   type Restaurant,
 } from '../data/demo';
 import { useCachedReady } from '../hooks/useCachedReady';
+import { useScrollHeaderMotion } from '../lib/scrollHeaderMotion';
 import { useSearchPlaceholder } from '../hooks/useSearchPlaceholder';
 import { useAppNav } from '../lib/navigation';
 import { createRouteStyleSheet } from '../lib/routeStyles';
@@ -113,6 +114,7 @@ export function Home() {
   });
   const [sortBy, setSortBy] = useState<SortKey>(cachedHome.sortBy);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
   const openSearch = useSearchStore((state) => state.openSearch);
   const { dish: searchDish, duration: searchDishDuration } = useSearchPlaceholder(scrollRef);
 
@@ -124,11 +126,15 @@ export function Home() {
 
   useLayoutEffect(() => homeStyle.attach(), []);
 
+  const storeScrollTop = useCallback((top: number) => patchHome({ scrollTop: top }), [patchHome]);
+  const syncHeaderMotion = useScrollHeaderMotion({ scroller: scrollRef, host: headerRef, onScrollTop: storeScrollTop });
+
   useLayoutEffect(() => {
     const scroller = scrollRef.current;
     if (!scroller || !ready) return;
     scroller.scrollTop = cachedHome.scrollTop;
-  }, [cachedHome.scrollTop, ready]);
+    syncHeaderMotion();
+  }, [cachedHome.scrollTop, ready, syncHeaderMotion]);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -193,15 +199,8 @@ export function Home() {
 
   return (
     <div className="home-screen">
-      <div
-        className="home-scroll"
-        ref={scrollRef}
-        onScroll={() => {
-          const scroller = scrollRef.current;
-          if (scroller) patchHome({ scrollTop: scroller.scrollTop });
-        }}
-      >
-        <header className="hero-header" id="home-header">
+      <div className="home-scroll" ref={scrollRef}>
+        <header className="hero-header" id="home-header" ref={headerRef}>
           <div className="loc-row es-header-item">
             <button
               type="button"
