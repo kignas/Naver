@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { findRestaurant } from '../data/demo';
 import type { MenuItem } from '../data/demo';
-import { useSkeleton } from '../hooks/useSkeleton';
+import { useCachedReady } from '../hooks/useCachedReady';
 import { useAppNav } from '../lib/navigation';
 import { useCustomize } from '../lib/customizeContext';
 import { customizedQtyFor, isCustomisable } from '../lib/customization';
 import { useAppStore } from '../store/appStore';
+import { useUiStore } from '../store/uiStore';
 import { toast } from '../store/toastStore';
 import restaurantBundleCss from '../styles/original/restaurant.bundle.css?raw';
 import restaurantShellCss from '../styles/original/restaurant-shell.css?raw';
@@ -59,9 +60,13 @@ function categoryId(name: string, index: number): string {
 
 export function Restaurant() {
   const { id } = useParams<{ id: string }>();
+  const routeId = Number(id);
   const restaurant = findRestaurant(id);
   const nav = useAppNav();
-  const ready = useSkeleton(400, 700);
+  const ready = useCachedReady(`restaurant:${routeId}`, 400, 400);
+  const cachedRestaurant = useUiStore.getState().restaurants[routeId];
+  const cachedMenu = useUiStore((s) => s.menus[routeId]);
+  const patchRestaurant = useUiStore((s) => s.patchRestaurant);
   const cart = useAppStore((s) => s.cart);
   const addItem = useAppStore((s) => s.addItem);
   const decrementItem = useAppStore((s) => s.decrementItem);
@@ -69,13 +74,15 @@ export function Restaurant() {
   const { openCustomize } = useCustomize();
   const selectRestaurant = useAppStore((s) => s.selectRestaurant);
 
-  const [tab, setTab] = useState<MenuTab>('menu');
-  const [filters, setFilters] = useState<Set<MenuFilter>>(() => new Set());
-  const [query, setQuery] = useState('');
-  const [menuSearchOpen, setMenuSearchOpen] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  const [activeCategory, setActiveCategory] = useState(0);
+  const [tab, setTab] = useState<MenuTab>(cachedRestaurant?.tab ?? 'menu');
+  const [filters, setFilters] = useState<Set<MenuFilter>>(
+    () => new Set((cachedRestaurant?.filters ?? []) as MenuFilter[]),
+  );
+  const [query, setQuery] = useState(cachedRestaurant?.query ?? '');
+  const [menuSearchOpen, setMenuSearchOpen] = useState(cachedRestaurant?.menuSearchOpen ?? false);
+  const [saved, setSaved] = useState(cachedRestaurant?.saved ?? false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set(cachedRestaurant?.collapsed ?? []));
+  const [activeCategory, setActiveCategory] = useState(cachedRestaurant?.activeCategory ?? 0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -103,25 +110,40 @@ export function Restaurant() {
   }, [restaurant, selectRestaurant]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: 0 });
-    setActiveCategory(0);
-  }, [id]);
+    if (!Number.isFinite(routeId)) return;
+    patchRestaurant(routeId, {
+      tab,
+      filters: [...filters],
+      query,
+      menuSearchOpen,
+      saved,
+      collapsed: [...collapsed],
+      activeCategory,
+    });
+  }, [activeCategory, collapsed, filters, menuSearchOpen, patchRestaurant, query, routeId, saved, tab]);
+
+  useLayoutEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller || !ready) return;
+    scroller.scrollTop = cachedRestaurant?.scrollTop ?? 0;
+  }, [cachedRestaurant?.scrollTop, ready, routeId]);
 
   useEffect(() => {
     if (menuSearchOpen) searchRef.current?.focus();
   }, [menuSearchOpen]);
 
+  const menu = useMemo(() => cachedMenu ?? restaurant?.menu ?? [], [cachedMenu, restaurant]);
   const groups = useMemo<MenuGroup[]>(() => {
     if (!restaurant) return [];
     const grouped = new Map<string, MenuItem[]>();
-    restaurant.menu.forEach((menuItem) => {
+    menu.forEach((menuItem) => {
       const name = menuItem.category?.trim() || 'Recommended';
       const list = grouped.get(name);
       if (list) list.push(menuItem);
       else grouped.set(name, [menuItem]);
     });
     return Array.from(grouped, ([name, items]) => ({ name, items }));
-  }, [restaurant]);
+  }, [menu, restaurant]);
 
   const visibleGroups = useMemo(() => {
     const search = query.trim().toLowerCase();
@@ -228,6 +250,7 @@ export function Restaurant() {
       if (top <= threshold) next = index;
     });
     if (next !== activeCategory) setActiveCategory(next);
+    patchRestaurant(routeId, { scrollTop: scroller.scrollTop, activeCategory: next });
   };
 
   return (

@@ -557,13 +557,127 @@ ol {
   }
 }
 
-/* ---------- Route transition wrappers ---------- */
-.page-motion {
+/* ---------- Route transition layers ---------- */
+.route-stage {
   position: absolute;
   inset: 0;
+  overflow: hidden;
+  background: #fff;
+  isolation: isolate;
+}
+
+.route-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #fff;
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
   will-change: transform, opacity;
   backface-visibility: hidden;
+}
+
+.route-layer.is-idle {
+  transition: none;
+}
+
+.route-layer.is-top {
   touch-action: pan-y;
+}
+
+.route-layer-back {
+  visibility: hidden;
+  z-index: 0;
+}
+
+.route-stage.is-animating {
+  pointer-events: none;
+}
+
+@keyframes routePushIn {
+  from {
+    transform: translate3d(100%, 0, 0);
+    opacity: 0.6;
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+}
+
+@keyframes routePushOut {
+  from {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+  to {
+    transform: translate3d(-22%, 0, 0);
+    opacity: 0.7;
+  }
+}
+
+@keyframes routePopIn {
+  from {
+    transform: translate3d(-22%, 0, 0);
+    opacity: 0.85;
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+}
+
+@keyframes routePopOut {
+  from {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+  to {
+    transform: translate3d(100%, 0, 0);
+    opacity: 0.4;
+  }
+}
+
+@keyframes routeFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes routeFadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.route-stage.direction-push .route-layer.is-enter {
+  animation: routePushIn var(--dur-push) var(--ease-toing) both;
+}
+
+.route-stage.direction-push .route-layer.is-leave {
+  animation: routePushOut var(--dur-push) var(--ease-toing) both;
+}
+
+.route-stage.direction-pop .route-layer.is-enter {
+  animation: routePopIn var(--dur-push) var(--ease-toing) both;
+}
+
+.route-stage.direction-pop .route-layer.is-leave {
+  animation: routePopOut var(--dur-push) var(--ease-toing) both;
+}
+
+.route-stage.direction-tab .route-layer.is-enter {
+  animation: routeFadeIn var(--dur-tab) ease-out both;
+}
+
+.route-stage.direction-tab .route-layer.is-leave {
+  animation: routeFadeOut var(--dur-tab) ease-out both;
 }
 
 .swipe-edge {

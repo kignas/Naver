@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
 import { Capacitor } from '@capacitor/core';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { StatusBar, Style } from '@capacitor/status-bar';
@@ -57,13 +56,12 @@ function AppRoutes() {
   return (
     <div className="app-shell">
       <div className="app-viewport">
-        <AnimatePresence mode="sync" initial={false} custom={direction}>
-          <PageTransition
-            key={location.pathname}
-            direction={direction}
-            swipeBack={!isTabPath(location.pathname) && location.pathname !== '/login'}
-          >
-            <Routes location={location}>
+        <PageTransition
+          location={location}
+          direction={direction}
+          swipeBack={!isTabPath(location.pathname) && location.pathname !== '/login'}
+          render={(routeLocation) => (
+            <Routes location={routeLocation}>
               <Route path="/login" element={<Login />} />
               <Route path="/" element={<Home />} />
               <Route path="/under99" element={<Under99 />} />
@@ -76,8 +74,8 @@ function AppRoutes() {
               <Route path="/profile" element={<Profile />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-          </PageTransition>
-        </AnimatePresence>
+          )}
+        />
       </div>
       <CartBar visible={cartBarVisible} mode={cartBarMode} aboveNav={cartBarAboveNav} />
       <ToastHost />

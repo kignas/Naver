@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import heroDish from '../assets/placeholders/hero-dish.svg';
@@ -16,10 +16,11 @@ import {
   type MenuItem,
   type Restaurant,
 } from '../data/demo';
-import { useSkeleton } from '../hooks/useSkeleton';
+import { useCachedReady } from '../hooks/useCachedReady';
 import { useAppNav } from '../lib/navigation';
 import { useCustomize } from '../lib/customizeContext';
 import { useAppStore } from '../store/appStore';
+import { useUiStore } from '../store/uiStore';
 import { toast } from '../store/toastStore';
 import '../styles/original/header-theme.css';
 import '../styles/original/home-base.css';
@@ -102,23 +103,29 @@ function RestaurantSkeleton() {
 
 export function Home() {
   const nav = useAppNav();
-  const ready = useSkeleton(420, 650);
+  const ready = useCachedReady('home', 420, 650);
+  const patchHome = useUiStore((state) => state.patchHome);
+  const cachedHome = useUiStore.getState().home;
   const cart = useAppStore((state) => state.cart);
   const user = useAppStore((state) => state.user);
   const addItem = useAppStore((state) => state.addItem);
   const decrementItem = useAppStore((state) => state.decrementItem);
   const selectRestaurant = useAppStore((state) => state.selectRestaurant);
-  const [vegOnly, setVegOnly] = useState(false);
-  const [nearFast, setNearFast] = useState(false);
-  const [rating4, setRating4] = useState(false);
-  const [under30, setUnder30] = useState(false);
-  const [under100, setUnder100] = useState(false);
+  const [vegOnly, setVegOnly] = useState(cachedHome.vegOnly);
+  const [nearFast, setNearFast] = useState(cachedHome.nearFast);
+  const [rating4, setRating4] = useState(cachedHome.rating4);
+  const [under30, setUnder30] = useState(cachedHome.under30);
+  const [under100, setUnder100] = useState(cachedHome.under100);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const filterSheetRef = useRef<SheetHandle>(null);
   const closeFilterSheet = () => filterSheetRef.current?.close();
-  const [activeFilterTab, setActiveFilterTab] = useState<FilterTab>('SORT');
-  const [sortBy, setSortBy] = useState<SortKey>('recommended');
+  const [activeFilterTab, setActiveFilterTab] = useState<FilterTab>(() => {
+    const tab = cachedHome.activeFilterTab;
+    return FILTER_TABS.some((entry) => entry.id === tab) ? (tab as FilterTab) : 'SORT';
+  });
+  const [sortBy, setSortBy] = useState<SortKey>(cachedHome.sortBy);
   const [dishIndex, setDishIndex] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const initial = (user?.name ?? demoUser.name).charAt(0).toUpperCase();
 
@@ -128,6 +135,16 @@ export function Home() {
     }, 2800);
     return () => window.clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    patchHome({ vegOnly, nearFast, rating4, under30, under100, sortBy, activeFilterTab });
+  }, [activeFilterTab, nearFast, patchHome, rating4, sortBy, under100, under30, vegOnly]);
+
+  useLayoutEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller || !ready) return;
+    scroller.scrollTop = cachedHome.scrollTop;
+  }, [cachedHome.scrollTop, ready]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -182,7 +199,14 @@ export function Home() {
 
   return (
     <div className="home-screen">
-      <div className="home-scroll">
+      <div
+        className="home-scroll"
+        ref={scrollRef}
+        onScroll={() => {
+          const scroller = scrollRef.current;
+          if (scroller) patchHome({ scrollTop: scroller.scrollTop });
+        }}
+      >
         <header className="hero-header" id="home-header">
           <div className="loc-row es-header-item">
             <button

@@ -29,22 +29,22 @@
   z-index: 200;
 }
 
-.ct-coupon-list {
+.cart-page .ct-coupon-list {
   display: grid;
   gap: 8px;
   margin-top: 16px;
 }
 
-.ct-coupon-list .ct-sav-row {
+.cart-page .ct-coupon-list .ct-sav-row {
   min-height: 58px;
 }
 
-.ct-coupon-list .ct-sav-flag {
+.cart-page .ct-coupon-list .ct-sav-flag {
   flex: 0 0 auto;
   letter-spacing: .04em;
 }
 
-.navereat-place-order {
+.cart-page .navereat-place-order {
   width: 100%;
   min-height: 52px;
   margin-top: 18px;
