@@ -11,3 +11,10 @@ android/local.properties
 android/.idea/
 android/captures/
 *.iml
+
+# Read-only original frontend reference (Eatswada) and local verification output.
+# These live outside the repo; the patterns guard against accidental adds.
+reference/
+verify/
+.openhands/
+workspace/reference/
