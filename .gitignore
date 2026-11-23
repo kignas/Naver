@@ -2,7 +2,7 @@
 verify/
 reference/
 
-# Original Eatswada frontend copies must never be committed here.
+# Original reference frontend copies must never be committed here.
 # The ported app lives under navereat/ and is not affected by these root patterns.
 /*.html
 /*.js
@@ -19,3 +19,14 @@ dist/
 
 # Agent workspace notes
 .openhands/
+
+# Local signing material must never be committed
+*.keystore
+*.jks
+.secrets/
+
+# Android build outputs
+navereat/android/.gradle/
+navereat/android/build/
+navereat/android/app/build/
+navereat/android/local.properties

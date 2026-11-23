@@ -19,7 +19,7 @@ const CART = {
 const ROUTES = [
   { name: 'Login', path: '/login', auth: false, ready: '.login-page', scroller: '.login-page', last: '.legal-text', before: 'No (clipped)', cause: '.page overflow:hidden overrode .login-page; page height was content-driven' },
   { name: 'Home', path: '/', auth: true, ready: '.home-scroll', scroller: '.home-scroll', last: '.u99-card-host', before: 'Yes', cause: 'Route scroller already worked; added overlay lock' },
-  { name: '₹99 Store', path: '/under99', auth: true, ready: '.u99-page', scroller: '.u99-scroll', last: '.u99-card', before: 'Yes', cause: 'Route scroller already worked; added overlay lock' },
+  { name: '₹99 Store', path: '/under99', auth: true, ready: '.u99-page', scroller: '.u99-scroll', last: '.u99-product-card', before: 'Yes', cause: 'Route scroller already worked; added overlay lock' },
   { name: 'Category', path: '/category/Biryani', auth: true, ready: '.cat-page', scroller: '.cat-scroll', last: '.cat-result', before: 'Fits', cause: 'Content fits; added overlay lock' },
   { name: 'Restaurant', path: '/restaurant/2', auth: true, ready: '.rest-page', scroller: '.rest-scroll', last: '.rmf-report', before: 'Yes', cause: 'Route scroller already worked; added overlay lock' },
   { name: 'Cart', path: '/cart?offers=none', auth: true, ready: '.cart-page', scroller: '.cart-page', last: '.ct-oi-policy', before: 'No (clipped)', cause: '.page overflow:hidden loaded after .cart-page; forced auto overflow' },

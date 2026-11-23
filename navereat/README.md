@@ -1,6 +1,6 @@
 # Navereat
 
-A fully static, demo-only Android app rebuilt from the original Nearbite web UI.
+A fully static, demo-only Android app rebuilt from the original reference web UI.
 It uses React 18, Vite, TypeScript, React Router, Framer Motion, plain CSS, and
 Capacitor 6. There is no backend, no Firebase, no maps SDK, and no runtime
 network access — fonts, icons, images, and data are all bundled locally.
@@ -101,12 +101,12 @@ permissions and blocks cleartext traffic.
 
 ## Visual reference
 
-The original Eatswada frontend is kept outside this public repository as a
-read-only reference, for example `/workspace/reference/Nearbite-main/`. Run the
+The original reference frontend is kept outside this public repository as a
+read-only reference, for example `/workspace/reference/`. Run the
 screenshot comparison with:
 
 ```bash
-ORIGINAL_DIR=/workspace/reference/Nearbite-main npm run visual
+ORIGINAL_DIR=/workspace/reference npm run visual
 ```
 
 The script writes screenshots and diffs to `../verify/`; both `verify/` and
@@ -121,8 +121,11 @@ workflow**. It installs Node 22, Java 17, and the Android SDK, runs
 uploads the `Navereat-debug-apk` artifact, and publishes a GitHub Release tagged
 `v1.0.<run_number>` with the APK renamed to `Navereat.apk`.
 
-The APK is debug-signed, so it installs directly on a phone. A commented
-signed-release section is included in the workflow for later use.
+Every CI build is signed with one fixed debug keystore supplied through the
+`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, and `KEY_PASSWORD` repository
+secrets, so a new APK installs over the previous build. The keystore is never
+committed. `versionName` is `1.0.0`; `versionCode` is the Actions run number.
+A commented signed-release section is included in the workflow for later use.
 
 `.github/workflows/perf.yml` runs the unthrottled push/pop FPS gate on pushes
 and pull requests that touch `navereat/**`, using a downloaded Chromium and

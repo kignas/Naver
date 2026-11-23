@@ -1,5 +1,8 @@
 apply plugin: 'com.android.application'
 
+def ciKeystore = System.getenv('NAVEREAT_KEYSTORE_FILE')
+def ciVersionCode = (project.findProperty('versionCode') ?: '1').toString().toInteger()
+
 android {
     namespace "com.navereat.app"
     compileSdk rootProject.ext.compileSdkVersion
@@ -7,8 +10,8 @@ android {
         applicationId "com.navereat.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode ciVersionCode
+        versionName "1.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,7 +19,20 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (ciKeystore) {
+            debug {
+                storeFile file(ciKeystore)
+                storePassword System.getenv('NAVEREAT_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('NAVEREAT_KEY_ALIAS')
+                keyPassword System.getenv('NAVEREAT_KEY_PASSWORD')
+            }
+        }
+    }
     buildTypes {
+        debug {
+            if (ciKeystore) signingConfig signingConfigs.debug
+        }
         release {
             minifyEnabled true
             shrinkResources true
