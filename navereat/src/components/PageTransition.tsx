@@ -11,6 +11,9 @@ const PUSH_DURATION = 300;
 const PUSH_START_BUDGET = 16;
 const EASE = 'cubic-bezier(0.22, 0.61, 0.36, 1)';
 const SWIPE_THRESHOLD = 0.35;
+// Cap the freeze snapshot: the visible top of the page is what can shift during
+// a slide, and every captured node costs 50 pinned properties on apply.
+const SNAPSHOT_NODES = 96;
 
 type Phase = 'idle' | 'enter' | 'leave';
 
@@ -123,7 +126,7 @@ export function PageTransition({ location, swipeBack = false, render }: PageTran
   }, []);
 
   const captureCurrentLayout = useCallback((force = false) => {
-    const limit = force ? Infinity : 120;
+    const limit = SNAPSHOT_NODES;
     const tab = activeTabRef.current;
     if (tab) {
       const key = `tab:${tab}`;

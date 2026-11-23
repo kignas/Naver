@@ -468,7 +468,7 @@ try {
   const clsBudget = Number(process.env.PERF_CLS_BUDGET || 0.01);
   const maxTransitionCls = result.clsTransitions.reduce((max, transition) => Math.max(max, transition.cls), 0);
   const clsPass = result.clsTransitions.every((transition) => transition.cls <= clsBudget);
-  const latencyBudget = Number(process.env.PERF_LATENCY_BUDGET || 100);
+  const latencyBudget = Number(process.env.PERF_LATENCY_BUDGET || 60);
   const latency1xRows = result.pushLatency['1x'].rows;
   const maxTapToFrame1x = Math.max(...latency1xRows.map((row) => row.tapToFirstAnimationFrameMs));
   const latencyPass = maxTapToFrame1x <= latencyBudget;
