@@ -6,6 +6,7 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 import { CartBar } from './components/CartBar';
 import { CustomizeProvider } from './components/CustomizeSheet';
 import { PageTransition } from './components/PageTransition';
+import { SearchOverlay } from './components/SearchOverlay';
 import { ToastHost } from './components/ToastHost';
 import { useBackButton } from './hooks/useBackButton';
 import { isTabPath } from './lib/navigation';
@@ -15,7 +16,6 @@ import { Login } from './pages/Login';
 import { Home } from './pages/Home';
 import { Restaurant } from './pages/Restaurant';
 import { Under99 } from './pages/Under99';
-import { Search } from './pages/Search';
 import { Category } from './pages/Category';
 import { Cart } from './pages/Cart';
 import { Orders } from './pages/Orders';
@@ -46,7 +46,6 @@ function AppRoutes() {
   const pathname = location.pathname;
   const cartBarVisible =
     pathname === '/' ||
-    pathname === '/search' ||
     pathname === '/under99' ||
     pathname.startsWith('/category/') ||
     pathname.startsWith('/restaurant/');
@@ -65,7 +64,6 @@ function AppRoutes() {
               <Route path="/login" element={<Login />} />
               <Route path="/" element={<Home />} />
               <Route path="/under99" element={<Under99 />} />
-              <Route path="/search" element={<Search />} />
               <Route path="/category/:type" element={<Category />} />
               <Route path="/restaurant/:id" element={<Restaurant />} />
               <Route path="/cart" element={<Cart />} />
@@ -95,6 +93,7 @@ export default function App() {
     <HashRouter>
       <CustomizeProvider>
         <AppRoutes />
+        <SearchOverlay />
       </CustomizeProvider>
     </HashRouter>
   );

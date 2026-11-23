@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { BottomNav } from '../components/BottomNav';
 import { useAppNav } from '../lib/navigation';
+import { useSearchStore } from '../store/searchStore';
 import { useAppStore } from '../store/appStore';
 import { toast } from '../store/toastStore';
 import profileBundleCss from '../styles/original/profile.bundle.css?raw';
@@ -74,6 +75,7 @@ const navOverride = `
 
 export function Profile() {
   const nav = useAppNav();
+  const openSearch = useSearchStore((state) => state.openSearch);
   const user = useAppStore((s) => s.user);
   const logout = useAppStore((s) => s.logout);
 
@@ -118,7 +120,7 @@ export function Profile() {
             </button>
             <div className="title pf-sr">Profile</div>
             <div className="top-actions">
-              <button className="icon-btn search" type="button" aria-label="Search" onClick={() => nav.tab('/search')}>
+              <button className="icon-btn search" type="button" aria-label="Search" onClick={() => openSearch('home')}>
                 <SpriteIcon name="search" />
               </button>
             </div>

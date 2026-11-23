@@ -1,5 +1,6 @@
 import { useLocation } from 'react-router-dom';
 import { useAppNav } from '../lib/navigation';
+import { useSearchStore } from '../store/searchStore';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
 
@@ -20,11 +21,21 @@ const ITEMS: NavEntry[] = [
 export function BottomNav() {
   const { pathname } = useLocation();
   const nav = useAppNav();
+  const openSearch = useSearchStore((state) => state.openSearch);
+  const searchOpen = useSearchStore((state) => state.isOpen);
+  const searchContext = pathname === '/under99' ? 'under99' : 'home';
 
   return (
     <nav className="bottom-nav" aria-label="Primary">
       {ITEMS.map((item) => {
-        const active = item.to === '/' ? pathname === '/' : pathname.startsWith(item.to);
+        const isSearch = item.to === '/search';
+        const active = isSearch
+          ? searchOpen
+          : searchOpen
+            ? false
+            : item.to === '/'
+              ? pathname === '/'
+              : pathname.startsWith(item.to);
         return (
           <button
             key={item.to}
@@ -32,6 +43,10 @@ export function BottomNav() {
             className={`nav-item tap${active ? ' active' : ''}`}
             aria-current={active ? 'page' : undefined}
             onClick={() => {
+              if (isSearch) {
+                openSearch(searchContext);
+                return;
+              }
               if (!active) nav.tab(item.to);
             }}
           >

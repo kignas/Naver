@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import heroDish from '../assets/placeholders/hero-dish.svg';
@@ -17,9 +17,11 @@ import {
   type Restaurant,
 } from '../data/demo';
 import { useCachedReady } from '../hooks/useCachedReady';
+import { useSearchPlaceholder } from '../hooks/useSearchPlaceholder';
 import { useAppNav } from '../lib/navigation';
 import { useCustomize } from '../lib/customizeContext';
 import { useAppStore } from '../store/appStore';
+import { useSearchStore } from '../store/searchStore';
 import { useUiStore } from '../store/uiStore';
 import { toast } from '../store/toastStore';
 import '../styles/original/header-theme.css';
@@ -38,22 +40,6 @@ const FILTER_TABS: Array<{ id: FilterTab; label: string; icon: IconName }> = [
   { id: 'DELIVERY TIME', label: 'Time', icon: 'regular:clock' },
   { id: 'OFFERS', label: 'Offers', icon: 'solid:tag' },
   { id: 'FOOD TYPE', label: 'Food Type', icon: 'solid:leaf' },
-];
-
-const SEARCH_DISHES = [
-  'Chowmein',
-  'Biryani',
-  'Pizza',
-  'Momos',
-  'Rolls',
-  'Fried Rice',
-  'Puchka',
-  'Burger',
-  'Dosa',
-  'Noodles',
-  'Thali',
-  'Sweets',
-  'Pasta',
 ];
 
 function RestaurantSkeleton() {
@@ -124,17 +110,11 @@ export function Home() {
     return FILTER_TABS.some((entry) => entry.id === tab) ? (tab as FilterTab) : 'SORT';
   });
   const [sortBy, setSortBy] = useState<SortKey>(cachedHome.sortBy);
-  const [dishIndex, setDishIndex] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const openSearch = useSearchStore((state) => state.openSearch);
+  const { dish: searchDish, duration: searchDishDuration } = useSearchPlaceholder(scrollRef);
 
   const initial = (user?.name ?? demoUser.name).charAt(0).toUpperCase();
-
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      setDishIndex((index) => (index + 1) % SEARCH_DISHES.length);
-    }, 2800);
-    return () => window.clearInterval(id);
-  }, []);
 
   useEffect(() => {
     patchHome({ vegOnly, nearFast, rating4, under30, under100, sortBy, activeFilterTab });
@@ -252,12 +232,21 @@ export function Home() {
           </div>
 
           <div className="search-row es-header-item">
-            <button type="button" className="search-box tap" onClick={() => nav.push('/search')}>
+            <button
+              type="button"
+              className="search-box tap"
+              onClick={() => openSearch('home')}
+              aria-haspopup="dialog"
+            >
               <Icon name="solid:magnifying-glass" size={18} className="search-icon" />
-              <span className="search-text" id="search-placeholder" aria-label="Search dishes, restaurants and cuisines">
+              <span className="search-text" id="search-placeholder" aria-label={`Search "${searchDish}"`}>
                 <span className="search-static">Search&nbsp;</span>
-                <span className="search-dish is-sliding" key={dishIndex}>
-                  &quot;{SEARCH_DISHES[dishIndex]}&quot;
+                <span
+                  className="search-dish is-sliding"
+                  key={searchDish}
+                  style={{ '--search-dish-duration': `${searchDishDuration}ms` } as CSSProperties}
+                >
+                  &quot;{searchDish}&quot;
                 </span>
               </span>
               <span

@@ -455,7 +455,7 @@ async function main(): Promise<void> {
 
   await original.click('#filter-sheet-btn');
   await original.waitForSelector('#filter-sheet.open', { timeout: 5000 });
-  await app.getByRole('button', { name: 'Filters' }).click();
+  await app.locator('.filter-pill-sheet').click();
   await app.waitForSelector('.filter-sheet.open', { timeout: 5000 });
   await original.waitForTimeout(550);
   await app.waitForTimeout(550);
@@ -790,12 +790,24 @@ async function main(): Promise<void> {
 
   const originalSearch = await context.newPage();
   await originalSearch.route(originalApiRoute, mockApi);
-  await originalSearch.goto(`http://127.0.0.1:${originalPort}/search.html`, { waitUntil: 'domcontentloaded' });
-  await originalSearch.waitForTimeout(1200);
+  await originalSearch.goto(`http://127.0.0.1:${originalPort}/index.html`, { waitUntil: 'domcontentloaded' });
+  await originalSearch.waitForSelector('#restaurant-list .u99-card-host', { timeout: 20000 });
+  await originalSearch.evaluate(() => {
+    document.querySelectorAll('.ew-pr,.ew-pr-scrim,.ew-pr-sheet,.ew-offer-popup').forEach((element) => element.remove());
+    document.documentElement.style.overflow = '';
+    document.body.style.overflow = '';
+    document.querySelector<HTMLElement>('.search-box')?.click();
+  });
+  await originalSearch.waitForSelector('#ew-search-root.is-open', { timeout: 5000 });
+  await originalSearch.waitForTimeout(450);
+
   const appSearch = await context.newPage();
-  await appSearch.goto(`http://127.0.0.1:${appPort}/#/search`, { waitUntil: 'networkidle' });
-  await appSearch.waitForTimeout(800);
-  await writePairDiff('search', originalSearch, appSearch);
+  await appSearch.goto(`http://127.0.0.1:${appPort}/#/`, { waitUntil: 'networkidle' });
+  await appSearch.waitForSelector('#restaurant-list .u99-card-host', { timeout: 20000 });
+  await appSearch.evaluate(() => document.querySelector<HTMLElement>('.search-box')?.click());
+  await appSearch.waitForSelector('#ew-search-root.is-open', { timeout: 5000 });
+  await appSearch.waitForTimeout(450);
+  await writeElementPairDiff('search-overlay-idle', originalSearch, appSearch, '.ew-search-sheet');
 
   await browser.close();
   await new Promise<void>((resolve) => originalServer.close(() => resolve()));

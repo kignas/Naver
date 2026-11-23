@@ -8,6 +8,7 @@ import { useSkeleton } from '../hooks/useSkeleton';
 import { useAppNav } from '../lib/navigation';
 import { formatMoney } from '../lib/money';
 import { useAppStore } from '../store/appStore';
+import { useSearchStore } from '../store/searchStore';
 import '../styles/pages/under99.css';
 
 interface StoreItem {
@@ -35,6 +36,7 @@ const formatCountdown = (seconds: number): string => {
 
 export function Under99() {
   const nav = useAppNav();
+  const openSearch = useSearchStore((state) => state.openSearch);
   const ready = useSkeleton(400, 700);
   const cart = useAppStore((s) => s.cart);
   const addItem = useAppStore((s) => s.addItem);
@@ -88,7 +90,7 @@ export function Under99() {
                 </div>
               </div>
               <div className="u99-actions">
-                <button type="button" className="icon-btn tap" onClick={() => nav.tab('/search')} aria-label="Search">
+                <button type="button" className="icon-btn tap" onClick={() => openSearch('under99')} aria-label="Search">
                   <Icon name="solid:magnifying-glass" size={12} />
                 </button>
                 <button type="button" className="icon-btn tap" aria-label="Share">

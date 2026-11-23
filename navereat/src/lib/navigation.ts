@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useNavStore } from '../store/navStore';
 
-export const TAB_PATHS = ['/', '/under99', '/search', '/orders', '/profile'] as const;
+export const TAB_PATHS = ['/', '/under99', '/orders', '/profile'] as const;
 
 export const isTabPath = (pathname: string): boolean =>
   (TAB_PATHS as readonly string[]).includes(pathname);

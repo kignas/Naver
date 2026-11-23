@@ -5,12 +5,14 @@ import { Icon } from '../components/Icon';
 import { restaurants } from '../data/demo';
 import { useSkeleton } from '../hooks/useSkeleton';
 import { useAppNav } from '../lib/navigation';
+import { useSearchStore } from '../store/searchStore';
 import '../styles/pages/category.css';
 
 export function Category() {
   const { type } = useParams<{ type: string }>();
   const [searchParams] = useSearchParams();
   const nav = useAppNav();
+  const openSearch = useSearchStore((state) => state.openSearch);
   const ready = useSkeleton(400, 700);
   const [sortRating, setSortRating] = useState(false);
   const [ratingOnly, setRatingOnly] = useState(false);
@@ -45,7 +47,7 @@ export function Category() {
               <p className="cat-sub">Restaurants near you</p>
             </div>
           </div>
-          <button type="button" className="icon-btn tap" onClick={() => nav.tab('/search')} aria-label="Search">
+          <button type="button" className="icon-btn tap" onClick={() => openSearch('home')} aria-label="Search">
             <Icon name="solid:magnifying-glass" size={14} />
           </button>
       </div>
