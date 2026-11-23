@@ -69,46 +69,75 @@ jobs:
       - name: Sync Capacitor Android
         run: npx cap sync android
 
-      - name: Check signing secret availability
+      - name: Validate signing secrets
         env:
-          SECRET_KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-          SECRET_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          SECRET_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          SECRET_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          VAR_KEYSTORE_BASE64: ${{ vars.KEYSTORE_BASE64 }}
-          VAR_KEYSTORE_PASSWORD: ${{ vars.KEYSTORE_PASSWORD }}
-          VAR_KEY_ALIAS: ${{ vars.KEY_ALIAS }}
-          VAR_KEY_PASSWORD: ${{ vars.KEY_PASSWORD }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          python3 - <<'PY'
-          import os
-          for name in (
-              "SECRET_KEYSTORE_BASE64", "SECRET_KEYSTORE_PASSWORD",
-              "SECRET_KEY_ALIAS", "SECRET_KEY_PASSWORD",
-              "VAR_KEYSTORE_BASE64", "VAR_KEYSTORE_PASSWORD",
-              "VAR_KEY_ALIAS", "VAR_KEY_PASSWORD",
-          ):
-              value = os.environ.get(name, "")
-              print(f"{name}: {'present' if value else 'MISSING'} ({len(value)} chars)")
-          PY
-
-      - name: Decode fixed debug keystore
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 || vars.KEYSTORE_BASE64 }}
-        run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "KEYSTORE_BASE64 secret is missing" >&2
+          set -u
+          missing=0
+          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            eval "value=\${$name:-}"
+            if [ -n "$value" ]; then
+              echo "$name: set"
+            else
+              echo "$name: MISSING"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::Required signing secret is missing. Add KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS, and KEY_PASSWORD as repository Actions secrets."
             exit 1
           fi
-          printf '%s' "$KEYSTORE_BASE64" | base64 -d > android/app/navereat-debug.keystore
+
+          if ! echo "$KEYSTORE_BASE64" | tr -d '\n\r ' | base64 -d > android/app/keystore.jks 2>/tmp/base64.err; then
+            echo "::error::KEYSTORE_BASE64 is not valid base64."
+            cat /tmp/base64.err
+            exit 1
+          fi
+          echo "KEYSTORE_BASE64: decoded"
+
+          if ! keytool -list -keystore android/app/keystore.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/tmp/keytool-list.txt 2>&1; then
+            echo "::error::KEYSTORE_PASSWORD or KEY_ALIAS is wrong; keytool could not open the keystore."
+            sed -n '1,20p' /tmp/keytool-list.txt
+            exit 1
+          fi
+          echo "KEYSTORE_PASSWORD and KEY_ALIAS: OK"
+
+          fingerprint=$(keytool -list -v -keystore android/app/keystore.jks -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" 2>/dev/null | sed -n 's/.*SHA256: //p' | head -1)
+          if [ -z "$fingerprint" ]; then
+            echo "::error::Could not read the certificate SHA-256 fingerprint from KEYSTORE_BASE64."
+            exit 1
+          fi
+          echo "Keystore SHA-256: $fingerprint"
+
+          rm -f /tmp/navereat-keycheck.p12
+          if ! keytool -importkeystore \
+            -srckeystore android/app/keystore.jks \
+            -srcstorepass "$KEYSTORE_PASSWORD" \
+            -srcalias "$KEY_ALIAS" \
+            -srckeypass "$KEY_PASSWORD" \
+            -destkeystore /tmp/navereat-keycheck.p12 \
+            -deststoretype PKCS12 \
+            -deststorepass "$KEYSTORE_PASSWORD" \
+            -destkeypass "$KEY_PASSWORD" \
+            -noprompt >/tmp/keytool-key.txt 2>&1; then
+            echo "::error::KEY_PASSWORD is wrong; keytool could not open the private key."
+            sed -n '1,20p' /tmp/keytool-key.txt
+            exit 1
+          fi
+          rm -f /tmp/navereat-keycheck.p12
+          echo "KEY_PASSWORD: OK"
 
       - name: Assemble debug APK
         working-directory: navereat/android
         env:
-          NAVEREAT_KEYSTORE_FILE: ${{ github.workspace }}/navereat/android/app/navereat-debug.keystore
-          NAVEREAT_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || vars.KEYSTORE_PASSWORD }}
-          NAVEREAT_KEY_ALIAS: ${{ secrets.KEY_ALIAS || vars.KEY_ALIAS }}
-          NAVEREAT_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || vars.KEY_PASSWORD }}
+          NAVEREAT_KEYSTORE_FILE: ${{ github.workspace }}/navereat/android/app/keystore.jks
+          NAVEREAT_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          NAVEREAT_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          NAVEREAT_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           chmod +x ./gradlew
           ./gradlew assembleDebug -PversionCode=${{ github.run_number }} --no-daemon
