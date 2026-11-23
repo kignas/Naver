@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { BottomNav } from '../components/BottomNav';
 import { Icon } from '../components/Icon';
 import { restaurants } from '../data/demo';
 import { useCachedReady } from '../hooks/useCachedReady';
@@ -143,7 +142,6 @@ export function Category() {
           )}
         </div>
       </div>
-      <BottomNav />
     </div>
   );
 }

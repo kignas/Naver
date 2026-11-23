@@ -47,7 +47,7 @@ body {
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
-  padding-bottom: calc(66px + 104px + var(--sab));
+  padding-bottom: calc(var(--nav-reserve) + 104px);
   scrollbar-width: none;
 }
 
@@ -65,53 +65,6 @@ body {
   font-size: 13px;
   line-height: 1.5;
   text-align: center;
-}
-
-/* ---------- Bottom navigation (original items + styling) ---------- */
-.home-screen .bottom-nav {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: calc(66px + max(12px, env(safe-area-inset-bottom, 0px)));
-  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
-  background: #fffdf8;
-  border-top: 1px solid rgba(93, 13, 24, 0.12);
-  box-shadow: 0 -6px 18px rgba(93, 13, 24, 0.07);
-  display: flex;
-  align-items: stretch;
-  justify-content: space-around;
-  z-index: 400;
-  flex-shrink: 0;
-}
-
-.home-screen .nav-item {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  text-decoration: none;
-  color: #9b8b84;
-  transition: color 0.18s;
-  cursor: pointer;
-  position: relative;
-}
-
-.home-screen .nav-item.active {
-  color: var(--theme-burgundy);
-}
-
-.home-screen .nav-item .icon {
-  width: 22px;
-  height: 22px;
-}
-
-.home-screen .nav-item > span:last-child {
-  font-size: 10px;
-  font-weight: 700;
-  font-family: 'Manrope', 'Poppins', system-ui, sans-serif;
 }
 
 /* ---------- Categories: two-row rail, no circles/backgrounds ---------- */

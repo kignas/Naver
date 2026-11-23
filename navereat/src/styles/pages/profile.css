@@ -3,7 +3,7 @@
   overflow-y: auto !important;
   overflow-x: hidden !important;
   padding-top: 0;
-  padding-bottom: calc(var(--nav-h) + 28px + var(--sab));
+  padding-bottom: calc(var(--nav-reserve) + 28px);
   background: #f1f0f5;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;

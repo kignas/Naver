@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import heroDish from '../assets/placeholders/hero-dish.svg';
-import { BottomNav } from '../components/BottomNav';
 import { HomeRestaurantCard } from '../components/HomeRestaurantCard';
 import { Icon } from '../components/Icon';
 import type { IconName } from '../components/icons';
@@ -464,8 +463,6 @@ export function Home() {
           </div>
         </main>
       </div>
-
-      <BottomNav />
 
       {filterSheetOpen && (
         <Sheet

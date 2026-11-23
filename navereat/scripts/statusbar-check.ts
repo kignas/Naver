@@ -3,6 +3,7 @@ import path from 'node:path';
 import { chromium } from 'playwright-core';
 import { PNG } from 'pngjs';
 import { preview } from 'vite';
+import { statusBarStyle, statusBarTheme } from '../src/lib/statusBarTheme';
 
 const appRoot = process.cwd();
 const repoRoot = path.resolve(appRoot, '..');
@@ -13,24 +14,45 @@ const sizes = [
   { width: 360, height: 800 },
 ];
 const routes = [
-  { name: 'home', hash: '/#/', selector: '.hero-header', auth: true, header: '#5D0D18' },
-  { name: 'login', hash: '/#/login', selector: '.login-hero', auth: false, header: '#FFD92F' },
-  { name: 'orders', hash: '/#/orders', selector: '.orders-header', auth: true, header: '#FFFFFF' },
-  { name: 'restaurant', hash: '/#/restaurant/1', selector: '.top-bar', auth: true, header: '#FFFFFF' },
+  { name: 'home', path: '/', hash: '/#/', selector: '.hero-header', auth: true },
+  { name: 'login', path: '/login', hash: '/#/login', selector: '.login-hero', auth: false },
+  { name: 'orders', path: '/orders', hash: '/#/orders', selector: '.orders-header', auth: true },
+  { name: 'restaurant', path: '/restaurant/1', hash: '/#/restaurant/1', selector: '.top-bar', auth: true },
 ];
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function rgb(hex) {
+function rgb(hex: string): [number, number, number] {
   const value = hex.replace('#', '');
   return [parseInt(value.slice(0, 2), 16), parseInt(value.slice(2, 4), 16), parseInt(value.slice(4, 6), 16)];
 }
 
-function hexOf(data, offset) {
-  return `#${[data[offset], data[offset + 1], data[offset + 2]].map((v) => v.toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+function hexOf(data: Buffer, offset: number): string {
+  return `#${[data[offset], data[offset + 1], data[offset + 2]]
+    .map((v) => v.toString(16).padStart(2, '0'))
+    .join('')
+    .toUpperCase()}`;
 }
 
-function composite(pagePng, width, height, color) {
+function luminance(hex: string): number {
+  const channel = (value: number) => {
+    const c = value / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const [r, g, b] = rgb(hex);
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
+function contrast(a: number, b: number): number {
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
+function expectedIcons(hex: string): 'light' | 'dark' {
+  const bg = luminance(hex);
+  return contrast(1, bg) >= contrast(0, bg) ? 'light' : 'dark';
+}
+
+function composite(pagePng: PNG, width: number, height: number, color: string): PNG {
   const out = new PNG({ width, height });
   const [r, g, b] = rgb(color);
   for (let y = 0; y < height; y += 1) {
@@ -62,11 +84,14 @@ const browser = await chromium.launch({
   headless: true,
   args: ['--no-sandbox'],
 });
-const report = [];
+const report: Array<Record<string, unknown>> = [];
 try {
   await mkdir(outDir, { recursive: true });
   for (const size of sizes) {
     for (const route of routes) {
+      const theme = statusBarTheme(route.path);
+      const expected = expectedIcons(theme.color);
+      const styleApplied = statusBarStyle(theme);
       const context = await browser.newContext({
         viewport: { width: size.width, height: size.height - STATUS_BAR_PX },
         deviceScaleFactor: 1,
@@ -88,15 +113,23 @@ try {
       await sleep(700);
       const shot = PNG.sync.read(await page.screenshot({ type: 'png' }));
       const pageTop = hexOf(shot.data, (2 * shot.width + 4) * 4);
-      const composed = composite(shot, size.width, size.height, route.header);
+      const composed = composite(shot, size.width, size.height, theme.color);
       const file = path.join(outDir, `${route.name}-${size.width}x${size.height}.png`);
       await writeFile(file, PNG.sync.write(composed));
+      const colorMatch = theme.color === pageTop;
+      const iconMatch = theme.lightIcons === (expected === 'light');
       report.push({
         route: route.name,
         size: `${size.width}x${size.height}`,
-        statusBar: route.header,
+        statusBar: theme.color,
         pageTop,
-        match: route.header === pageTop,
+        icons: theme.lightIcons ? 'light' : 'dark',
+        expectedIcons: expected,
+        styleApplied,
+        contrast: Number(contrast(theme.lightIcons ? 1 : 0, luminance(theme.color)).toFixed(2)),
+        colorMatch,
+        iconMatch,
+        match: colorMatch && iconMatch,
         file: path.relative(repoRoot, file),
       });
       await context.close();
@@ -111,5 +144,5 @@ try {
   }
 } finally {
   await browser.close();
-  await new Promise((resolve) => server.httpServer.close(resolve));
+  await new Promise<void>((resolve) => server.httpServer.close(() => resolve()));
 }

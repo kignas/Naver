@@ -4,7 +4,11 @@
   background: #fff;
 }
 .u99-page .u99-scroll{
-  padding-bottom: 92px;
+  padding-bottom: calc(var(--nav-reserve) + 16px);
+}
+
+body.has-cart-bar .u99-page .u99-scroll{
+  padding-bottom: calc(var(--nav-reserve) + 88px);
 }
 .u99-page .u99-hero{
   padding-top: calc(var(--sat) + 12px);

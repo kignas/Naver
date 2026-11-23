@@ -1,0 +1,134 @@
+/* Floating Zomato-style primary navigation. Rendered once in App, outside
+   the route transition layers. */
+.bottom-nav.nav-float {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: var(--nav-bottom);
+  height: var(--nav-h);
+  /* Above route transition layers, sheets and the search scrim. */
+  z-index: 2147483005;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border: 1px solid rgba(93, 13, 24, 0.08);
+  border-radius: 999px;
+  background: #fffdf8;
+  box-shadow: 0 12px 30px rgba(93, 13, 24, 0.18), 0 2px 8px rgba(93, 13, 24, 0.08);
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.bottom-nav.nav-float.is-hidden {
+  opacity: 0;
+  transform: translate3d(0, calc(100% + 24px), 0);
+  pointer-events: none;
+}
+
+.nav-indicator {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  width: var(--nav-indicator-w, 84px);
+  border-radius: 999px;
+  background: var(--theme-burgundy);
+  box-shadow: 0 5px 14px rgba(93, 13, 24, 0.26);
+  transform: translate3d(var(--nav-indicator-x, 0px), 0, 0);
+  transition: transform 0.35s cubic-bezier(0.34, 1.2, 0.64, 1),
+    width 0.35s cubic-bezier(0.34, 1.2, 0.64, 1);
+  will-change: transform, width;
+}
+
+.bottom-nav.nav-float.is-dragging .nav-indicator {
+  transition: none;
+}
+
+.nav-tab {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: #8f817b;
+  font-family: var(--font);
+  cursor: pointer;
+  overflow: visible;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.nav-tab:focus-visible {
+  outline: 2px solid var(--theme-burgundy);
+  outline-offset: -2px;
+  border-radius: 999px;
+}
+
+.nav-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  transition: transform 0.22s cubic-bezier(0.34, 1.2, 0.64, 1);
+}
+
+.nav-label {
+  display: block;
+  flex: 0 0 auto;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  white-space: nowrap;
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.1px;
+  transition: max-width 0.35s cubic-bezier(0.34, 1.2, 0.64, 1), opacity 0.2s ease;
+}
+
+.nav-tab.is-active {
+  color: #fff;
+}
+
+.nav-tab.is-active .nav-icon {
+  transform: scale(1.08);
+}
+
+.nav-tab.is-active .nav-label {
+  max-width: 72px;
+  opacity: 1;
+}
+
+@media (max-width: 380px) {
+  .bottom-nav.nav-float {
+    left: 12px;
+    right: 12px;
+  }
+
+  .nav-label {
+    font-size: 9px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bottom-nav.nav-float,
+  .nav-indicator,
+  .nav-icon,
+  .nav-label {
+    transition: none !important;
+  }
+}
+
+body.has-bottom-nav .sheet-footer,
+body.has-bottom-nav .ewcs-foot {
+  padding-bottom: calc(12px + var(--nav-reserve)) !important;
+}

@@ -3,6 +3,7 @@ import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'r
 import { Capacitor } from '@capacitor/core';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { StatusBar, Style } from '@capacitor/status-bar';
+import { BottomNav } from './components/BottomNav';
 import { CartBar } from './components/CartBar';
 import { CustomizeProvider } from './components/CustomizeSheet';
 import { PageTransition } from './components/PageTransition';
@@ -12,8 +13,9 @@ import { ToastHost } from './components/ToastHost';
 import { useBackButton } from './hooks/useBackButton';
 import { isTabPath } from './lib/navigation';
 import { useAppStore } from './store/appStore';
+import { useSearchStore } from './store/searchStore';
 import { useNavDirection, useNavStore } from './store/navStore';
-import { statusBarTheme } from './lib/statusBarTheme';
+import { statusBarStyle, statusBarTheme } from './lib/statusBarTheme';
 import { preloadLikelyRoutes, routeLoaders } from './lib/routeLoaders';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
@@ -32,6 +34,7 @@ function AppRoutes() {
   const direction = useNavDirection();
   const setDirection = useNavStore((s) => s.setDirection);
   const token = useAppStore((s) => s.token);
+  const searchOpen = useSearchStore((s) => s.isOpen);
 
   useBackButton();
 
@@ -39,7 +42,7 @@ function AppRoutes() {
     if (!Capacitor.isNativePlatform()) return;
     const theme = statusBarTheme(location.pathname);
     void StatusBar.setOverlaysWebView({ overlay: false });
-    void StatusBar.setStyle({ style: theme.lightIcons ? Style.Light : Style.Dark });
+    void StatusBar.setStyle({ style: statusBarStyle(theme) === 'Dark' ? Style.Dark : Style.Light });
     void StatusBar.setBackgroundColor({ color: theme.color });
   }, [location.pathname]);
 
@@ -68,12 +71,13 @@ function AppRoutes() {
 
   const pathname = location.pathname;
   const cartBarVisible =
-    pathname === '/' ||
-    pathname === '/under99' ||
-    pathname.startsWith('/category/') ||
-    pathname.startsWith('/restaurant/');
+    !searchOpen &&
+    (pathname === '/' ||
+      pathname === '/under99' ||
+      pathname.startsWith('/category/') ||
+      pathname.startsWith('/restaurant/'));
   const cartBarMode = pathname.startsWith('/restaurant/') ? 'pink' : 'home';
-  const cartBarAboveNav = false;
+  const cartBarAboveNav = isTabPath(pathname);
 
   return (
     <div className="app-shell">
@@ -103,6 +107,7 @@ function AppRoutes() {
         />
       </div>
       <CartBar visible={cartBarVisible} mode={cartBarMode} aboveNav={cartBarAboveNav} />
+      <BottomNav />
       <ToastHost />
     </div>
   );

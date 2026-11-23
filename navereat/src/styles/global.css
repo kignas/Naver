@@ -23,6 +23,8 @@ html {
 }
 
 body {
+  /* Route CSS bundles include a body fadeIn; never fade the app shell/nav. */
+  animation: none !important;
   font-family: var(--font);
   background: #f1f1f1;
   color: var(--ink);
@@ -176,62 +178,6 @@ ol {
   position: absolute;
   inset: 0;
   background: #fff;
-}
-
-/* ---------- Bottom nav ---------- */
-.bottom-nav {
-  flex-shrink: 0;
-  height: calc(var(--nav-h) + max(12px, env(safe-area-inset-bottom, 0px)));
-  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
-  background: #fffdf8;
-  border-top: 1px solid rgba(93, 13, 24, 0.12);
-  box-shadow: 0 -6px 18px rgba(93, 13, 24, 0.07);
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  position: relative;
-  z-index: 400;
-}
-
-.nav-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  flex: 1;
-  padding: 8px 0;
-  color: #9b8b84;
-  transition: color 0.2s;
-  background: none;
-  border: 0;
-  position: relative;
-}
-
-.nav-item.active {
-  color: var(--theme-burgundy);
-}
-
-.nav-item.active::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 50%;
-  width: 28px;
-  height: 3px;
-  border-radius: 0 0 3px 3px;
-  background: var(--theme-gold);
-  transform: translateX(-50%);
-}
-
-.nav-item svg {
-  width: 22px;
-  height: 22px;
-}
-
-.nav-item span {
-  font-size: 10px;
-  font-weight: 700;
-  font-family: var(--font);
 }
 
 /* ---------- Cart bar (two-tone pill) ---------- */

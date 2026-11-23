@@ -184,6 +184,11 @@ export function CartBar({ visible = true, mode = 'home', aboveNav = false }: Car
   const pinkTimer = useRef<number | null>(null);
 
   useEffect(() => {
+    document.body.classList.toggle('has-cart-bar', visible && count > 0);
+    return () => document.body.classList.remove('has-cart-bar');
+  }, [visible, count]);
+
+  useEffect(() => {
     if (!visible) {
       setMounted(false);
       setExiting(false);

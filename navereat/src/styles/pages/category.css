@@ -1,5 +1,5 @@
 .cat-page{ background: #fff; }
-.cat-page .cat-scroll{ padding-bottom: calc(var(--nav-h) + 24px + var(--sab)); }
+.cat-page .cat-scroll{ padding-bottom: 24px; }
 .cat-page .cat-header{ flex-shrink: 0; background: #fff; z-index: 50; padding: 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--g100); box-shadow: var(--sh-sm); }
 .cat-page .cat-header-left{ display: flex; align-items: center; gap: 12px; min-width: 0; }
 .cat-page .cat-back{ width: 36px; height: 36px; border-radius: 50%; background: var(--g100); display: flex; align-items: center; justify-content: center; color: var(--g800); flex-shrink: 0; }

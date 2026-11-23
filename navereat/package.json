@@ -15,7 +15,8 @@
     "scroll-check": "node scripts/scroll-check.cjs",
     "perf-check": "node scripts/perf-check.mjs",
     "perf-transitions": "node scripts/transition-check.mjs after",
-    "statusbar-check": "node scripts/statusbar-check.mjs"
+    "statusbar-check": "vite-node scripts/statusbar-check.ts",
+    "nav-check": "node scripts/nav-check.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.0",

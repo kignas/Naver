@@ -19,3 +19,8 @@ export function statusBarTheme(pathname: string): StatusBarTheme {
   if (pathname === '/under99') return { color: HEADER_U99, lightIcons: true };
   return { color: HEADER_WHITE, lightIcons: false };
 }
+
+/** Capacitor's enum is inverted: Style.Dark = light icons, Style.Light = dark icons. */
+export function statusBarStyle(theme: StatusBarTheme): 'Dark' | 'Light' {
+  return theme.lightIcons ? 'Dark' : 'Light';
+}
