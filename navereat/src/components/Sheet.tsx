@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { Icon } from './Icon';
 import { registerSheet } from '../lib/sheetStack';
+import { lockPageScroll } from '../lib/scrollLock';
 
 export interface SheetHandle {
   close: () => void;
@@ -103,7 +104,9 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
     const variantClass =
       variant === 'filter' ? 'filter-sheet-open' : variant === 'customize' ? 'u99-cust-open ewcs-custom-open' : 'ct-sheet-open';
     body.classList.add('nb-sheet-open', ...variantClass.split(' '));
+    const unlock = lockPageScroll();
     return () => {
+      unlock();
       body.classList.remove('nb-sheet-open', 'filter-sheet-open', 'ct-sheet-open', 'u99-cust-open', 'ewcs-custom-open');
     };
   }, [variant]);

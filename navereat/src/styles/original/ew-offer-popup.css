@@ -5,7 +5,7 @@
 .ew-offer-scrim{position:absolute;inset:0;background:rgba(20,24,30,.55);opacity:0;transition:opacity .2s ease}
 .ew-offer.is-open .ew-offer-scrim{opacity:1}
 .ew-offer-card{position:relative;width:min(100%,350px);box-sizing:border-box;padding:30px 24px 26px;border-radius:28px;
-  background:#fff;text-align:center;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.28);
+  background:#fff;text-align:center;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;max-height:calc(100dvh - 44px);box-shadow:0 24px 70px rgba(0,0,0,.28);
   opacity:0;transform:translateY(18px) scale(.92);transition:opacity .2s ease,transform .38s cubic-bezier(.34,1.45,.5,1)}
 .ew-offer.is-open .ew-offer-card{opacity:1;transform:none}
 .ew-offer-x{position:absolute;top:14px;right:14px;width:34px;height:34px;border-radius:50%;border:0;

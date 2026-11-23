@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { categories, restaurants, type Category, type MenuItem, type Restaurant } from '../data/demo';
 import { useAppNav } from '../lib/navigation';
 import { registerSheet } from '../lib/sheetStack';
+import { lockPageScroll } from '../lib/scrollLock';
 import { useAppStore } from '../store/appStore';
 import { useSearchStore, type SearchContext } from '../store/searchStore';
 import '../styles/search-overlay.css';
@@ -264,13 +265,17 @@ export function SearchOverlay() {
     setPhase('idle');
     if (inputRef.current) inputRef.current.value = prefill;
     document.body.classList.add('ew-search-open');
+    const unlock = lockPageScroll();
     syncViewport();
     bindViewport();
     const frame = window.requestAnimationFrame(() => {
       inputRef.current?.focus({ preventScroll: true });
       if (prefill.trim().length >= MIN_QUERY) scheduleSearch(true);
     });
-    return () => window.cancelAnimationFrame(frame);
+    return () => {
+      unlock();
+      window.cancelAnimationFrame(frame);
+    };
   }, [bindViewport, isOpen, nonce, prefill, scheduleSearch, syncViewport]);
 
   useEffect(() => {

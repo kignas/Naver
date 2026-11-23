@@ -11,6 +11,7 @@ import { createPortal } from 'react-dom';
 import badgeSvg from '../assets/order-success-badge.svg?raw';
 import planeSvg from '../assets/order-success-plane.svg?raw';
 import { registerSheet } from '../lib/sheetStack';
+import { lockPageScroll } from '../lib/scrollLock';
 import '../styles/original/order-success-sheet.css';
 
 type Stage = 'processing' | 'speed' | 'placed';
@@ -140,11 +141,7 @@ export const OrderSuccessSheet = forwardRef<OrderSuccessHandle, OrderSuccessShee
 
     useEffect(() => {
       if (!stage) return;
-      const previous = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = previous;
-      };
+      return lockPageScroll();
     }, [stage]);
 
     useEffect(() => {

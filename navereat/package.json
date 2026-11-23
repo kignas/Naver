@@ -11,7 +11,8 @@
     "android:prepare": "npm run build && npx cap sync android",
     "android:debug": "cd android && ./gradlew assembleDebug",
     "assets": "node scripts/generate-brand-assets.mjs && npx capacitor-assets generate --android && node scripts/patch-android-icons.mjs",
-    "visual": "vite-node scripts/visual-check.ts"
+    "visual": "vite-node scripts/visual-check.ts",
+    "scroll-check": "node scripts/scroll-check.cjs"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.0",

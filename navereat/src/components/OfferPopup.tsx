@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import type { DemoOffer } from '../data/demo';
+import { lockPageScroll } from '../lib/scrollLock';
 import '../styles/original/ew-offer-popup.css';
 
 const AUTO_CLOSE_MS = 5200;
@@ -150,6 +151,7 @@ export function OfferPopup({ offers, onClose }: OfferPopupProps) {
 
   useEffect(() => {
     if (!offers?.length) return;
+    const unlock = lockPageScroll();
     const frame = window.requestAnimationFrame(() => {
       setOpen(true);
       startTimer();
@@ -159,6 +161,7 @@ export function OfferPopup({ offers, onClose }: OfferPopupProps) {
     };
     document.addEventListener('keydown', onKeyDown);
     return () => {
+      unlock();
       window.cancelAnimationFrame(frame);
       document.removeEventListener('keydown', onKeyDown);
       if (timerRef.current !== null) window.clearTimeout(timerRef.current);

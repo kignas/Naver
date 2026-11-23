@@ -30,6 +30,7 @@
   padding:34px 24px calc(28px + env(safe-area-inset-bottom));
   background:#fff; border-radius:32px 32px 0 0; text-align:center; box-shadow:none;
   transform:translateY(105%); transition:transform .55s var(--os-ease); isolation:isolate;
+  max-height:calc(100dvh - 12px); overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
 }
 .ew-os__sheet:focus{ outline:none; }
 .ew-os.is-open .ew-os__scrim{ opacity:1; }

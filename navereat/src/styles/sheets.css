@@ -52,3 +52,13 @@ body.filter-sheet-open {
   inset: 0 !important;
   z-index: 1200 !important;
 }
+
+
+/* Freeze every route scroller while a sheet or overlay owns the screen.
+   body overflow alone cannot stop the inner .page/.page-scroll areas. */
+body.nb-scroll-lock .app-shell .page,
+body.nb-scroll-lock .app-shell .page-scroll,
+body.nb-scroll-lock .app-shell .home-scroll,
+body.nb-scroll-lock .app-shell .rest-scroll {
+  overflow-y: hidden !important;
+}

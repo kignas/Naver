@@ -4,6 +4,7 @@ import { cartCount, cartSubtotal, type Cart } from '../lib/cart';
 import { useAppNav } from '../lib/navigation';
 import { useAppStore } from '../store/appStore';
 import { registerSheet } from '../lib/sheetStack';
+import { lockPageScroll } from '../lib/scrollLock';
 import { Icon } from './Icon';
 import '../styles/original/cart-bar.css';
 import '../styles/original/cart-bar-overrides.css';
@@ -70,11 +71,7 @@ function groupsFor(cart: Cart): CartGroup[] {
 function useBodyLock(active: boolean): void {
   useEffect(() => {
     if (!active) return;
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previous;
-    };
+    return lockPageScroll();
   }, [active]);
 }
 
