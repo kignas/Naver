@@ -69,9 +69,32 @@ jobs:
       - name: Sync Capacitor Android
         run: npx cap sync android
 
+      - name: Check signing secret availability
+        env:
+          SECRET_KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          SECRET_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          SECRET_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          SECRET_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          VAR_KEYSTORE_BASE64: ${{ vars.KEYSTORE_BASE64 }}
+          VAR_KEYSTORE_PASSWORD: ${{ vars.KEYSTORE_PASSWORD }}
+          VAR_KEY_ALIAS: ${{ vars.KEY_ALIAS }}
+          VAR_KEY_PASSWORD: ${{ vars.KEY_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import os
+          for name in (
+              "SECRET_KEYSTORE_BASE64", "SECRET_KEYSTORE_PASSWORD",
+              "SECRET_KEY_ALIAS", "SECRET_KEY_PASSWORD",
+              "VAR_KEYSTORE_BASE64", "VAR_KEYSTORE_PASSWORD",
+              "VAR_KEY_ALIAS", "VAR_KEY_PASSWORD",
+          ):
+              value = os.environ.get(name, "")
+              print(f"{name}: {'present' if value else 'MISSING'} ({len(value)} chars)")
+          PY
+
       - name: Decode fixed debug keystore
         env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 || vars.KEYSTORE_BASE64 }}
         run: |
           if [ -z "$KEYSTORE_BASE64" ]; then
             echo "KEYSTORE_BASE64 secret is missing" >&2
@@ -83,9 +106,9 @@ jobs:
         working-directory: navereat/android
         env:
           NAVEREAT_KEYSTORE_FILE: ${{ github.workspace }}/navereat/android/app/navereat-debug.keystore
-          NAVEREAT_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          NAVEREAT_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          NAVEREAT_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          NAVEREAT_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || vars.KEYSTORE_PASSWORD }}
+          NAVEREAT_KEY_ALIAS: ${{ secrets.KEY_ALIAS || vars.KEY_ALIAS }}
+          NAVEREAT_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || vars.KEY_PASSWORD }}
         run: |
           chmod +x ./gradlew
           ./gradlew assembleDebug -PversionCode=${{ github.run_number }} --no-daemon
