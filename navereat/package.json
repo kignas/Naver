@@ -12,6 +12,7 @@
     "android:debug": "cd android && ./gradlew assembleDebug",
     "assets": "node scripts/generate-brand-assets.mjs && npx capacitor-assets generate --android && node scripts/patch-android-icons.mjs",
     "visual": "vite-node scripts/visual-check.ts",
+    "parity": "vite-node scripts/design-parity.ts",
     "scroll-check": "node scripts/scroll-check.cjs",
     "perf-check": "node scripts/perf-check.mjs",
     "perf-transitions": "node scripts/transition-check.mjs after",
