@@ -17,16 +17,19 @@ import {
 import { useCachedReady } from '../hooks/useCachedReady';
 import { useSearchPlaceholder } from '../hooks/useSearchPlaceholder';
 import { useAppNav } from '../lib/navigation';
+import { createRouteStyleSheet } from '../lib/routeStyles';
 import { useCustomize } from '../lib/customizeContext';
 import { useAppStore } from '../store/appStore';
 import { useSearchStore } from '../store/searchStore';
 import { useUiStore } from '../store/uiStore';
 import { toast } from '../store/toastStore';
 import '../styles/original/header-theme.css';
-import '../styles/original/home-base.css';
-import '../styles/original/home.bundle.css';
-import '../styles/original/home-final.css';
-import '../styles/pages/home.css';
+import homeBaseCss from '../styles/original/home-base.css?raw';
+import homeBundleCss from '../styles/original/home.bundle.css?raw';
+import homeFinalCss from '../styles/original/home-final.css?raw';
+import homePageCss from '../styles/pages/home.css?raw';
+
+const homeStyle = createRouteStyleSheet(`${homeBaseCss}\n${homeBundleCss}\n${homeFinalCss}\n${homePageCss}`, 'navereatHome');
 
 type FilterTab = 'SORT' | 'DELIVERY TIME' | 'RATING' | 'PRICE' | 'OFFERS' | 'FOOD TYPE';
 type SortKey = 'recommended' | 'rating' | 'delivery' | 'distance';
@@ -119,6 +122,8 @@ export function Home() {
   useEffect(() => {
     patchHome({ vegOnly, nearFast, rating4, under30, under100, sortBy, activeFilterTab });
   }, [activeFilterTab, nearFast, patchHome, rating4, sortBy, under100, under30, vegOnly]);
+
+  useLayoutEffect(() => homeStyle.attach(), []);
 
   useLayoutEffect(() => {
     const scroller = scrollRef.current;

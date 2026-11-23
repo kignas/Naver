@@ -109,3 +109,6 @@ body.navereat-restaurant .app-viewport {
 .rest-page .ew-hd-back::before {
   display: none !important;
 }
+/* Cart bar sits above the page; the customise sheet must sit above the bar. */
+.ewcs-backdrop{ z-index: 100010; }
+.ewcs-sheet{ z-index: 100011; }

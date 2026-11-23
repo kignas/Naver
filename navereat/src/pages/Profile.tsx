@@ -1,5 +1,4 @@
 import { useLayoutEffect } from 'react';
-import { BottomNav } from '../components/BottomNav';
 import { createRouteStyleSheet } from '../lib/routeStyles';
 import { useAppNav } from '../lib/navigation';
 import { useSearchStore } from '../store/searchStore';
@@ -66,15 +65,7 @@ function Row({
   );
 }
 
-const navOverride = `
-.profile-page .bottom-nav{background:#fffdf8!important;height:calc(var(--nav-h) + var(--sab))!important;padding-bottom:var(--sab)!important;border-top:1px solid rgba(93,13,24,.12)!important;box-shadow:0 -6px 18px rgba(93,13,24,.07)!important}
-.profile-page .nav-item{color:#9b8b84!important}
-.profile-page .nav-item.active{color:var(--theme-burgundy)!important}
-.profile-page .nav-item.active::before{content:'';position:absolute;top:0;left:50%;width:28px;height:3px;border-radius:0 0 3px 3px;background:var(--theme-gold)}
-.profile-page .nav-item span{font-family:var(--font)!important}
-`;
-
-const profileStyle = createRouteStyleSheet(`${profileShellCss}\n${profileBundleCss}\n${navOverride}`, 'navereatProfile');
+const profileStyle = createRouteStyleSheet(`${profileShellCss}\n${profileBundleCss}`, 'navereatProfile');
 
 export function Profile() {
   const nav = useAppNav();
@@ -86,6 +77,7 @@ export function Profile() {
 
   const name = user?.name?.trim() || 'Navereat User';
   const phone = user?.phone?.trim() || '+91 98765 43210';
+  const email = user?.email?.trim() || '';
   const initial = name.charAt(0).toUpperCase() || 'N';
 
   return (
@@ -135,6 +127,11 @@ export function Profile() {
                   <span>Verified</span>
                 </span>
               </div>
+              {email && (
+                <div className="contact" id="userEmailLine">
+                  <span id="userEmail">{email}</span>
+                </div>
+              )}
               <button className="edit-profile" id="editProfileBtn" type="button" onClick={() => toast('Edit profile is part of the demo')}>
                 Edit profile
                 <SpriteIcon name="chevron" />
@@ -258,7 +255,6 @@ export function Profile() {
         </main>
       </div>
 
-      <BottomNav />
     </div>
   );
 }

@@ -15,7 +15,7 @@ const FLOW: Array<{ key: string; label: string; sub: string }> = [
   { key: 'confirmed', label: 'Restaurant confirmed', sub: 'The restaurant accepted your order' },
   { key: 'preparing', label: 'Preparing your food', sub: 'Freshly cooking your dishes' },
   { key: 'picked_up', label: 'Delivery partner assigned', sub: 'Your rider is at the restaurant' },
-  { key: 'on_the_way', label: 'On the way', sub: 'Your rider is heading to you' },
+  { key: 'on_the_way', label: 'On the way', sub: 'Your order is on its way to you' },
   { key: 'delivered', label: 'Delivered', sub: 'Enjoy your meal!' },
 ];
 
@@ -42,7 +42,7 @@ const subFor = (status: string): string => {
   if (status === 'confirmed') return 'The restaurant is getting your order ready';
   if (status === 'preparing') return 'Your food is being freshly prepared';
   if (status === 'picked_up') return 'Your rider has collected the order';
-  if (status === 'on_the_way') return 'Your rider is heading to your address';
+  if (status === 'on_the_way') return 'Rider has picked up your order & is on the way';
   if (status === 'delivered') return 'Your order has reached you';
   if (status === 'cancelled') return 'This order was cancelled';
   return 'Waiting for the restaurant to confirm';
@@ -153,7 +153,9 @@ export function Track() {
           </button>
           <h1 className="ab-center">Order Details</h1>
           <button className="ab-support tap" type="button" onClick={() => toast('Support is not part of this demo')}>
-            <Icon name="solid:comment-dots" size={16} />
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.3 9.3 9.3 0 0 1-3.8-.8L3 21l1.9-5.2a8 8 0 0 1-1.4-4.4A8.4 8.4 0 0 1 12 3.2a8.4 8.4 0 0 1 9 8.3Z" />
+            </svg>
             <span>Support</span>
           </button>
           <button className="ab-btn tap" type="button" aria-label="Share tracking link" onClick={() => toast('Sharing is part of the demo')}>
@@ -202,7 +204,7 @@ export function Track() {
       <div className="tracking-sheet">
         <div className="tracker-hero card-fade" role="status" aria-live="polite">
           <div className="hero-icon-wrapper">
-            <Icon name="solid:receipt" size={19} />
+            <Icon name={order.status === 'on_the_way' || order.status === 'picked_up' ? 'solid:motorcycle' : 'solid:receipt'} size={19} />
           </div>
           <div className="status-text">
             <div className="status-title">{titleFor(order.status)}</div>
@@ -223,17 +225,28 @@ export function Track() {
         </div>
 
         {!delivered && !cancelled && (
+          <div className="customer-otp-box card-fade d1" style={{ display: 'flex' }}>
+            <div className="otp-lock-icon"><Icon name="solid:lock" size={15} /></div>
+            <div className="otp-left">
+              <div className="otp-label">Share PIN with delivery partner</div>
+              <div className="otp-instructions">Only when they arrive</div>
+            </div>
+            <div className="otp-value">----</div>
+          </div>
+        )}
+
+        {!delivered && !cancelled && (
           <div className="rider-card card-fade d2">
             <div className="rider-left">
               <div className="rider-photo">
                 <Icon name="solid:user" size={18} />
               </div>
               <div className="rider-info">
-                <div className="rider-kicker">Delivery partner</div>
+                <div className="rider-kicker">Your delivery partner</div>
                 <h3>{rider.name}</h3>
                 <div className="rider-meta-row">
                   <span className="rider-rating">
-                    <Icon name="solid:star" size={10} /> {rider.rating}
+                    <Icon name="solid:star" size={10} style={{ color: '#E5A100' }} /> {rider.rating}
                   </span>
                   <span className="rider-vehicle">
                     <Icon name="solid:motorcycle" size={11} /> {rider.vehicle}

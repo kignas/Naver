@@ -7,7 +7,7 @@ import { chromium } from 'playwright-core';
 import pixelmatch from 'pixelmatch';
 import { PNG } from 'pngjs';
 import { preview } from 'vite';
-import { categories, restaurants } from '../src/data/demo';
+import { categories, demoOrders, demoUser, restaurants } from '../src/data/demo';
 
 const appRoot = process.cwd();
 const repoRoot = path.resolve(appRoot, '..');
@@ -174,6 +174,30 @@ const apiRestaurants = restaurants.map((restaurant) => ({
   },
 }));
 
+const apiOrders = demoOrders.map((order) => ({
+  _id: order.id,
+  restaurantId: order.restaurantId,
+  restaurantName: order.restaurantName,
+  status: order.status === 'on_the_way' ? 'out_for_delivery' : order.status,
+  total: order.total,
+  createdAt: order.placedAt,
+  items: order.lines.map((line, index) => ({
+    name: line.name,
+    quantity: line.qty,
+    price: line.price,
+    menuItem: `${order.restaurantId}-${index + 1}`,
+  })),
+  deliveryAddress: order.address,
+  paymentMethod: order.paymentMethod,
+  estimatedDelivery: order.eta,
+  rider: {
+    name: 'Rahul Das',
+    phone: '+91 90000 12345',
+    rating: 4.8,
+    vehicle: 'WB 64 AB 1234',
+  },
+}));
+
 const apiBanners = [
   {
     _id: 'hero-1',
@@ -221,8 +245,16 @@ async function mockApi(route: import('playwright-core').Route): Promise<void> {
     await json(route, apiCategories);
     return;
   }
-  if (pathname === '/restaurants' || pathname === '/restaurants/search') {
+  if (pathname === '/restaurants' || pathname === '/restaurants/search' || pathname === '/restaurants/under99') {
     await json(route, apiRestaurants);
+    return;
+  }
+  if (pathname === '/orders') {
+    await json(route, apiOrders);
+    return;
+  }
+  if (pathname === '/users/profile') {
+    await json(route, demoUser);
     return;
   }
   if (pathname === '/pricing/restaurant-cards') {
@@ -917,6 +949,203 @@ async function main(): Promise<void> {
   await appSearch.waitForSelector('#ew-search-root.is-open', { timeout: 5000 });
   await appSearch.waitForTimeout(450);
   await writeElementPairDiff('search-overlay-idle', originalSearch, appSearch, '.ew-search-sheet');
+
+
+  // ── Remaining screens and states ─────────────────────────────────────
+  const stripChrome = async (page: import('playwright-core').Page) => {
+    await page.evaluate(() => {
+      document.querySelectorAll(
+        '.ew-gate,.loc-sheet,.theme-intro,.ew-theme-intro,.new-user-location-prompt,.welcome-prompt,.ps-banner,.eg-banner,.service-closed,.closed-overlay,.ew-pr,.ew-pr-scrim,.ew-pr-sheet,.ew-offer-popup,.ew-free-delivery-toast,#ew-sticky-search',
+      ).forEach((element) => element.remove());
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+      document.body.style.paddingBottom = '0';
+    });
+  };
+
+  const loginContext = await browser.newContext({
+    viewport,
+    deviceScaleFactor: scale,
+    isMobile: true,
+    hasTouch: true,
+    locale: 'en-IN',
+    serviceWorkers: 'block',
+  });
+  await loginContext.addInitScript(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    localStorage.setItem('eatswada_theme', 'light');
+    localStorage.setItem('eatswada_header_theme', 'raspberry');
+    sessionStorage.setItem('ew_gate_auto_shown', '1');
+    sessionStorage.setItem('eg_screen_dismissed', '1');
+    sessionStorage.setItem('eg_banner_closed', '1');
+    sessionStorage.setItem('eatswada_location_prompt_dismissed', '1');
+  });
+  const originalLogin = await loginContext.newPage();
+  await originalLogin.goto(`http://127.0.0.1:${originalPort}/login.html`, { waitUntil: 'domcontentloaded' });
+  await originalLogin.waitForSelector('.auth-choice-view', { timeout: 20000 });
+  await originalLogin.evaluate(() => document.fonts.ready);
+  await stripChrome(originalLogin);
+  await originalLogin.waitForTimeout(900);
+  const appLogin = await loginContext.newPage();
+  await appLogin.goto(`http://127.0.0.1:${appPort}/#/login`, { waitUntil: 'networkidle' });
+  await appLogin.waitForSelector('.login-page', { timeout: 20000 });
+  await appLogin.evaluate(() => document.fonts.ready);
+  await appLogin.waitForTimeout(700);
+  await writePairDiff('login', originalLogin, appLogin, 844);
+  await originalLogin.close();
+  await appLogin.close();
+  await loginContext.close();
+
+  const originalUnder99 = await context.newPage();
+  await originalUnder99.route(originalApiRoute, mockApi);
+  await originalUnder99.goto(`http://127.0.0.1:${originalPort}/under99.html`, { waitUntil: 'domcontentloaded' });
+  await originalUnder99.waitForSelector('#u99-product-grid .u99-product-card', { timeout: 20000 });
+  await originalUnder99.evaluate(() => document.fonts.ready);
+  await stripChrome(originalUnder99);
+  await originalUnder99.waitForTimeout(800);
+  const appUnder99 = await context.newPage();
+  await appUnder99.goto(`http://127.0.0.1:${appPort}/#/under99`, { waitUntil: 'networkidle' });
+  await appUnder99.waitForSelector('#u99-product-grid .u99-product-card', { timeout: 20000 });
+  await appUnder99.evaluate(() => document.fonts.ready);
+  await appUnder99.waitForTimeout(700);
+  await writePairDiff('under99', originalUnder99, appUnder99, 844);
+  await originalUnder99.close();
+  await appUnder99.close();
+
+  const originalCategory = await context.newPage();
+  await originalCategory.route(originalApiRoute, mockApi);
+  await originalCategory.goto(`http://127.0.0.1:${originalPort}/category.html?type=Biryani`, { waitUntil: 'domcontentloaded' });
+  await originalCategory.waitForSelector('#cat-results .res-card', { timeout: 20000 });
+  await originalCategory.evaluate(() => document.fonts.ready);
+  await stripChrome(originalCategory);
+  await originalCategory.waitForTimeout(800);
+  const appCategory = await context.newPage();
+  await appCategory.goto(`http://127.0.0.1:${appPort}/#/category/Biryani`, { waitUntil: 'networkidle' });
+  await appCategory.waitForSelector('.cat-page .cat-result', { timeout: 20000 });
+  await appCategory.evaluate(() => document.fonts.ready);
+  await appCategory.waitForTimeout(700);
+  await writePairDiff('category', originalCategory, appCategory, 844);
+  await originalCategory.close();
+  await appCategory.close();
+
+  const originalOrders = await context.newPage();
+  await originalOrders.route(originalApiRoute, mockApi);
+  await originalOrders.goto(`http://127.0.0.1:${originalPort}/orders.html`, { waitUntil: 'domcontentloaded' });
+  await originalOrders.waitForSelector('#live-orders-container .order-card, #past-orders-container .order-card', { timeout: 20000 });
+  await originalOrders.evaluate(() => document.fonts.ready);
+  await stripChrome(originalOrders);
+  await originalOrders.waitForTimeout(800);
+  const appOrders = await context.newPage();
+  await appOrders.goto(`http://127.0.0.1:${appPort}/#/orders`, { waitUntil: 'networkidle' });
+  await appOrders.evaluate(() => localStorage.removeItem('nearbite_orders'));
+  await appOrders.reload({ waitUntil: 'networkidle' });
+  await appOrders.waitForSelector('.orders-page .order-card', { timeout: 20000 });
+  await appOrders.evaluate(() => document.fonts.ready);
+  await appOrders.waitForTimeout(700);
+  await writePairDiff('orders', originalOrders, appOrders, 844);
+  await originalOrders.close();
+  await appOrders.close();
+
+  const originalTrack = await context.newPage();
+  await originalTrack.route(originalApiRoute, mockApi);
+  await originalTrack.goto(`http://127.0.0.1:${originalPort}/track-order.html?id=NAV-240318`, { waitUntil: 'domcontentloaded' });
+  await originalTrack.waitForSelector('#status-title', { timeout: 20000 });
+  await originalTrack.waitForFunction(() => !document.querySelector('#status-title')?.textContent?.includes('Loading'), { timeout: 20000 });
+  await originalTrack.evaluate(() => document.fonts.ready);
+  await stripChrome(originalTrack);
+  await originalTrack.waitForTimeout(1000);
+  const appTrack = await context.newPage();
+  await appTrack.goto(`http://127.0.0.1:${appPort}/#/track/NAV-240318`, { waitUntil: 'networkidle' });
+  await appTrack.waitForSelector('.track-page', { timeout: 20000 });
+  await appTrack.evaluate(() => document.fonts.ready);
+  await appTrack.waitForTimeout(900);
+  await writePairDiff('tracking', originalTrack, appTrack, 844);
+  await originalTrack.close();
+  await appTrack.close();
+
+  const originalProfile = await context.newPage();
+  await originalProfile.route(originalApiRoute, mockApi);
+  await originalProfile.goto(`http://127.0.0.1:${originalPort}/profile.html`, { waitUntil: 'domcontentloaded' });
+  await originalProfile.waitForSelector('#userName', { timeout: 20000 });
+  await originalProfile.waitForTimeout(1200);
+  await originalProfile.evaluate(() => document.fonts.ready);
+  await stripChrome(originalProfile);
+  await originalProfile.waitForTimeout(500);
+  const appProfile = await context.newPage();
+  await appProfile.goto(`http://127.0.0.1:${appPort}/#/profile`, { waitUntil: 'networkidle' });
+  await appProfile.waitForSelector('.profile-page', { timeout: 20000 });
+  await appProfile.evaluate(() => document.fonts.ready);
+  await appProfile.waitForTimeout(700);
+  await writePairDiff('profile', originalProfile, appProfile, 844);
+  await originalProfile.close();
+  await appProfile.close();
+
+  const drawerContext = await browser.newContext({
+    viewport,
+    deviceScaleFactor: scale,
+    isMobile: true,
+    hasTouch: true,
+    locale: 'en-IN',
+    serviceWorkers: 'block',
+  });
+  await drawerContext.addInitScript(() => {
+    localStorage.setItem('nearbite_token', 'demo-token');
+    localStorage.setItem('token', 'demo-token');
+    localStorage.setItem('nearbite_user', JSON.stringify({ name: 'Sagnik', phone: '+91 98765 43210', email: 'demo@navereat.app' }));
+    localStorage.setItem('nearbite_cart', JSON.stringify({
+      'Hyderabadi Chicken Biryani': { quantity: 2, price: 249, originalPrice: 311, resId: 2, resName: 'Biryani Bhavan', restaurantName: 'Biryani Bhavan', menuItem: 'bb1' },
+      Raita: { quantity: 1, price: 39, resId: 2, resName: 'Biryani Bhavan', restaurantName: 'Biryani Bhavan', menuItem: 'bb7' },
+      'Paneer Tikka': { quantity: 1, price: 219, resId: 1, resName: 'Mistanna Sweets', restaurantName: 'Mistanna Sweets', menuItem: 'ms3' },
+    }));
+    localStorage.setItem('eatswada_theme', 'light');
+    localStorage.setItem('eatswada_header_theme', 'raspberry');
+    sessionStorage.setItem('ew_gate_auto_shown', '1');
+    sessionStorage.setItem('eg_screen_dismissed', '1');
+    sessionStorage.setItem('eg_banner_closed', '1');
+    sessionStorage.setItem('eatswada_location_prompt_dismissed', '1');
+  });
+  const originalDrawer = await drawerContext.newPage();
+  await originalDrawer.route(originalApiRoute, mockApi);
+  await originalDrawer.goto(`http://127.0.0.1:${originalPort}/index.html`, { waitUntil: 'domcontentloaded' });
+  await originalDrawer.waitForSelector('#restaurant-list .u99-card-host', { timeout: 20000 });
+  await originalDrawer.evaluate(() => document.fonts.ready);
+  await stripChrome(originalDrawer);
+  await originalDrawer.waitForTimeout(800);
+  await originalDrawer.click('#wc-allup');
+  await originalDrawer.waitForSelector('#ew-cart-drawer.show', { timeout: 5000 });
+  await originalDrawer.waitForTimeout(500);
+  const appDrawer = await drawerContext.newPage();
+  await appDrawer.goto(`http://127.0.0.1:${appPort}/#/`, { waitUntil: 'networkidle' });
+  await appDrawer.waitForSelector('#restaurant-list .u99-card-host', { timeout: 20000 });
+  await appDrawer.waitForTimeout(700);
+  await appDrawer.click('#wc-allup');
+  await appDrawer.waitForSelector('#ew-cart-drawer.show', { timeout: 5000 });
+  await appDrawer.waitForTimeout(500);
+  await writePairDiff('cart-drawer', originalDrawer, appDrawer, 844);
+  await originalDrawer.close();
+  await appDrawer.close();
+  await drawerContext.close();
+
+  await originalSearch.fill('#ew-search-input', 'biry');
+  await appSearch.fill('#ew-search-input', 'biry');
+  await originalSearch.waitForTimeout(120);
+  await appSearch.waitForTimeout(120);
+  await writeElementPairDiff('search-typing', originalSearch, appSearch, '.ew-search-sheet');
+  await Promise.allSettled([
+    originalSearch.waitForSelector('.ew-search-result', { timeout: 10000 }),
+    appSearch.waitForSelector('.ew-search-result', { timeout: 10000 }),
+  ]);
+  await originalSearch.waitForTimeout(350);
+  await appSearch.waitForTimeout(350);
+  await writeElementPairDiff('search-results', originalSearch, appSearch, '.ew-search-sheet');
+  await originalSearch.fill('#ew-search-input', 'zzzz');
+  await appSearch.fill('#ew-search-input', 'zzzz');
+  await originalSearch.waitForSelector('.ew-search-state', { timeout: 10000 });
+  await appSearch.waitForSelector('.ew-search-state', { timeout: 10000 });
+  await originalSearch.waitForTimeout(350);
+  await appSearch.waitForTimeout(350);
+  await writeElementPairDiff('search-empty', originalSearch, appSearch, '.ew-search-sheet');
 
   await browser.close();
   await new Promise<void>((resolve) => originalServer.close(() => resolve()));

@@ -1,5 +1,4 @@
 import { useLayoutEffect, useMemo, useState } from 'react';
-import { BottomNav } from '../components/BottomNav';
 import { Icon } from '../components/Icon';
 import { findRestaurant, type Order } from '../data/demo';
 import { formatMoney } from '../lib/money';
@@ -44,14 +43,7 @@ const orderDate = (iso: string): string =>
   });
 
 const initial = (name: string): string => (name ? name.charAt(0).toUpperCase() : 'N');
-
-const navOverride = `
-.orders-page .bottom-nav{background:#fffdf8!important;height:calc(var(--nav-h) + var(--sab))!important;padding-bottom:var(--sab)!important;border-top:1px solid rgba(93,13,24,.12)!important;box-shadow:0 -6px 18px rgba(93,13,24,.07)!important}
-.orders-page .nav-item{color:#9b8b84!important}
-.orders-page .nav-item.active{color:var(--theme-burgundy)!important}
-.orders-page .nav-item.active::before{content:'';position:absolute;top:0;left:50%;width:28px;height:3px;border-radius:0 0 3px 3px;background:var(--theme-gold)}
-.orders-page .nav-item span{font-family:var(--font)!important}
-`;
+const orderLabel = (order: Order): string => order.id.slice(-6).toUpperCase();
 
 function PastCard({ order, onReorder }: { order: Order; onReorder: (order: Order) => void }) {
   const nav = useAppNav();
@@ -67,7 +59,7 @@ function PastCard({ order, onReorder }: { order: Order; onReorder: (order: Order
         </div>
         <div className="ord-title">
           <h4 className="ord-name">{order.restaurantName}</h4>
-          <div className="ord-loc">Demo City</div>
+          <div className="ord-loc">Order #{orderLabel(order)}</div>
           <button
             type="button"
             className="ord-view-menu"
@@ -117,7 +109,7 @@ function PastCard({ order, onReorder }: { order: Order; onReorder: (order: Order
       <div className="ord-foot">
         {order.status === 'delivered' && (
           <button type="button" className="ghost-link tap" onClick={() => toast('Ratings are part of the demo')}>
-            <Icon name="solid:star" size={12} /> Rate
+            <Icon name="solid:star" size={12} style={{ color: '#E5A100' }} /> Rate
           </button>
         )}
         <button type="button" className="ord-reorder tap" onClick={() => onReorder(order)}>
@@ -145,7 +137,7 @@ function LiveCard({ order }: { order: Order }) {
         <div className="oc-title">
           <h3 className="oc-name">{order.restaurantName}</h3>
           <div className="oc-sub">
-            Order #{order.id} · {formatMoney(order.total)}
+            Order #{orderLabel(order)} · {formatMoney(order.total)}
           </div>
         </div>
       </div>
@@ -156,7 +148,7 @@ function LiveCard({ order }: { order: Order }) {
         </span>
         <span className="live-state-text">
           <span className="live-state-title">{statusLabel(order)}</span>
-          <span className="live-state-detail">Arriving in {order.eta}</span>
+          <span className="live-state-detail">{order.status === 'on_the_way' ? 'Your order is on its way to you' : `Arriving in ${order.eta}`}</span>
         </span>
       </button>
 
@@ -188,7 +180,7 @@ function LiveCard({ order }: { order: Order }) {
 
       <div className="live-actions">
         <button className="track-btn tap" type="button" onClick={() => nav.push(`/track/${order.id}`)}>
-          View live tracking <Icon name="solid:arrow-right" size={12} />
+          {order.status === 'on_the_way' ? 'Track live' : 'View live tracking'} <Icon name="solid:arrow-right" size={12} />
         </button>
         <button className="icon-btn tap" type="button" aria-label="Call delivery partner" onClick={() => toast('Calling the rider (demo)')}>
           <Icon name="solid:phone" size={14} />
@@ -201,7 +193,7 @@ function LiveCard({ order }: { order: Order }) {
   );
 }
 
-const ordersStyle = createRouteStyleSheet(`${ordersShellCss}\n${ordersBundleCss}\n${navOverride}`, 'navereatOrders');
+const ordersStyle = createRouteStyleSheet(`${ordersShellCss}\n${ordersBundleCss}`, 'navereatOrders');
 
 export function Orders() {
   const nav = useAppNav();
@@ -323,7 +315,6 @@ export function Orders() {
         )}
       </div>
 
-      <BottomNav />
     </div>
   );
 }

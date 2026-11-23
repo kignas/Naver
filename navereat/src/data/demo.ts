@@ -499,7 +499,7 @@ export const demoOrders: Order[] = [
     status: 'delivered',
     placedAt: '2026-11-20T20:12:00+05:30',
     eta: 'Delivered',
-    paymentMethod: 'Cash on Delivery',
+    paymentMethod: 'UPI · pending',
     address: DEMO_ADDRESS,
   },
   {

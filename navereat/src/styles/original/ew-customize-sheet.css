@@ -411,3 +411,7 @@
 .ewcs-sheet,
 .ewcs-sheet.show { transition: none !important; }
 }
+
+/* Navereat: the persistent cart bar is above page content; sheets must be above it. */
+.ewcs-backdrop{ z-index: 100010; }
+.ewcs-sheet{ z-index: 100011; }
