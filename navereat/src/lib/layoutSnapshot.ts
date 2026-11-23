@@ -66,9 +66,10 @@ export interface LayoutSnapshot {
 }
 
 /** Captures the used layout of a subtree before an incoming route's global CSS can touch it. */
-export function captureLayout(root: Element): LayoutSnapshot {
+export function captureLayout(root: Element, maxNodes = Infinity): LayoutSnapshot {
   const entries: SnapshotEntry[] = [];
   const visit = (element: Element) => {
+    if (entries.length >= maxNodes) return;
     const style = (element as HTMLElement | SVGElement).style;
     if (style) {
       const computed = window.getComputedStyle(element);
@@ -94,10 +95,9 @@ export function captureLayout(root: Element): LayoutSnapshot {
 /** Applies the snapshot with !important so the outgoing page cannot reflow. */
 export function applyLayout(snapshot: LayoutSnapshot): () => void {
   snapshot.entries.forEach((entry) => {
-    const style = (entry.element as HTMLElement | SVGElement).style;
-    entry.values.forEach(([property, value]) => {
-      style.setProperty(property, value, 'important');
-    });
+    const declarations = entry.values.map(([property, value]) => `${property}:${value}!important`).join(';');
+    const base = entry.originalStyle ? `${entry.originalStyle};` : '';
+    entry.element.setAttribute('style', `${base}${declarations}`);
   });
   snapshot.entries.forEach((entry) => {
     entry.element.scrollTop = entry.scrollTop;

@@ -8,15 +8,16 @@ import { CartBar } from './components/CartBar';
 import { CustomizeProvider } from './components/CustomizeSheet';
 import { PageTransition } from './components/PageTransition';
 import { RouteReady } from './components/RouteReady';
+import { RouteShell } from './components/RouteShell';
 import { SearchOverlay } from './components/SearchOverlay';
 import { ToastHost } from './components/ToastHost';
 import { useBackButton } from './hooks/useBackButton';
-import { isTabPath } from './lib/navigation';
+import { isTabPath, NavBridge } from './lib/navigation';
 import { useAppStore } from './store/appStore';
 import { useSearchStore } from './store/searchStore';
-import { useNavDirection, useNavStore } from './store/navStore';
+import { useNavStore } from './store/navStore';
 import { statusBarStyle, statusBarTheme } from './lib/statusBarTheme';
-import { preloadLikelyRoutes, routeLoaders } from './lib/routeLoaders';
+import { installPreloadOnIntent, preloadAllRoutes, preloadLikelyRoutes, routeLoaders } from './lib/routeLoaders';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
 
@@ -31,7 +32,6 @@ const Profile = lazy(() => routeLoaders.profile().then((module) => ({ default: m
 function AppRoutes() {
   const location = useLocation();
   const navigate = useNavigate();
-  const direction = useNavDirection();
   const setDirection = useNavStore((s) => s.setDirection);
   const token = useAppStore((s) => s.token);
   const searchOpen = useSearchStore((s) => s.isOpen);
@@ -50,12 +50,25 @@ function AppRoutes() {
     if (!token) return;
     const run = () => preloadLikelyRoutes(location.pathname);
     if (typeof window.requestIdleCallback === 'function') {
-      const id = window.requestIdleCallback(run, { timeout: 1500 });
+      const id = window.requestIdleCallback(run, { timeout: 500 });
       return () => window.cancelIdleCallback(id);
     }
     const id = window.setTimeout(run, 200);
     return () => window.clearTimeout(id);
   }, [location.pathname, token]);
+
+  useEffect(() => {
+    if (!token) return;
+    const run = () => preloadAllRoutes();
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(run, { timeout: 900 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(run, 600);
+    return () => window.clearTimeout(id);
+  }, [token]);
+
+  useEffect(() => installPreloadOnIntent(), []);
 
   useEffect(() => {
     if (!token && location.pathname !== '/login') {
@@ -84,10 +97,9 @@ function AppRoutes() {
       <div className="app-viewport">
         <PageTransition
           location={location}
-          direction={direction}
           swipeBack={!isTabPath(location.pathname) && location.pathname !== '/login'}
           render={(routeLocation) => (
-            <Suspense fallback={<div className="route-loading" aria-hidden="true" />}>
+            <Suspense fallback={<RouteShell pathname={routeLocation.pathname} />}>
               <RouteReady routeKey={routeLocation.key}>
                 <Routes location={routeLocation}>
                   <Route path="/login" element={<Login />} />
@@ -127,6 +139,7 @@ export default function App() {
 
   return (
     <HashRouter>
+      <NavBridge />
       <CustomizeProvider>
         <AppRoutes />
         <SearchOverlay />

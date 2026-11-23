@@ -2,11 +2,13 @@ import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type R
 import type { Location } from 'react-router-dom';
 import { isTabPath, TAB_PATHS, useAppNav } from '../lib/navigation';
 import { applyLayout, captureLayout, type LayoutSnapshot } from '../lib/layoutSnapshot';
+import { RouteShell } from './RouteShell';
 import { waitForRouteReady } from '../lib/routeReady';
 import { routeKeyFor } from '../lib/routeLoaders';
-import { useNavStore, type NavDirection } from '../store/navStore';
+import { useNavDirection, useNavStore, type NavDirection } from '../store/navStore';
 
 const PUSH_DURATION = 300;
+const PUSH_START_BUDGET = 16;
 const EASE = 'cubic-bezier(0.22, 0.61, 0.36, 1)';
 const SWIPE_THRESHOLD = 0.35;
 
@@ -34,7 +36,6 @@ const CachedRoute = memo(function CachedRoute({ content }: { content: ReactNode 
 
 interface PageTransitionProps {
   location: Location;
-  direction: NavDirection;
   swipeBack?: boolean;
   render: (location: Location) => ReactNode;
 }
@@ -45,8 +46,9 @@ interface PageTransitionProps {
  * Detail routes slide over the cached tab stack. All page motion is transform
  * only: route layers stay fully opaque.
  */
-export function PageTransition({ location, direction, swipeBack = false, render }: PageTransitionProps) {
+export function PageTransition({ location, swipeBack = false, render }: PageTransitionProps) {
   const nav = useAppNav();
+  const direction = useNavDirection();
   const startsOnTab = isTabPath(location.pathname);
   const [layers, setLayers] = useState<Layer[]>(
     startsOnTab ? [] : [{ key: location.key, location, phase: 'idle' }],
@@ -86,6 +88,7 @@ export function PageTransition({ location, direction, swipeBack = false, render 
   const timerRef = useRef<number | null>(null);
   const swipeTimerRef = useRef<number | null>(null);
   const prepareFrameRef = useRef<number | null>(null);
+  const startTimerRef = useRef<number | null>(null);
   const elementCacheRef = useRef(new Map<string, ReactNode>());
   const snapshotsRef = useRef(new Map<string, LayoutSnapshot>());
   const restoresRef = useRef<Array<{ scope: 'tab' | 'layer'; restore: () => void }>>([]);
@@ -119,16 +122,23 @@ export function PageTransition({ location, direction, swipeBack = false, render 
     }
   }, []);
 
-  const captureCurrentLayout = useCallback(() => {
+  const captureCurrentLayout = useCallback((force = false) => {
+    const limit = force ? Infinity : 120;
     const tab = activeTabRef.current;
     if (tab) {
+      const key = `tab:${tab}`;
       const root = tabRefs.current.get(tab);
-      if (root) snapshotsRef.current.set(`tab:${tab}`, captureLayout(root));
+      if (root && (force || !snapshotsRef.current.has(key))) {
+        snapshotsRef.current.set(key, captureLayout(root, limit));
+      }
     }
     const top = layersRef.current[layersRef.current.length - 1];
     if (top) {
+      const key = `layer:${top.key}`;
       const root = layerRefs.current.get(top.key);
-      if (root) snapshotsRef.current.set(`layer:${top.key}`, captureLayout(root));
+      if (root && (force || !snapshotsRef.current.has(key))) {
+        snapshotsRef.current.set(key, captureLayout(root, limit));
+      }
     }
   }, []);
 
@@ -161,7 +171,6 @@ export function PageTransition({ location, direction, swipeBack = false, render 
         restoresRef.current.push({ scope: 'tab', restore: applyLayout(snapshot) });
       }
     }
-
     const top = layersRef.current[layersRef.current.length - 1];
     if (top) {
       const snapshot = snapshotsRef.current.get(`layer:${top.key}`);
@@ -180,7 +189,7 @@ export function PageTransition({ location, direction, swipeBack = false, render 
 
   useEffect(() => {
     if (stage.animating) return;
-    const timer = window.setTimeout(captureCurrentLayout, 450);
+    const timer = window.setTimeout(() => captureCurrentLayout(true), 450);
     return () => window.clearTimeout(timer);
   }, [activeTab, layers, stage.animating, captureCurrentLayout]);
 
@@ -197,7 +206,7 @@ export function PageTransition({ location, direction, swipeBack = false, render 
     resetInlineStyles();
   }, [activeTab, layers, resetInlineStyles]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const current = layersRef.current;
     const top = current[current.length - 1];
     const targetIsTab = isTabPath(location.pathname);
@@ -328,21 +337,29 @@ export function PageTransition({ location, direction, swipeBack = false, render 
     runIdRef.current = runId;
     setSwipeBackLocation(null);
     setSwiping(false);
-    useNavStore.getState().setPreparing(true);
     setPreparing(true);
     setLayers(oldLayer ? [oldLayer, newLayer] : [newLayer]);
     setStage({ direction, animating: true });
 
+    let started = false;
     const start = () => {
-      if (runId !== runIdRef.current) return;
+      if (started || runId !== runIdRef.current) return;
+      started = true;
+      if (startTimerRef.current !== null) {
+        window.clearTimeout(startTimerRef.current);
+        startTimerRef.current = null;
+      }
       setPreparing(false);
       setTabShift(true);
       window.dispatchEvent(new CustomEvent('navereat:transition-start', { detail: { direction } }));
       timerRef.current = window.setTimeout(() => {
         if (runId !== runIdRef.current) return;
+        // The shell paid for the slide; the page can now render its full state
+        // immediately instead of swapping a skeleton after the transition.
+        useNavStore.getState().setPreparing(true);
         setLayers([{ key: location.key, location, phase: 'idle' }]);
         setStage({ direction, animating: false });
-        useNavStore.getState().setPreparing(false);
+        void waitForRouteReady(location.key, 1500).then(() => useNavStore.getState().setPreparing(false));
         window.dispatchEvent(new CustomEvent('navereat:transition-end', { detail: { direction } }));
         timerRef.current = null;
       }, PUSH_DURATION);
@@ -377,6 +394,7 @@ export function PageTransition({ location, direction, swipeBack = false, render 
       await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
     };
 
+    startTimerRef.current = window.setTimeout(start, PUSH_START_BUDGET);
     void settleIncoming().then(start);
   }, [direction, location]);
 
@@ -384,6 +402,7 @@ export function PageTransition({ location, direction, swipeBack = false, render 
     clearTimer();
     if (swipeTimerRef.current !== null) window.clearTimeout(swipeTimerRef.current);
     if (prepareFrameRef.current !== null) window.cancelAnimationFrame(prepareFrameRef.current);
+    if (startTimerRef.current !== null) window.clearTimeout(startTimerRef.current);
   }, []);
 
   const renderCached = (target: Location): ReactNode => {
@@ -551,7 +570,8 @@ export function PageTransition({ location, direction, swipeBack = false, render 
             style={{ zIndex: layer.phase === 'idle' ? 1 : zIndex }}
             aria-hidden={!isTop}
           >
-            <CachedRoute content={renderCached(layer.location)} />
+            <RouteShell pathname={layer.location.pathname} />
+            {layer.phase !== 'enter' && <CachedRoute content={renderCached(layer.location)} />}
           </div>
         );
       })}

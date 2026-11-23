@@ -16,8 +16,13 @@ const sizes = [
 const routes = [
   { name: 'home', path: '/', hash: '/#/', selector: '.hero-header', auth: true },
   { name: 'login', path: '/login', hash: '/#/login', selector: '.login-hero', auth: false },
-  { name: 'orders', path: '/orders', hash: '/#/orders', selector: '.orders-header', auth: true },
+  { name: 'under99', path: '/under99', hash: '/#/under99', selector: '.u99-header', auth: true },
+  { name: 'category', path: '/category/Pizza', hash: '/#/category/Pizza', selector: '.cat-header', auth: true },
   { name: 'restaurant', path: '/restaurant/1', hash: '/#/restaurant/1', selector: '.top-bar', auth: true },
+  { name: 'cart', path: '/cart', hash: '/#/cart', selector: '.ct-delivery-head', auth: true },
+  { name: 'orders', path: '/orders', hash: '/#/orders', selector: '.orders-header', auth: true },
+  { name: 'track', path: '/track/NAV-240318', hash: '/#/track/NAV-240318', selector: '.app-bar', auth: true },
+  { name: 'profile', path: '/profile', hash: '/#/profile', selector: '.header', auth: true },
 ];
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -104,6 +109,13 @@ try {
         if (auth) {
           localStorage.setItem('nearbite_token', 'demo-token');
           localStorage.setItem('nearbite_user', JSON.stringify({ name: 'Aarav', phone: '+91 98765 43210', email: 'demo@navereat.app' }));
+          localStorage.setItem('nearbite_cart', JSON.stringify({
+            'Masala Dosa': {
+              quantity: 1, price: 99, resId: 1, isVeg: true, image: '',
+              resName: 'Foodie Dosa Restaurant', restaurantName: 'Foodie Dosa Restaurant',
+              menuItem: 'fd1', name: 'Masala Dosa',
+            },
+          }));
         }
         sessionStorage.setItem('ew_offers_seen_v1', '["demo"]');
       }, { auth: route.auth });
@@ -129,6 +141,7 @@ try {
         contrast: Number(contrast(theme.lightIcons ? 1 : 0, luminance(theme.color)).toFixed(2)),
         colorMatch,
         iconMatch,
+        capacitorStyle: styleApplied === 'Dark' ? 'Style.Dark (light icons)' : 'Style.Light (dark icons)',
         match: colorMatch && iconMatch,
         file: path.relative(repoRoot, file),
       });

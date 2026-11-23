@@ -313,6 +313,7 @@ export function CartBar({ visible = true, mode = 'home', aboveNav = false }: Car
     <>
       <div
         id="white-cart-root"
+        data-preload-route="/cart"
         className={[
           mode === 'pink' ? 'wc-pink' : '',
           aboveNav ? 'wc-above-nav' : '',
@@ -411,7 +412,7 @@ export function CartBar({ visible = true, mode = 'home', aboveNav = false }: Car
             </div>
           </>
         ) : (
-          <button type="button" id="es-pink-inner" aria-label="View cart" onClick={() => nav.push('/cart')}>
+          <button type="button" id="es-pink-inner" data-preload-route="/cart" aria-label="View cart" onClick={() => nav.push('/cart')}>
             <span className="wc-pink-message" id="wc-delivery-message" aria-live="polite">
               <span className="wc-delivery-message-icon" aria-hidden="true">
                 ✦

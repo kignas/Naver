@@ -83,11 +83,12 @@ export const OrderSuccessSheet = forwardRef<OrderSuccessHandle, OrderSuccessShee
       continuedRef.current = true;
       clearTimers();
       setLeaving(true);
+      // Start the route while the sheet slides out, not 260 ms later.
+      onContinueRef.current();
       window.setTimeout(() => {
         setStage(null);
         setEntered(false);
         setLeaving(false);
-        onContinueRef.current();
       }, 260);
     }, [clearTimers]);
 
@@ -208,7 +209,7 @@ export const OrderSuccessSheet = forwardRef<OrderSuccessHandle, OrderSuccessShee
             {message}
           </p>
           <div className="ew-os__actions">
-            <button className="ew-os__btn" type="button" onClick={finish}>
+            <button className="ew-os__btn" data-preload-route="/track/demo" type="button" onClick={finish}>
               Track my order
             </button>
           </div>

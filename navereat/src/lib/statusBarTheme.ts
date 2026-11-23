@@ -16,7 +16,7 @@ export interface StatusBarTheme {
 export function statusBarTheme(pathname: string): StatusBarTheme {
   if (pathname === '/') return { color: HEADER_BURGUNDY, lightIcons: true };
   if (pathname === '/login') return { color: HEADER_LOGIN_YELLOW, lightIcons: false };
-  if (pathname === '/under99') return { color: HEADER_U99, lightIcons: true };
+  if (pathname === '/under99') return { color: HEADER_WHITE, lightIcons: false };
   return { color: HEADER_WHITE, lightIcons: false };
 }
 

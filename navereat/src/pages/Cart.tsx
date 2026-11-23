@@ -1011,7 +1011,7 @@ export function Cart() {
               </button>
             ))}
           </div>
-          <button className="ct-btn ct-btn-primary navereat-place-order" id="btn-checkout" type="button" onClick={handlePlace}>
+          <button className="ct-btn ct-btn-primary navereat-place-order" id="btn-checkout" data-preload-route="/track/demo" type="button" onClick={handlePlace}>
             Place Order · {formatMoney(payTotal)}
           </button>
         </Sheet>

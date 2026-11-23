@@ -72,7 +72,34 @@ export function preloadRouteAssets(pathname: string): Promise<void> {
 export function preloadRoute(pathname: string): Promise<unknown> {
   const key = routeKeyFor(pathname);
   if (!key) return Promise.resolve();
-  return Promise.all([routeLoaders[key](), preloadRouteAssets(pathname)]);
+  const chunk = routeLoaders[key]();
+  // Images must never gate a tap: the route shell frames the slide while they
+  // decode in the background.
+  void preloadRouteAssets(pathname);
+  return chunk;
+}
+
+/** Loads every route chunk once, after the first screen has painted. */
+export function preloadAllRoutes(): void {
+  Object.values(routeLoaders).forEach((load) => {
+    void load();
+  });
+}
+
+/** Starts the target chunk and its images as soon as the user touches a card. */
+export function installPreloadOnIntent(): () => void {
+  const onIntent = (event: Event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const route = target.closest('[data-preload-route]')?.getAttribute('data-preload-route');
+    if (route) void preloadRoute(route);
+  };
+  window.addEventListener('pointerdown', onIntent, { capture: true, passive: true });
+  window.addEventListener('touchstart', onIntent, { capture: true, passive: true });
+  return () => {
+    window.removeEventListener('pointerdown', onIntent, true);
+    window.removeEventListener('touchstart', onIntent, true);
+  };
 }
 
 function scheduleSpeculative(task: () => void): void {
@@ -102,6 +129,6 @@ export function preloadLikelyRoutes(pathname: string): void {
     return;
   }
   if (pathname === '/cart') {
-    scheduleSpeculative(() => void preloadRoute('/orders'));
+    scheduleSpeculative(() => void preloadRoute('/track/demo'));
   }
 }

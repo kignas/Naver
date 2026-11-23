@@ -159,6 +159,7 @@ function HomeRestaurantCardView({
           role="button"
           tabIndex={0}
           aria-label={`Open ${restaurant.name}`}
+          data-preload-route={`/restaurant/${restaurant.id}`}
           onClick={() => onOpen(restaurant)}
           onKeyDown={openOnKey}
         >
@@ -285,7 +286,7 @@ function HomeRestaurantCardView({
             })}
             {menu.length > 0 && (
               <div className="u99-more-tile">
-                <button type="button" className="u99-more-box" onClick={() => onOpen(restaurant)} aria-label="View full menu">
+                <button type="button" className="u99-more-box" data-preload-route={`/restaurant/${restaurant.id}`} onClick={() => onOpen(restaurant)} aria-label="View full menu">
                   <span className="u99-more-arrow" aria-hidden="true">
                     →
                   </span>

@@ -17,7 +17,12 @@ public class MainActivity extends BridgeActivity {
         getWindow().setStatusBarColor(Color.parseColor("#5D0D18"));
         getWindow().setNavigationBarColor(Color.WHITE);
 
+        // Native default: burgundy bar with LIGHT status icons. The JS status
+        // bar effect then applies the per-route style/color.
         int flags = 0;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
         }

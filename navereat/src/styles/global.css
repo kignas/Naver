@@ -836,3 +836,55 @@ a,
     animation-duration: 0.12s !important;
   }
 }
+
+/* Opaque shell used while a lazy route chunk is still mounting. */
+.route-shell {
+  position: absolute;
+  inset: 0;
+  background: #ffffff;
+  z-index: 0;
+}
+
+.route-shell__bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 58px;
+  padding: 0 16px;
+  background: #ffffff;
+  border-bottom: 1px solid #f0f1f2;
+}
+
+.route-shell__back {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #f5f6f7;
+  color: #1c2024;
+  font-size: 25px;
+  line-height: 1;
+}
+
+.route-shell__title {
+  color: #1c2024;
+  font: 700 18px/1.2 Manrope, system-ui, sans-serif;
+  letter-spacing: -0.3px;
+}
+
+.route-shell__body {
+  padding: 22px 16px;
+  background: #ffffff;
+}
+
+.route-shell__line {
+  display: block;
+  height: 14px;
+  margin-bottom: 12px;
+  border-radius: 7px;
+  background: #f1f2f3;
+}
+
+.route-shell__line--wide { width: 58%; }
+.route-shell__line--short { width: 34%; }

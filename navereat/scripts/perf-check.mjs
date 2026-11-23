@@ -249,6 +249,86 @@ const interactions = async (browser) => {
   return { homeRender, afterQty, push, pop, sheet, restaurantCls };
 };
 
+const latencyInitScript = () => {
+  localStorage.setItem('nearbite_token', 'demo-token');
+  localStorage.setItem('nearbite_user', JSON.stringify({ name: 'Aarav', phone: '+91 98765 43210' }));
+  sessionStorage.setItem('ew_offers_seen_v1', '["demo"]');
+  localStorage.setItem('nearbite_cart', JSON.stringify({
+    'Masala Dosa': {
+      quantity: 1,
+      price: 99,
+      resId: 1,
+      isVeg: true,
+      image: '',
+      resName: 'Foodie Dosa Restaurant',
+      restaurantName: 'Foodie Dosa Restaurant',
+      menuItem: 'fd1',
+      name: 'Masala Dosa',
+    },
+  }));
+  window.__latency = { tapAt: null, startAt: null, firstFrameAt: null };
+  window.addEventListener('pointerdown', () => { window.__latency.tapAt = performance.now(); }, true);
+  window.addEventListener('navereat:transition-start', () => {
+    window.__latency.startAt = performance.now();
+    requestAnimationFrame(() => {
+      if (window.__latency.firstFrameAt == null) window.__latency.firstFrameAt = performance.now();
+    });
+  });
+  window.__resetLatency = () => { window.__latency = { tapAt: null, startAt: null, firstFrameAt: null }; };
+  window.__readLatency = () => ({
+    tapAt: window.__latency.tapAt,
+    startAt: window.__latency.startAt,
+    firstFrameAt: window.__latency.firstFrameAt,
+  });
+};
+
+const pushLatency = async (browser, rate) => {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+  });
+  await context.addInitScript(latencyInitScript);
+  const page = await context.newPage();
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate });
+  await page.goto(`${base}/#/`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('#restaurant-list .u99-restaurant-card', { timeout: 15000 });
+  await page.waitForTimeout(1200);
+
+  const rows = [];
+  const measure = async (name, action) => {
+    await page.evaluate(() => window.__resetLatency());
+    await action();
+    await page.waitForFunction(() => window.__readLatency().firstFrameAt != null, null, { timeout: 15000 });
+    const data = await page.evaluate(() => window.__readLatency());
+    rows.push({
+      transition: name,
+      tapToFirstAnimationFrameMs: Number((data.firstFrameAt - data.tapAt).toFixed(1)),
+      tapToTransitionStartMs: Number((data.startAt - data.tapAt).toFixed(1)),
+      firstFrameAfterStartMs: Number((data.firstFrameAt - data.startAt).toFixed(1)),
+    });
+  };
+
+  await measure('Home→Restaurant', () => page.locator('.u99-restaurant-head').first().click());
+  await page.waitForSelector('.menu-item', { timeout: 15000 });
+  await page.waitForTimeout(500);
+
+  await measure('Restaurant→Cart', () => page.locator('#es-pink-inner').click());
+  await page.waitForSelector('.ct-cta', { timeout: 15000 });
+  await page.locator('.ct-cta').first().click();
+  await page.waitForSelector('#btn-checkout', { timeout: 15000 });
+  await page.locator('#btn-checkout').click();
+  await page.waitForSelector('.ew-os__btn', { timeout: 15000 });
+  await page.waitForTimeout(250);
+
+  await measure('Cart→Tracking', () => page.locator('.ew-os__btn').click());
+  await page.waitForSelector('.floating-back', { timeout: 15000 });
+  await context.close();
+  return { rate, rows };
+};
+
 const clsInitScript = () => {
   localStorage.setItem('nearbite_token', 'demo-token');
   localStorage.setItem('nearbite_user', JSON.stringify({ name: 'Aarav', phone: '+91 98765 43210' }));
@@ -375,6 +455,10 @@ try {
     measuredAt: new Date().toISOString(),
     coldStart: await coldStart(browser),
     interactions: await interactions(browser),
+    pushLatency: {
+      '1x': await pushLatency(browser, 1),
+      '4x': await pushLatency(browser, 4),
+    },
     clsTransitions: await clsTransitions(browser),
     bundle: await bundle(),
   };
@@ -384,6 +468,10 @@ try {
   const clsBudget = Number(process.env.PERF_CLS_BUDGET || 0.01);
   const maxTransitionCls = result.clsTransitions.reduce((max, transition) => Math.max(max, transition.cls), 0);
   const clsPass = result.clsTransitions.every((transition) => transition.cls <= clsBudget);
+  const latencyBudget = Number(process.env.PERF_LATENCY_BUDGET || 100);
+  const latency1xRows = result.pushLatency['1x'].rows;
+  const maxTapToFrame1x = Math.max(...latency1xRows.map((row) => row.tapToFirstAnimationFrameMs));
+  const latencyPass = maxTapToFrame1x <= latencyBudget;
   result.gate = {
     required: gateRequired,
     pushFps: Number(pushFps.toFixed(1)),
@@ -392,12 +480,15 @@ try {
     clsBudget,
     maxTransitionCls: Number(maxTransitionCls.toFixed(6)),
     clsPass,
-    pass: (!gateRequired || (pushFps >= minFps && popFps >= minFps)) && clsPass,
+    latencyBudgetMs: latencyBudget,
+    maxTapToFirstFrameMs1x: Number(maxTapToFrame1x.toFixed(1)),
+    latencyPass,
+    pass: (!gateRequired || (pushFps >= minFps && popFps >= minFps)) && clsPass && latencyPass,
   };
   await writeFile(path.join(outDir, `perf-${label}.json`), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result, null, 2));
   if (!result.gate.pass) {
-    console.error(`FAIL: performance gate (push ${pushFps.toFixed(1)} fps, pop ${popFps.toFixed(1)} fps, max transition CLS ${maxTransitionCls.toFixed(6)}, budget ${clsBudget})`);
+    console.error(`FAIL: performance gate (push ${pushFps.toFixed(1)} fps, pop ${popFps.toFixed(1)} fps, max transition CLS ${maxTransitionCls.toFixed(6)}, budget ${clsBudget}, max tap→frame ${maxTapToFrame1x.toFixed(1)} ms, budget ${latencyBudget} ms)`);
     process.exitCode = 1;
   }
 } finally {
