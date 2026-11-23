@@ -383,16 +383,22 @@ const clsTransitions = async (browser) => {
   await page.waitForSelector('#home-header', { timeout: 15000 });
   await page.waitForTimeout(1100);
 
+  // CLS by definition excludes shifts caused by recent input. A route push/pop is
+  // driven by the tap that starts it, so counting those shifts measured the tap
+  // itself (and flipped with runner speed). Only unexpected shifts count here;
+  // the input-driven total is still recorded for transparency.
   const measure = async (name, action, waitMs = 650) => {
     await page.evaluate(() => window.__resetCls());
     await action();
     await page.waitForTimeout(waitMs);
     const entries = await page.evaluate(() => window.__readCls());
-    const total = entries.reduce((sum, entry) => sum + entry.value, 0);
+    const sum = (list) => list.reduce((total, entry) => total + entry.value, 0);
+    const expected = entries.filter((entry) => !entry.hadRecentInput);
     return {
       name,
-      cls: Number(total.toFixed(6)),
-      entries: entries.filter((entry) => entry.value > 0.00001),
+      cls: Number(sum(expected).toFixed(6)),
+      inputDrivenCls: Number(sum(entries.filter((entry) => entry.hadRecentInput)).toFixed(6)),
+      entries: expected.filter((entry) => entry.value > 0.00001),
     };
   };
 
