@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Location } from 'react-router-dom';
 import { useAppNav } from '../lib/navigation';
-import type { NavDirection } from '../store/navStore';
+import { waitForRouteReady } from '../lib/routeReady';
+import { useNavStore, type NavDirection } from '../store/navStore';
 
 const PUSH_DURATION = 300;
 const TAB_DURATION = 200;
@@ -92,6 +93,7 @@ export function PageTransition({ location, direction, swipeBack = false, render 
       setSwipeBackLocation(null);
       setSwiping(false);
       setPreparing(false);
+      useNavStore.getState().setPreparing(false);
       setLayers([{ key: location.key, location, phase: 'idle' }]);
       setStage((value) => ({ ...value, animating: false }));
       historyRef.current = historyRef.current.filter((entry) => entry.key !== top.location.key);
@@ -121,9 +123,10 @@ export function PageTransition({ location, direction, swipeBack = false, render 
     runIdRef.current = runId;
     setSwipeBackLocation(null);
     setSwiping(false);
+    useNavStore.getState().setPreparing(true);
+    setPreparing(true);
     setLayers([oldLayer, newLayer]);
     setStage({ direction, animating: true });
-    setPreparing(false);
 
     const start = () => {
       if (runId !== runIdRef.current) return;
@@ -133,23 +136,49 @@ export function PageTransition({ location, direction, swipeBack = false, render 
         if (runId !== runIdRef.current) return;
         setLayers([{ key: location.key, location, phase: 'idle' }]);
         setStage({ direction, animating: false });
+        useNavStore.getState().setPreparing(false);
         window.dispatchEvent(new CustomEvent('navereat:transition-end', { detail: { direction } }));
         timerRef.current = null;
       }, duration);
     };
 
-    if (direction === 'pop') {
-      // Mount and measure Home while it is hidden, so the pop-back animation is smooth.
-      setPreparing(true);
-      prepareFrameRef.current = window.requestAnimationFrame(() => {
-        prepareFrameRef.current = window.requestAnimationFrame(() => {
-          if (topRef.current) void topRef.current.offsetHeight;
-          start();
-        });
+    const waitForIncoming = () =>
+      new Promise<HTMLDivElement | null>((resolve) => {
+        const check = () => {
+          if (runId !== runIdRef.current) {
+            resolve(null);
+            return;
+          }
+          const node = layerRefs.current.get(newLayer.key);
+          if (node) resolve(node);
+          else prepareFrameRef.current = window.requestAnimationFrame(check);
+        };
+        check();
       });
-    } else {
-      start();
-    }
+
+    const settleIncoming = async () => {
+      const node = await waitForIncoming();
+      if (!node) return;
+      // The layer ref exists before a lazy route leaves Suspense; wait for the
+      // real page, including its layout effects and cached route CSS.
+      await waitForRouteReady(newLayer.key);
+      // Let React finish the hidden commit, then force layout before compositing.
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+      void node.offsetHeight;
+      const images = Array.from(node.querySelectorAll('img'));
+      await Promise.race([
+        Promise.all(images.map((image) => image.decode().catch(() => undefined))),
+        new Promise((resolve) => window.setTimeout(resolve, 120)),
+      ]);
+      // Let the hidden page paint once; start on the following frame so its
+      // first paint is not charged to the animation.
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    };
+
+    // Every route is mounted fully rendered but hidden until CSS, layout, and
+    // images are ready. Only then does the compositor start the animation.
+    void settleIncoming().then(start);
   }, [direction, location]);
 
   useEffect(() => () => {

@@ -10,6 +10,7 @@ import { useAppNav } from '../lib/navigation';
 import { useCustomize } from '../lib/customizeContext';
 import { customizedQtyFor, isCustomisable } from '../lib/customization';
 import { useAppStore } from '../store/appStore';
+import { useNavStore } from '../store/navStore';
 import { useUiStore } from '../store/uiStore';
 import { toast } from '../store/toastStore';
 import restaurantBundleCss from '../styles/original/restaurant.bundle.css?raw';
@@ -77,6 +78,7 @@ export function Restaurant() {
   const removeCustomizedUnit = useAppStore((s) => s.removeCustomizedUnit);
   const { openCustomize } = useCustomize();
   const selectRestaurant = useAppStore((s) => s.selectRestaurant);
+  const preparing = useNavStore((s) => s.preparing);
 
   const [tab, setTab] = useState<MenuTab>(cachedRestaurant?.tab ?? 'menu');
   const [filters, setFilters] = useState<Set<MenuFilter>>(
@@ -102,16 +104,16 @@ export function Restaurant() {
   }, []);
 
   useEffect(() => {
-    if (!restaurant) return;
+    if (!restaurant || preparing) return;
     selectRestaurant(restaurant.id);
     document.title = `${restaurant.name} – Navereat`;
     return () => {
       document.title = 'Navereat';
     };
-  }, [restaurant, selectRestaurant]);
+  }, [preparing, restaurant, selectRestaurant]);
 
   useEffect(() => {
-    if (!Number.isFinite(routeId)) return;
+    if (!Number.isFinite(routeId) || preparing) return;
     patchRestaurant(routeId, {
       tab,
       filters: [...filters],
@@ -121,7 +123,7 @@ export function Restaurant() {
       collapsed: [...collapsed],
       activeCategory,
     });
-  }, [activeCategory, collapsed, filters, menuSearchOpen, patchRestaurant, query, routeId, saved, tab]);
+  }, [activeCategory, collapsed, filters, menuSearchOpen, patchRestaurant, preparing, query, routeId, saved, tab]);
 
   useLayoutEffect(() => {
     const scroller = scrollRef.current;
@@ -130,8 +132,8 @@ export function Restaurant() {
   }, [cachedRestaurant?.scrollTop, ready, routeId]);
 
   useEffect(() => {
-    if (menuSearchOpen) searchRef.current?.focus();
-  }, [menuSearchOpen]);
+    if (!preparing && menuSearchOpen) searchRef.current?.focus();
+  }, [menuSearchOpen, preparing]);
 
   const menu = useMemo(() => cachedMenu ?? restaurant?.menu ?? [], [cachedMenu, restaurant]);
   const groups = useMemo<MenuGroup[]>(() => {

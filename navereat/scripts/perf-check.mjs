@@ -5,7 +5,8 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 
 const label = process.argv[2] || 'run';
-const cpuRate = Number(process.env.PERF_RATE || 4);
+const cpuRate = Number(process.env.PERF_RATE || 1);
+const minFps = Number(process.env.PERF_MIN_FPS || 55);
 const legacyFps = process.env.PERF_METHOD === 'legacy';
 const root = process.cwd();
 const port = 4210 + (label === 'after' ? 1 : 0);
@@ -13,7 +14,7 @@ const base = `http://127.0.0.1:${port}`;
 const outDir = path.resolve('..', 'verify');
 await mkdir(outDir, { recursive: true });
 
-const server = spawn('npx', ['vite', 'preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], {
+const server = spawn(path.join(root, 'node_modules', '.bin', 'vite'), ['preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], {
   cwd: root,
   stdio: 'ignore',
 });
@@ -54,6 +55,7 @@ const initScript = () => {
     homeAt: null,
     cls: 0,
     fpsFrames: [],
+    fpsStart: 0,
     fpsOn: false,
   });
   try {
@@ -77,6 +79,7 @@ const initScript = () => {
   else document.addEventListener('DOMContentLoaded', startObserving, { once: true });
   window.__startFps = () => {
     perf.fpsFrames = [];
+    perf.fpsStart = performance.now();
     perf.fpsOn = true;
     const loop = (time) => {
       if (!perf.fpsOn) return;
@@ -95,6 +98,7 @@ const initScript = () => {
       fps: duration > 0 ? ((frames.length - 1) * 1000) / duration : 0,
       maxGapMs: gaps.length ? Math.max(...gaps) : 0,
       longFrames: gaps.filter((gap) => gap > 25).length,
+      frameTimes: frames.map((time) => Number((time - perf.fpsStart).toFixed(1))),
     };
   };
   window.__resetCls = () => {
@@ -265,7 +269,11 @@ const bundle = async () => {
 };
 
 await waitServer();
-const browser = await chromium.launch({ executablePath: '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
+const browser = await chromium.launch({
+  executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium',
+  headless: true,
+  args: ['--no-sandbox'],
+});
 try {
   const result = {
     label,
@@ -274,8 +282,22 @@ try {
     interactions: await interactions(browser),
     bundle: await bundle(),
   };
+  const pushFps = result.interactions.push.fps;
+  const popFps = result.interactions.pop.fps;
+  const gateRequired = cpuRate === 1;
+  result.gate = {
+    required: gateRequired,
+    pushFps: Number(pushFps.toFixed(1)),
+    popFps: Number(popFps.toFixed(1)),
+    minFps,
+    pass: !gateRequired || (pushFps >= minFps && popFps >= minFps),
+  };
   await writeFile(path.join(outDir, `perf-${label}.json`), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result, null, 2));
+  if (!result.gate.pass) {
+    console.error(`FAIL: unthrottled push/pop FPS below ${minFps} (push ${pushFps.toFixed(1)}, pop ${popFps.toFixed(1)})`);
+    process.exitCode = 1;
+  }
 } finally {
   await browser.close();
   server.kill('SIGTERM');

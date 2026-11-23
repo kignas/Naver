@@ -1,0 +1,57 @@
+name: Navereat performance gate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'navereat/**'
+      - '.github/workflows/perf.yml'
+  pull_request:
+    paths:
+      - 'navereat/**'
+      - '.github/workflows/perf.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: navereat
+
+jobs:
+  transitions:
+    name: Push / pop FPS gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: navereat/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Install Chromium
+        run: |
+          npx playwright-core install --with-deps chromium
+          echo "CHROMIUM_PATH=$(node -p 'require("playwright-core").chromium.executablePath()')" >> "$GITHUB_ENV"
+
+      - name: Run transition FPS gate
+        run: npm run perf-check ci
+
+      - name: Upload performance result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Navereat-perf
+          path: verify/perf-ci.json
+          if-no-files-found: warn

@@ -6,6 +6,7 @@ import { StatusBar, Style } from '@capacitor/status-bar';
 import { CartBar } from './components/CartBar';
 import { CustomizeProvider } from './components/CustomizeSheet';
 import { PageTransition } from './components/PageTransition';
+import { RouteReady } from './components/RouteReady';
 import { SearchOverlay } from './components/SearchOverlay';
 import { ToastHost } from './components/ToastHost';
 import { useBackButton } from './hooks/useBackButton';
@@ -85,18 +86,20 @@ function AppRoutes() {
           swipeBack={!isTabPath(location.pathname) && location.pathname !== '/login'}
           render={(routeLocation) => (
             <Suspense fallback={<div className="route-loading" aria-hidden="true" />}>
-              <Routes location={routeLocation}>
-                <Route path="/login" element={<Login />} />
-                <Route path="/" element={<Home />} />
-                <Route path="/under99" element={<Under99 />} />
-                <Route path="/category/:type" element={<Category />} />
-                <Route path="/restaurant/:id" element={<Restaurant />} />
-                <Route path="/cart" element={<Cart />} />
-                <Route path="/orders" element={<Orders />} />
-                <Route path="/track/:id" element={<Track />} />
-                <Route path="/profile" element={<Profile />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
+              <RouteReady routeKey={routeLocation.key}>
+                <Routes location={routeLocation}>
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/" element={<Home />} />
+                  <Route path="/under99" element={<Under99 />} />
+                  <Route path="/category/:type" element={<Category />} />
+                  <Route path="/restaurant/:id" element={<Restaurant />} />
+                  <Route path="/cart" element={<Cart />} />
+                  <Route path="/orders" element={<Orders />} />
+                  <Route path="/track/:id" element={<Track />} />
+                  <Route path="/profile" element={<Profile />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </RouteReady>
             </Suspense>
           )}
         />

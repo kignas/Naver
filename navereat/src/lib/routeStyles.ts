@@ -2,36 +2,26 @@ export interface RouteStyleSheet {
   attach: () => () => void;
 }
 
-const supportsAdopted =
-  typeof CSSStyleSheet !== 'undefined' &&
-  'replaceSync' in CSSStyleSheet.prototype &&
-  'adoptedStyleSheets' in Document.prototype;
-
 /**
- * Parses a large raw route stylesheet when its chunk loads, not when the route
- * mounts. The sheet is only activated for the lifetime of the route.
+ * Parses a large raw route stylesheet when its chunk loads (the idle
+ * preloader), keeps it disabled, and only enables it for the route's lifetime.
+ * The parse happens once; mount never parses or creates a stylesheet.
  */
 export function createRouteStyleSheet(css: string, marker: string): RouteStyleSheet {
-  if (supportsAdopted) {
-    const sheet = new CSSStyleSheet();
-    sheet.replaceSync(css);
-    return {
-      attach: () => {
-        document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
-        return () => {
-          document.adoptedStyleSheets = document.adoptedStyleSheets.filter((entry) => entry !== sheet);
-        };
-      },
-    };
-  }
+  const style = document.createElement('style');
+  style.dataset[marker] = 'true';
+  style.media = 'not all';
+  style.textContent = css;
+  document.head.appendChild(style);
+  // Force the CSS parser to run now, while the route chunk is being preloaded.
+  void style.sheet?.cssRules;
 
   return {
     attach: () => {
-      const style = document.createElement('style');
-      style.dataset[marker] = 'true';
-      style.textContent = css;
-      document.head.appendChild(style);
-      return () => style.remove();
+      style.media = 'all';
+      return () => {
+        style.media = 'not all';
+      };
     },
   };
 }

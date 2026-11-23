@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import heroArt from '../assets/login-hero.webp';
+import { createRouteStyleSheet } from '../lib/routeStyles';
 import { useAppNav } from '../lib/navigation';
 import { useAppStore } from '../store/appStore';
 import { toast } from '../store/toastStore';
@@ -8,6 +9,7 @@ import loginShellCss from '../styles/original/login-shell.css?raw';
 import '../styles/pages/login.css';
 
 const OTP_LENGTH = 6;
+const loginStyle = createRouteStyleSheet(`${loginShellCss}\n${loginBundleCss}`, 'navereatLogin');
 
 export function Login() {
   const login = useAppStore((s) => s.login);
@@ -18,14 +20,11 @@ export function Login() {
   const [busy, setBusy] = useState(false);
   const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
 
-  useEffect(() => {
-    const style = document.createElement('style');
-    style.dataset.navereatLogin = 'true';
-    style.textContent = `${loginShellCss}\n${loginBundleCss}`;
-    document.head.appendChild(style);
+  useLayoutEffect(() => {
+    const detach = loginStyle.attach();
     document.body.classList.add('login-redesign');
     return () => {
-      style.remove();
+      detach();
       document.body.classList.remove('login-redesign');
     };
   }, []);

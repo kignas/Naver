@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useLayoutEffect } from 'react';
 import { BottomNav } from '../components/BottomNav';
+import { createRouteStyleSheet } from '../lib/routeStyles';
 import { useAppNav } from '../lib/navigation';
 import { useSearchStore } from '../store/searchStore';
 import { useAppStore } from '../store/appStore';
@@ -73,19 +74,15 @@ const navOverride = `
 .profile-page .nav-item span{font-family:var(--font)!important}
 `;
 
+const profileStyle = createRouteStyleSheet(`${profileShellCss}\n${profileBundleCss}\n${navOverride}`, 'navereatProfile');
+
 export function Profile() {
   const nav = useAppNav();
   const openSearch = useSearchStore((state) => state.openSearch);
   const user = useAppStore((s) => s.user);
   const logout = useAppStore((s) => s.logout);
 
-  useEffect(() => {
-    const style = document.createElement('style');
-    style.dataset.navereatProfile = 'true';
-    style.textContent = `${profileShellCss}\n${profileBundleCss}\n${navOverride}`;
-    document.head.appendChild(style);
-    return () => style.remove();
-  }, []);
+  useLayoutEffect(() => profileStyle.attach(), []);
 
   const name = user?.name?.trim() || 'Navereat User';
   const phone = user?.phone?.trim() || '+91 98765 43210';

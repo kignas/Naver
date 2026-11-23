@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useState } from 'react';
 import { BottomNav } from '../components/BottomNav';
 import { Icon } from '../components/Icon';
 import { findRestaurant, type Order } from '../data/demo';
 import { formatMoney } from '../lib/money';
+import { createRouteStyleSheet } from '../lib/routeStyles';
 import { useAppNav } from '../lib/navigation';
 import { useAppStore } from '../store/appStore';
 import { toast } from '../store/toastStore';
@@ -200,19 +201,15 @@ function LiveCard({ order }: { order: Order }) {
   );
 }
 
+const ordersStyle = createRouteStyleSheet(`${ordersShellCss}\n${ordersBundleCss}\n${navOverride}`, 'navereatOrders');
+
 export function Orders() {
   const nav = useAppNav();
   const orders = useAppStore((s) => s.orders);
   const addItem = useAppStore((s) => s.addItem);
   const [query, setQuery] = useState('');
 
-  useEffect(() => {
-    const style = document.createElement('style');
-    style.dataset.navereatOrders = 'true';
-    style.textContent = `${ordersShellCss}\n${ordersBundleCss}\n${navOverride}`;
-    document.head.appendChild(style);
-    return () => style.remove();
-  }, []);
+  useLayoutEffect(() => ordersStyle.attach(), []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

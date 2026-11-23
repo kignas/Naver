@@ -22,7 +22,8 @@ npm run check        # tsc --noEmit + eslint
 npm run build        # typecheck + production build
 npm run scroll-check # every route + sheet at 390x844 and 360x640
 npm run visual       # pixel diff against the original reference
-npm run perf-check after  # cold start, CLS, transition FPS, bundle sizes
+npm run perf-check        # cold start, CLS, transition FPS, bundle sizes
+npm run perf-transitions  # three push transitions + pop, plus a frame strip
 ```
 
 The production bundle is route-split: Home is eager, while Restaurant, Cart,
@@ -69,11 +70,29 @@ npm run assets   # sharp SVGs -> Android mipmaps + splash, then patch adaptive X
 
 ## Performance and offline checks
 
-`npm run perf-check after` writes `../verify/perf-after.json` with:
+`npm run perf-check` writes `../verify/perf-<label>.json` with cold-start time to
+first Home paint, FCP, DOMContentLoaded, CLS, push/pop/sheet FPS, and bundle
+sizes. The default run is unthrottled and **exits non-zero if push or pop is
+below 55 fps**. Use `PERF_RATE=4 npm run perf-check stress` for the 4x CPU
+stress run. `npm run perf-transitions` measures Home → Restaurant → Cart →
+Tracking and the pop back, and writes the seven-frame strip to
+`../verify/frames/home-restaurant-strip.png`.
 
-- cold-start time to first Home paint, FCP, DOMContentLoaded, and CLS;
-- FPS during push, pop, and filter-sheet animations under 4x CPU throttling;
-- entry JS/CSS sizes and total JS size.
+Measured in this workspace, same harness, before (`7382fe9`) and after:
+
+| Transition | 1x before | 1x after | 4x before | 4x after |
+| --- | --- | --- | --- | --- |
+| Home → Restaurant | 49.4 fps / 66.7 ms | **60.0 / 16.8** | 11.6 fps / 333.3 ms | **52.5 / 50.0** |
+| Restaurant → Cart | 52.9 fps / 33.4 ms | **60.0 / 16.8** | 20.0 fps / 200.0 ms | **60.0 / 16.8** |
+| Cart → Tracking | 60.0 fps / 16.7 ms | **60.0 / 16.8** | 49.4 fps / 66.6 ms | **60.0 / 16.8** |
+| Tracking → Cart (pop) | 60.0 fps / 16.8 ms | **60.0 / 16.8** | 60.0 fps / 16.7 ms | **60.0 / 16.8** |
+
+The fix starts the slide only after the real lazy page (not the Suspense
+fallback) has committed, its route CSS is parsed and enabled, its images are
+decoded, and the hidden page has painted once. Speculative preloads are
+serialized and paused during a slide, so a second route chunk cannot compile
+mid-animation. The committed evidence strip is
+[`docs/performance/transition-strip.png`](docs/performance/transition-strip.png).
 
 All fonts, icons, placeholders, and demo data are bundled. The only `http`
 strings in `src/` are SVG `xmlns` declarations and the Font Awesome license
@@ -104,6 +123,10 @@ uploads the `Navereat-debug-apk` artifact, and publishes a GitHub Release tagged
 
 The APK is debug-signed, so it installs directly on a phone. A commented
 signed-release section is included in the workflow for later use.
+
+`.github/workflows/perf.yml` runs the unthrottled push/pop FPS gate on pushes
+and pull requests that touch `navereat/**`, using a downloaded Chromium and
+uploading `verify/perf-ci.json` as the `Navereat-perf` artifact.
 
 ## Download
 

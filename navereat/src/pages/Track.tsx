@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { DEMO_RIDER, demoOrders, findRestaurant, type Order } from '../data/demo';
 import { formatMoney } from '../lib/money';
+import { createRouteStyleSheet } from '../lib/routeStyles';
 import { useAppNav } from '../lib/navigation';
 import { useAppStore } from '../store/appStore';
 import { toast } from '../store/toastStore';
@@ -60,6 +61,8 @@ const fmtDate = (iso: string): string =>
 const fmtTime = (iso: string): string =>
   new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
 
+const trackStyle = createRouteStyleSheet(trackBundleCss, 'navereatTrack');
+
 export function Track() {
   const { id } = useParams<{ id: string }>();
   const nav = useAppNav();
@@ -67,13 +70,7 @@ export function Track() {
   const user = useAppStore((s) => s.user);
   const addItem = useAppStore((s) => s.addItem);
 
-  useEffect(() => {
-    const style = document.createElement('style');
-    style.dataset.navereatTrack = 'true';
-    style.textContent = trackBundleCss;
-    document.head.appendChild(style);
-    return () => style.remove();
-  }, []);
+  useLayoutEffect(() => trackStyle.attach(), []);
 
   const order = useMemo<Order | undefined>(
     () => orders.find((entry) => entry.id === id) ?? demoOrders[0],

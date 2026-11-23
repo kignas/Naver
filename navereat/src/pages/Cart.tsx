@@ -19,6 +19,7 @@ import { useAppNav } from '../lib/navigation';
 import { useCustomize } from '../lib/customizeContext';
 import { customTextFor, displayNameFor } from '../lib/customization';
 import { useAppStore } from '../store/appStore';
+import { useNavStore } from '../store/navStore';
 import { toast } from '../store/toastStore';
 import cartBundleCss from '../styles/original/cart.bundle.css?raw';
 import '../styles/original/cart-popups.css';
@@ -228,6 +229,7 @@ export function Cart() {
   const [offerPopup, setOfferPopup] = useState<DemoOffer[] | null>(null);
   const [instructions, setInstructions] = useState<string[]>([]);
   const [diOpen, setDiOpen] = useState(false);
+  const preparing = useNavStore((s) => s.preparing);
 
   useLayoutEffect(() => {
     const detach = cartStyle.attach();
@@ -288,6 +290,7 @@ export function Cart() {
   const payTotal = bill.total + tip;
 
   useEffect(() => {
+    if (preparing) return;
     try {
       const raw = JSON.parse(localStorage.getItem('nearbite_cart_extras') || '{}') as {
         restaurantNote?: string;
@@ -309,9 +312,10 @@ export function Cart() {
     } catch {
       /* no saved extras */
     }
-  }, []);
+  }, [preparing]);
 
   useEffect(() => {
+    if (preparing) return;
     try {
       localStorage.setItem(
         'nearbite_cart_extras',
@@ -320,10 +324,10 @@ export function Cart() {
     } catch {
       /* storage may be unavailable */
     }
-  }, [instructions, note, tip]);
+  }, [instructions, note, preparing, tip]);
 
   useEffect(() => {
-    if (!offers.length || sheet !== null || placing || offerPopup || offerMode === 'none') return;
+    if (preparing || !offers.length || sheet !== null || placing || offerPopup || offerMode === 'none') return;
     const popupOffers = offerMode === 'single' ? offers.slice(0, 1) : offers;
     const key = `cart|${offers.map((offer) => offer.id).join('+')}|${subtotal}`;
     let seen: string[] = [];
@@ -342,7 +346,7 @@ export function Cart() {
       }
     }, 900);
     return () => window.clearTimeout(timer);
-  }, [offers, sheet, placing, offerPopup, subtotal, offerMode]);
+  }, [offers, offerMode, offerPopup, placing, preparing, sheet, subtotal]);
 
   const handleApply = (value: string) => {
     const result = applyCoupon(value);
