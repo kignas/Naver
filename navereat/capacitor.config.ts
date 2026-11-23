@@ -4,13 +4,13 @@ const config: CapacitorConfig = {
   appId: 'com.navereat.app',
   appName: 'Navereat',
   webDir: 'dist',
-  backgroundColor: '#9E1535',
+  backgroundColor: '#5D0D18',
   android: { allowMixedContent: false, captureInput: true },
   plugins: {
     SplashScreen: {
       launchShowDuration: 900,
       launchAutoHide: false,
-      backgroundColor: '#9E1535',
+      backgroundColor: '#5D0D18',
       showSpinner: false,
       splashFullScreen: false,
       splashImmersive: false,
@@ -18,7 +18,7 @@ const config: CapacitorConfig = {
     },
     StatusBar: {
       style: 'LIGHT',
-      backgroundColor: '#9E1535',
+      backgroundColor: '#5D0D18',
       overlaysWebView: false,
     },
   },

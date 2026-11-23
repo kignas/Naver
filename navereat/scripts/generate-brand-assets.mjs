@@ -3,7 +3,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 
 const OUT = path.resolve('assets');
-const BURGUNDY = '#9E1535';
+const BURGUNDY = '#5D0D18';
 const GOLD = '#F2C94C';
 const CREAM = '#FFF9EB';
 

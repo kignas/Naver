@@ -13,6 +13,7 @@ import { useBackButton } from './hooks/useBackButton';
 import { isTabPath } from './lib/navigation';
 import { useAppStore } from './store/appStore';
 import { useNavDirection, useNavStore } from './store/navStore';
+import { statusBarTheme } from './lib/statusBarTheme';
 import { preloadLikelyRoutes, routeLoaders } from './lib/routeLoaders';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
@@ -36,13 +37,10 @@ function AppRoutes() {
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
-    const burgundy =
-      location.pathname === '/' ||
-      location.pathname === '/login' ||
-      location.pathname === '/orders' ||
-      location.pathname.startsWith('/restaurant/');
-    void StatusBar.setStyle({ style: burgundy ? Style.Light : Style.Dark });
-    void StatusBar.setBackgroundColor({ color: burgundy ? '#9E1535' : '#ffffff' });
+    const theme = statusBarTheme(location.pathname);
+    void StatusBar.setOverlaysWebView({ overlay: false });
+    void StatusBar.setStyle({ style: theme.lightIcons ? Style.Light : Style.Dark });
+    void StatusBar.setBackgroundColor({ color: theme.color });
   }, [location.pathname]);
 
   useEffect(() => {

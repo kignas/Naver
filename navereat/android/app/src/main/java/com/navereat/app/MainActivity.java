@@ -14,7 +14,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        getWindow().setStatusBarColor(Color.parseColor("#9E1535"));
+        getWindow().setStatusBarColor(Color.parseColor("#5D0D18"));
         getWindow().setNavigationBarColor(Color.WHITE);
 
         int flags = 0;

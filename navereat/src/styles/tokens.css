@@ -104,7 +104,9 @@
 
   /* Layout */
   --nav-h: 64px;
-  --sat: env(safe-area-inset-top, 0px);
+  /* Non-overlay Android status bar: the WebView starts below it. */
+  --safe-top: 0px;
+  --sat: var(--safe-top);
   --sab: env(safe-area-inset-bottom, 0px);
   --maxw: 480px;
 
