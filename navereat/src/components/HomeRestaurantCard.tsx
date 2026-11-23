@@ -1,4 +1,4 @@
-import type { CSSProperties, KeyboardEvent } from 'react';
+import { memo, type CSSProperties, type KeyboardEvent } from 'react';
 import type { MenuItem, Restaurant } from '../data/demo';
 import type { Cart } from '../lib/cart';
 import { customizedQtyFor, isCustomisable } from '../lib/customization';
@@ -7,11 +7,11 @@ interface HomeRestaurantCardProps {
   restaurant: Restaurant;
   index: number;
   cart: Cart;
-  onOpen: () => void;
-  onAdd: (item: MenuItem) => void;
-  onCustomize: (item: MenuItem) => void;
-  onIncrement: (item: MenuItem) => void;
-  onDecrement: (item: MenuItem) => void;
+  onOpen: (restaurant: Restaurant) => void;
+  onAdd: (restaurant: Restaurant, item: MenuItem) => void;
+  onCustomize: (restaurant: Restaurant, item: MenuItem) => void;
+  onIncrement: (item: MenuItem, resId: number) => void;
+  onDecrement: (name: string) => void;
 }
 
 function RatingBadge() {
@@ -115,7 +115,7 @@ function displayOffer(restaurant: Restaurant): string {
   return best > 0 ? `UP TO ${best}% OFF` : 'LOWER PRICES';
 }
 
-export function HomeRestaurantCard({
+function HomeRestaurantCardView({
   restaurant,
   index,
   cart,
@@ -125,6 +125,8 @@ export function HomeRestaurantCard({
   onIncrement,
   onDecrement,
 }: HomeRestaurantCardProps) {
+  const perfWindow = window as Window & { __cardRenders?: number };
+  perfWindow.__cardRenders = (perfWindow.__cardRenders ?? 0) + 1;
   const menu = restaurant.menu
     .filter((item) => Number(item.price) > 0)
     .slice()
@@ -145,7 +147,7 @@ export function HomeRestaurantCard({
   const openOnKey = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      onOpen();
+      onOpen(restaurant);
     }
   };
 
@@ -157,7 +159,7 @@ export function HomeRestaurantCard({
           role="button"
           tabIndex={0}
           aria-label={`Open ${restaurant.name}`}
-          onClick={onOpen}
+          onClick={() => onOpen(restaurant)}
           onKeyDown={openOnKey}
         >
           <div className="u99-card-copy">
@@ -233,7 +235,7 @@ export function HomeRestaurantCard({
                         <button
                           type="button"
                           className="u99-add u99-add-cust"
-                          onClick={() => onCustomize(menuItem)}
+                          onClick={() => onCustomize(restaurant, menuItem)}
                           aria-label={`Customise ${menuItem.name}${customQty > 0 ? `, ${customQty} in cart` : ''}`}
                         >
                           +
@@ -245,16 +247,16 @@ export function HomeRestaurantCard({
                         </button>
                       ) : quantity > 0 ? (
                         <div className="u99-stepper">
-                          <button type="button" onClick={() => onDecrement(menuItem)} aria-label={`Remove one ${menuItem.name}`}>
+                          <button type="button" onClick={() => onDecrement(menuItem.name)} aria-label={`Remove one ${menuItem.name}`}>
                             −
                           </button>
                           <span>{quantity}</span>
-                          <button type="button" onClick={() => onIncrement(menuItem)} aria-label={`Add one ${menuItem.name}`}>
+                          <button type="button" onClick={() => onIncrement(menuItem, restaurant.id)} aria-label={`Add one ${menuItem.name}`}>
                             +
                           </button>
                         </div>
                       ) : (
-                        <button type="button" className="u99-add" onClick={() => onAdd(menuItem)} aria-label={`Add ${menuItem.name}`}>
+                        <button type="button" className="u99-add" onClick={() => onAdd(restaurant, menuItem)} aria-label={`Add ${menuItem.name}`}>
                           +
                         </button>
                       )}
@@ -283,7 +285,7 @@ export function HomeRestaurantCard({
             })}
             {menu.length > 0 && (
               <div className="u99-more-tile">
-                <button type="button" className="u99-more-box" onClick={onOpen} aria-label="View full menu">
+                <button type="button" className="u99-more-box" onClick={() => onOpen(restaurant)} aria-label="View full menu">
                   <span className="u99-more-arrow" aria-hidden="true">
                     →
                   </span>
@@ -297,3 +299,32 @@ export function HomeRestaurantCard({
     </div>
   );
 }
+
+function sameCartForRestaurant(prev: Cart, next: Cart, resId: number): boolean {
+  let prevCount = 0;
+  let nextCount = 0;
+  for (const line of Object.values(prev)) if (line.resId === resId) prevCount += 1;
+  for (const line of Object.values(next)) if (line.resId === resId) nextCount += 1;
+  if (prevCount !== nextCount) return false;
+  for (const [name, line] of Object.entries(next)) {
+    if (line.resId !== resId) continue;
+    const other = prev[name];
+    if (!other || other.quantity !== line.quantity || other.price !== line.price) return false;
+  }
+  return true;
+}
+
+function sameCardProps(prev: HomeRestaurantCardProps, next: HomeRestaurantCardProps): boolean {
+  return (
+    prev.restaurant === next.restaurant &&
+    prev.index === next.index &&
+    prev.onOpen === next.onOpen &&
+    prev.onAdd === next.onAdd &&
+    prev.onCustomize === next.onCustomize &&
+    prev.onIncrement === next.onIncrement &&
+    prev.onDecrement === next.onDecrement &&
+    sameCartForRestaurant(prev.cart, next.cart, next.restaurant.id)
+  );
+}
+
+export const HomeRestaurantCard = memo(HomeRestaurantCardView, sameCardProps);

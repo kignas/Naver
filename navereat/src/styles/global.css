@@ -75,7 +75,6 @@ ol {
   position: relative;
   width: 100%;
   max-width: var(--maxw);
-  height: 100vh;
   height: 100dvh;
   margin: 0 auto;
   overflow: hidden;
@@ -145,27 +144,45 @@ ol {
 }
 
 /* ---------- Skeleton ---------- */
-@keyframes shimmer {
-  0% {
-    background-position: -400px 0;
+@keyframes skeletonSweep {
+  from {
+    transform: translate3d(-100%, 0, 0);
   }
-  100% {
-    background-position: 400px 0;
+  to {
+    transform: translate3d(100%, 0, 0);
   }
 }
 
 .skeleton {
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-  background-size: 800px 100%;
-  animation: shimmer 1.4s infinite linear;
+  position: relative !important;
+  overflow: hidden !important;
+  background: #f0f0f2 !important;
+  background-image: none !important;
+  animation: none !important;
   border-radius: var(--r-lg);
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.58) 50%, transparent 100%);
+  transform: translate3d(-100%, 0, 0);
+  animation: skeletonSweep 1.15s infinite linear;
+  pointer-events: none;
+}
+
+.route-loading {
+  position: absolute;
+  inset: 0;
+  background: #fff;
 }
 
 /* ---------- Bottom nav ---------- */
 .bottom-nav {
   flex-shrink: 0;
-  height: calc(var(--nav-h) + var(--sab));
-  padding-bottom: var(--sab);
+  height: calc(var(--nav-h) + max(12px, env(safe-area-inset-bottom, 0px)));
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
   background: #fffdf8;
   border-top: 1px solid rgba(93, 13, 24, 0.12);
   box-shadow: 0 -6px 18px rgba(93, 13, 24, 0.07);
@@ -550,9 +567,9 @@ ol {
   *,
   *::before,
   *::after {
-    animation-duration: 0.01ms !important;
+    animation-duration: 0.12s !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    transition-duration: 0.08s !important;
   }
 }
 
@@ -593,6 +610,15 @@ ol {
 
 .route-stage.is-animating {
   pointer-events: none;
+}
+
+.route-stage.is-preparing .route-layer.is-enter {
+  animation: none !important;
+  opacity: 0 !important;
+}
+
+.route-stage.is-preparing .route-layer.is-leave {
+  animation: none !important;
 }
 
 @keyframes routePushIn {
@@ -689,4 +715,136 @@ ol {
   width: 24px;
   z-index: 60;
   touch-action: pan-y;
+}
+
+
+/* ---------- Touch ergonomics & platform polish ---------- */
+button,
+a,
+[role='button'] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+:where(
+  .tap,
+  .nav-item,
+  .filter-pill,
+  .u99-add,
+  .u99-stepper button,
+  .nb-add-btn,
+  .nb-qty-btn,
+  .ew-hd-circle,
+  .ew-hd-search,
+  .menu-search-cancel,
+  .sheet-close-btn,
+  .sheet-done,
+  .sheet-clear,
+  .ct-pill-btn,
+  .ct-step-down,
+  .ct-step-up,
+  .ew-cd-close,
+  .ew-cd-view,
+  .ew-cd-checkout,
+  .u99-back,
+  .icon-btn,
+  .cat-back,
+  .cat-result,
+  .ew-search-back,
+  .ew-search-clear,
+  .ew-search-mic,
+  .ew-search-result,
+  .ewcs-add,
+  .ewcs-qty button,
+  .filter-tab,
+  .sort-option,
+  .sheet-option,
+  .banner-cta,
+  .btn-store,
+  .btn-profile,
+  .search-box,
+  .veg-box
+) {
+  position: relative;
+  touch-action: manipulation;
+}
+
+:where(
+  .tap,
+  .nav-item,
+  .filter-pill,
+  .u99-add,
+  .u99-stepper button,
+  .nb-add-btn,
+  .nb-qty-btn,
+  .ew-hd-circle,
+  .ew-hd-search,
+  .menu-search-cancel,
+  .sheet-close-btn,
+  .sheet-done,
+  .sheet-clear,
+  .ct-pill-btn,
+  .ct-step-down,
+  .ct-step-up,
+  .ew-cd-close,
+  .ew-cd-view,
+  .ew-cd-checkout,
+  .u99-back,
+  .icon-btn,
+  .cat-back,
+  .cat-result,
+  .ew-search-back,
+  .ew-search-clear,
+  .ew-search-mic,
+  .ew-search-result,
+  .ewcs-add,
+  .ewcs-qty button,
+  .filter-tab,
+  .sort-option,
+  .sheet-option,
+  .banner-cta,
+  .btn-store,
+  .btn-profile,
+  .search-box,
+  .veg-box
+)::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
+  border-radius: inherit;
+}
+
+.bottom-nav,
+#cart-bar,
+.ct-footer,
+.cart-bottom-bar,
+.checkout-bar {
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+}
+
+#cart-bar {
+  bottom: calc(var(--nav-h, 64px) + max(12px, env(safe-area-inset-bottom, 0px)) + 12px) !important;
+}
+
+.cat-result-img-wrap,
+.ew-search-thumb,
+.header-slide__art {
+  aspect-ratio: 1 / 1;
+}
+
+.filter-sheet,
+.ewcs-sheet,
+.ct-sheet,
+.ew-os__sheet {
+  overscroll-behavior: contain;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation-duration: 0.12s !important;
+  }
 }

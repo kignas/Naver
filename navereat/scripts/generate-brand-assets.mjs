@@ -3,14 +3,16 @@ import path from 'node:path';
 import sharp from 'sharp';
 
 const OUT = path.resolve('assets');
-const ORANGE = '#FC8019';
-const CREAM = '#FFF7F0';
+const BURGUNDY = '#9E1535';
+const GOLD = '#F2C94C';
+const CREAM = '#FFF9EB';
 
 const nPath = (stroke = 150) =>
-  `<path d="M355 720 V304 L669 720 V304" fill="none" stroke="${ORANGE}" stroke-width="${stroke}" stroke-linecap="round" stroke-linejoin="round"/>`;
+  `<path d="M355 720 V304 L669 720 V304" fill="none" stroke="${GOLD}" stroke-width="${stroke}" stroke-linecap="round" stroke-linejoin="round"/>`;
 
 const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <rect width="1024" height="1024" rx="220" fill="#ffffff"/>
+  <rect width="1024" height="1024" rx="220" fill="${BURGUNDY}"/>
+  <circle cx="512" cy="512" r="372" fill="none" stroke="${GOLD}" stroke-opacity=".28" stroke-width="10"/>
   ${nPath(150)}
 </svg>`;
 
@@ -21,19 +23,20 @@ const foregroundSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" heig
 </svg>`;
 
 const backgroundSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <rect width="1024" height="1024" fill="#ffffff"/>
+  <rect width="1024" height="1024" fill="${BURGUNDY}"/>
 </svg>`;
 
 const splashSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="2732" height="2732" viewBox="0 0 2732 2732">
-  <rect width="2732" height="2732" fill="#ffffff"/>
+  <rect width="2732" height="2732" fill="${BURGUNDY}"/>
+  <circle cx="1366" cy="1366" r="570" fill="none" stroke="${GOLD}" stroke-opacity=".22" stroke-width="12"/>
   <g transform="translate(1366 1366) scale(1.9) translate(-512 -512)">
     ${nPath(150)}
   </g>
 </svg>`;
 
 const faviconSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 1024 1024">
-  <rect width="1024" height="1024" rx="220" fill="${ORANGE}"/>
-  <path d="M355 720 V304 L669 720 V304" fill="none" stroke="#ffffff" stroke-width="150" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect width="1024" height="1024" rx="220" fill="${BURGUNDY}"/>
+  <path d="M355 720 V304 L669 720 V304" fill="none" stroke="${GOLD}" stroke-width="150" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 
 await mkdir(OUT, { recursive: true });

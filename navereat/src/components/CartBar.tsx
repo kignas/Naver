@@ -135,7 +135,7 @@ function CartDrawer({
               const units = Math.round(group.units);
               return (
                 <div className="ew-cd-row" key={group.id}>
-                  {group.image ? <img className="ew-cd-logo" src={group.image} alt="" /> : <span className="ew-cd-logo" />}
+                  {group.image ? <img className="ew-cd-logo" src={group.image} alt="" loading="lazy" decoding="async" /> : <span className="ew-cd-logo" />}
                   <div className="ew-cd-info">
                     <div className="ew-cd-name">{group.name}</div>
                     <div className="ew-cd-menu">
@@ -338,7 +338,7 @@ export function CartBar({ visible = true, mode = 'home', aboveNav = false }: Car
                 <div className="wc-thumb-wrap">
                   <div className="wc-image-stack" id="wc-dynamic-img-stack" style={{ width: stackWidth }}>
                     {images.map((image, index) => (
-                      <img className="wc-img" src={image} alt="" key={`${image}-${index}`} />
+                      <img className="wc-img" src={image} alt="" key={`${image}-${index}`} loading="lazy" decoding="async" />
                     ))}
                   </div>
                   <span className="wc-qty-badge" id="wc-qty-badge" aria-hidden="true" ref={badgeRef}>

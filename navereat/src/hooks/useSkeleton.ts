@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
-/** Short fake load (400–700 ms) so skeleton shimmer matches the legacy pages. */
-export function useSkeleton(min = 400, max = 700): boolean {
+/** Short first-paint fake load. Keep the cap at 400 ms. */
+export function useSkeleton(min = 180, max = 320): boolean {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {

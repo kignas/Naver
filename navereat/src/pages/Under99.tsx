@@ -4,7 +4,7 @@ import { Icon } from '../components/Icon';
 import { QtyControl } from '../components/QtyControl';
 import { VegDot } from '../components/VegDot';
 import { restaurants, type MenuItem } from '../data/demo';
-import { useSkeleton } from '../hooks/useSkeleton';
+import { useCachedReady } from '../hooks/useCachedReady';
 import { useAppNav } from '../lib/navigation';
 import { formatMoney } from '../lib/money';
 import { useAppStore } from '../store/appStore';
@@ -37,7 +37,7 @@ const formatCountdown = (seconds: number): string => {
 export function Under99() {
   const nav = useAppNav();
   const openSearch = useSearchStore((state) => state.openSearch);
-  const ready = useSkeleton(400, 700);
+  const ready = useCachedReady('under99', 180, 320);
   const cart = useAppStore((s) => s.cart);
   const addItem = useAppStore((s) => s.addItem);
   const decrementItem = useAppStore((s) => s.decrementItem);
@@ -179,7 +179,7 @@ export function Under99() {
                 return (
                   <div className="u99-card" key={`${resId}-${item.id}`}>
                     <div className="u99-img-wrap">
-                      <img className="u99-img" src={item.image} alt={item.name} />
+                      <img className="u99-img" src={item.image} alt={item.name} loading="lazy" decoding="async" />
                       <div className="u99-add">
                         {qty > 0 ? (
                           <QtyControl

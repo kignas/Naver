@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '../components/Icon';
 import { CompleteYourMeal } from '../components/CompleteYourMeal';
 import { OfferPopup } from '../components/OfferPopup';
@@ -12,6 +12,7 @@ import {
   type Coupon,
   type DemoOffer,
 } from '../data/demo';
+import { createRouteStyleSheet } from '../lib/routeStyles';
 import { billFor, cartRestaurantId, type CartLine } from '../lib/cart';
 import { formatMoney } from '../lib/money';
 import { useAppNav } from '../lib/navigation';
@@ -24,6 +25,8 @@ import '../styles/original/cart-popups.css';
 import '../styles/pages/cart.css';
 
 type Payment = 'upi' | 'cod';
+const cartStyle = createRouteStyleSheet(cartBundleCss, 'navereatCart');
+
 type SheetName = 'coupon' | 'bill' | 'pay' | 'note' | 'tip' | null;
 const TIP_PRESETS = [10, 20, 30] as const;
 const NOTE_MAX = 100;
@@ -123,6 +126,77 @@ function VegMark({ value }: { value?: boolean }) {
   );
 }
 
+
+interface CartLineRowProps {
+  name: string;
+  line: CartLine;
+  original: number;
+  onQty: (name: string, qty: number) => void;
+}
+
+const CartLineRow = memo(
+  function CartLineRow({ name, line, original, onQty }: CartLineRowProps) {
+    const customText = customTextFor(line.customizations);
+    const shownName = displayNameFor(name, customText);
+    const hasDiscount = original > line.price;
+    const discountPct = hasDiscount ? Math.round(((original - line.price) / original) * 100) : 0;
+    const itemTotal = line.quantity * line.price;
+    const itemSavings = hasDiscount ? line.quantity * (original - line.price) : 0;
+    const last = line.quantity <= 1;
+    return (
+      <div className="ct-row" data-name={name}>
+        <div className="ct-info">
+          <div className="ct-name-row">
+            <VegMark value={line.isVeg} />
+            <span className="ct-name">{shownName}</span>
+          </div>
+          {customText && <div className="ct-custom">{customText}</div>}
+          <div className="ct-price-line">
+            <span className="ct-unit-price ct-num">₹{line.price}</span>
+            {hasDiscount && (
+              <>
+                <span className="ct-was-price ct-num">₹{original}</span>
+                <span className="ct-off-badge">{discountPct}% OFF</span>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="ct-right">
+          <div>
+            {hasDiscount && <div className="ct-item-was ct-num">₹{line.quantity * original}</div>}
+            <div className="ct-item-total ct-num">₹{itemTotal}</div>
+            {hasDiscount && <div className="ct-item-save ct-num">Save ₹{itemSavings.toFixed(0)}</div>}
+          </div>
+          <div className={`ct-stepper${last ? ' is-last' : ''}`} role="group" aria-label={`Quantity for ${name}`}>
+            <button
+              type="button"
+              className="ct-step-down"
+              aria-label={last ? `Remove ${name}` : 'Decrease quantity'}
+              onClick={() => onQty(name, line.quantity - 1)}
+            >
+              {last ? trashIcon : <span className="ct-step-glyph" aria-hidden="true">−</span>}
+            </button>
+            <span className="ct-qty">{line.quantity}</span>
+            <button
+              type="button"
+              className="ct-step-up"
+              aria-label="Increase quantity"
+              onClick={() => onQty(name, line.quantity + 1)}
+            >
+              <span className="ct-step-glyph" aria-hidden="true">+</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  },
+  (prev, next) =>
+    prev.name === next.name &&
+    prev.line === next.line &&
+    prev.original === next.original &&
+    prev.onQty === next.onQty,
+);
+
 export function Cart() {
   const nav = useAppNav();
   const cart = useAppStore((s) => s.cart);
@@ -155,15 +229,12 @@ export function Cart() {
   const [instructions, setInstructions] = useState<string[]>([]);
   const [diOpen, setDiOpen] = useState(false);
 
-  useEffect(() => {
-    const style = document.createElement('style');
-    style.dataset.navereatCart = 'true';
-    style.textContent = cartBundleCss;
-    document.head.appendChild(style);
+  useLayoutEffect(() => {
+    const detach = cartStyle.attach();
     document.body.classList.add('ct-page');
     document.body.classList.remove('ct-loading-cart', 'ct-loading-delivery', 'ct-location-modal-open');
     return () => {
-      style.remove();
+      detach();
       document.body.classList.remove('ct-page');
     };
   }, []);
@@ -443,62 +514,15 @@ export function Cart() {
                   </div>
                 </div>
                 <div className="ct-restaurant-items">
-                  {group.lines.map(({ name, line }) => {
-                    const customText = customTextFor(line.customizations);
-                    const shownName = displayNameFor(name, customText);
-                    const original = originalPriceFor(line);
-                    const hasDiscount = original > line.price;
-                    const discountPct = hasDiscount ? Math.round(((original - line.price) / original) * 100) : 0;
-                    const itemTotal = line.quantity * line.price;
-                    const itemSavings = hasDiscount ? line.quantity * (original - line.price) : 0;
-                    const last = line.quantity <= 1;
-                    return (
-                      <div className="ct-row" data-name={name} key={name}>
-                        <div className="ct-info">
-                          <div className="ct-name-row">
-                            <VegMark value={line.isVeg} />
-                            <span className="ct-name">{shownName}</span>
-                          </div>
-                          {customText && <div className="ct-custom">{customText}</div>}
-                          <div className="ct-price-line">
-                            <span className="ct-unit-price ct-num">₹{line.price}</span>
-                            {hasDiscount && (
-                              <>
-                                <span className="ct-was-price ct-num">₹{original}</span>
-                                <span className="ct-off-badge">{discountPct}% OFF</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <div className="ct-right">
-                          <div>
-                            {hasDiscount && <div className="ct-item-was ct-num">₹{line.quantity * original}</div>}
-                            <div className="ct-item-total ct-num">₹{itemTotal}</div>
-                            {hasDiscount && <div className="ct-item-save ct-num">Save ₹{itemSavings.toFixed(0)}</div>}
-                          </div>
-                          <div className={`ct-stepper${last ? ' is-last' : ''}`} role="group" aria-label={`Quantity for ${name}`}>
-                            <button
-                              type="button"
-                              className="ct-step-down"
-                              aria-label={last ? `Remove ${name}` : 'Decrease quantity'}
-                              onClick={() => setQty(name, line.quantity - 1)}
-                            >
-                              {last ? trashIcon : <span className="ct-step-glyph" aria-hidden="true">−</span>}
-                            </button>
-                            <span className="ct-qty">{line.quantity}</span>
-                            <button
-                              type="button"
-                              className="ct-step-up"
-                              aria-label="Increase quantity"
-                              onClick={() => setQty(name, line.quantity + 1)}
-                            >
-                              <span className="ct-step-glyph" aria-hidden="true">+</span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {group.lines.map(({ name, line }) => (
+                    <CartLineRow
+                      key={name}
+                      name={name}
+                      line={line}
+                      original={originalPriceFor(line)}
+                      onQty={setQty}
+                    />
+                  ))}
                 </div>
                 <div className="ct-item-actions ct-group-actions">
                   <button className="ct-pill-btn tap" type="button" onClick={() => nav.push(`/restaurant/${group.resId}`)}>

@@ -11,3 +11,5 @@ export const useNavStore = create<NavState>((set) => ({
   direction: 'tab',
   setDirection: (direction) => set({ direction }),
 }));
+
+export const useNavDirection = (): NavDirection => useNavStore((state) => state.direction);

@@ -105,8 +105,9 @@ const scrollState = (page, selector) => page.evaluate((sel) => {
 async function wheel(page, selector, distance = 500) {
   const box = await page.locator(selector).first().boundingBox();
   if (!box) return false;
-  const x = Math.round(box.x + box.width / 2);
-  const y = Math.round(box.y + box.height / 2);
+  // Keep the pointer away from the 24px swipe edge and the right-side action rows.
+  const x = Math.round(box.x + box.width * 0.25);
+  const y = Math.round(box.y + box.height * 0.7);
   await page.mouse.move(x, Math.max(1, y));
   await page.mouse.wheel(0, distance);
   await page.waitForTimeout(350);

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { SplashScreen } from '@capacitor/splash-screen';
@@ -11,25 +11,49 @@ import { ToastHost } from './components/ToastHost';
 import { useBackButton } from './hooks/useBackButton';
 import { isTabPath } from './lib/navigation';
 import { useAppStore } from './store/appStore';
-import { useNavStore } from './store/navStore';
+import { useNavDirection, useNavStore } from './store/navStore';
+import { preloadLikelyRoutes, routeLoaders } from './lib/routeLoaders';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
-import { Restaurant } from './pages/Restaurant';
-import { Under99 } from './pages/Under99';
-import { Category } from './pages/Category';
-import { Cart } from './pages/Cart';
-import { Orders } from './pages/Orders';
-import { Track } from './pages/Track';
-import { Profile } from './pages/Profile';
+
+const Restaurant = lazy(() => routeLoaders.restaurant().then((module) => ({ default: module.Restaurant })));
+const Under99 = lazy(() => routeLoaders.under99().then((module) => ({ default: module.Under99 })));
+const Category = lazy(() => routeLoaders.category().then((module) => ({ default: module.Category })));
+const Cart = lazy(() => routeLoaders.cart().then((module) => ({ default: module.Cart })));
+const Orders = lazy(() => routeLoaders.orders().then((module) => ({ default: module.Orders })));
+const Track = lazy(() => routeLoaders.track().then((module) => ({ default: module.Track })));
+const Profile = lazy(() => routeLoaders.profile().then((module) => ({ default: module.Profile })));
 
 function AppRoutes() {
   const location = useLocation();
   const navigate = useNavigate();
-  const direction = useNavStore((s) => s.direction);
+  const direction = useNavDirection();
   const setDirection = useNavStore((s) => s.setDirection);
   const token = useAppStore((s) => s.token);
 
   useBackButton();
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const burgundy =
+      location.pathname === '/' ||
+      location.pathname === '/login' ||
+      location.pathname === '/orders' ||
+      location.pathname.startsWith('/restaurant/');
+    void StatusBar.setStyle({ style: burgundy ? Style.Light : Style.Dark });
+    void StatusBar.setBackgroundColor({ color: burgundy ? '#9E1535' : '#ffffff' });
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!token) return;
+    const run = () => preloadLikelyRoutes(location.pathname);
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(run, { timeout: 1500 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(run, 200);
+    return () => window.clearTimeout(id);
+  }, [location.pathname, token]);
 
   useEffect(() => {
     if (!token && location.pathname !== '/login') {
@@ -60,18 +84,20 @@ function AppRoutes() {
           direction={direction}
           swipeBack={!isTabPath(location.pathname) && location.pathname !== '/login'}
           render={(routeLocation) => (
-            <Routes location={routeLocation}>
-              <Route path="/login" element={<Login />} />
-              <Route path="/" element={<Home />} />
-              <Route path="/under99" element={<Under99 />} />
-              <Route path="/category/:type" element={<Category />} />
-              <Route path="/restaurant/:id" element={<Restaurant />} />
-              <Route path="/cart" element={<Cart />} />
-              <Route path="/orders" element={<Orders />} />
-              <Route path="/track/:id" element={<Track />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+            <Suspense fallback={<div className="route-loading" aria-hidden="true" />}>
+              <Routes location={routeLocation}>
+                <Route path="/login" element={<Login />} />
+                <Route path="/" element={<Home />} />
+                <Route path="/under99" element={<Under99 />} />
+                <Route path="/category/:type" element={<Category />} />
+                <Route path="/restaurant/:id" element={<Restaurant />} />
+                <Route path="/cart" element={<Cart />} />
+                <Route path="/orders" element={<Orders />} />
+                <Route path="/track/:id" element={<Track />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Suspense>
           )}
         />
       </div>
@@ -84,9 +110,13 @@ function AppRoutes() {
 export default function App() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
-    void StatusBar.setStyle({ style: Style.Dark });
-    void StatusBar.setBackgroundColor({ color: '#ffffff' });
-    window.setTimeout(() => void SplashScreen.hide(), 250);
+    const hide = () => void SplashScreen.hide();
+    window.addEventListener('navereat:home-painted', hide, { once: true });
+    const fallback = window.setTimeout(hide, 2500);
+    return () => {
+      window.removeEventListener('navereat:home-painted', hide);
+      window.clearTimeout(fallback);
+    };
   }, []);
 
   return (

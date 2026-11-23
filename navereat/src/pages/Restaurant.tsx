@@ -1,9 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Icon } from '../components/Icon';
+import { RestaurantMenuItem } from '../components/RestaurantMenuItem';
 import { findRestaurant } from '../data/demo';
 import type { MenuItem } from '../data/demo';
 import { useCachedReady } from '../hooks/useCachedReady';
+import { createRouteStyleSheet } from '../lib/routeStyles';
 import { useAppNav } from '../lib/navigation';
 import { useCustomize } from '../lib/customizeContext';
 import { customizedQtyFor, isCustomisable } from '../lib/customization';
@@ -13,6 +15,8 @@ import { toast } from '../store/toastStore';
 import restaurantBundleCss from '../styles/original/restaurant.bundle.css?raw';
 import restaurantShellCss from '../styles/original/restaurant-shell.css?raw';
 import '../styles/pages/restaurant.css';
+
+const restaurantStyle = createRouteStyleSheet(`${restaurantBundleCss}\n${restaurantShellCss}`, 'navereatRestaurant');
 
 type MenuFilter = 'popular' | 'rating' | 'price' | 'veg' | 'nonveg';
 type MenuTab = 'menu' | 'info';
@@ -63,7 +67,7 @@ export function Restaurant() {
   const routeId = Number(id);
   const restaurant = findRestaurant(id);
   const nav = useAppNav();
-  const ready = useCachedReady(`restaurant:${routeId}`, 400, 400);
+  const ready = useCachedReady(`restaurant:${routeId}`, 200, 340);
   const cachedRestaurant = useUiStore.getState().restaurants[routeId];
   const cachedMenu = useUiStore((s) => s.menus[routeId]);
   const patchRestaurant = useUiStore((s) => s.patchRestaurant);
@@ -86,16 +90,13 @@ export function Restaurant() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const style = document.createElement('style');
-    style.dataset.navereatRestaurant = 'true';
-    style.textContent = `${restaurantBundleCss}\n${restaurantShellCss}`;
-    document.head.appendChild(style);
+  useLayoutEffect(() => {
+    const detach = restaurantStyle.attach();
     document.body.classList.add('navereat-restaurant');
     document.documentElement.dataset.ewHeader = 'raspberry';
     document.documentElement.dataset.ewTheme = 'light';
     return () => {
-      style.remove();
+      detach();
       document.body.classList.remove('navereat-restaurant');
     };
   }, []);
@@ -554,161 +555,24 @@ export function Restaurant() {
                     </div>
                     <div className={`menu-cat-items${groupCollapsed ? ' collapsed' : ''}`}>
                       {group.items.map((menuItem, itemIndex) => {
-                        const qty = cart[menuItem.name]?.quantity ?? 0;
                         const customisable = isCustomisable(menuItem);
                         const customQty = customisable ? customizedQtyFor(cart, menuItem) : 0;
-                        const originalPrice =
-                          menuItem.originalPrice && menuItem.originalPrice > menuItem.price
-                            ? menuItem.originalPrice
-                            : null;
-                        const discount =
-                          menuItem.discountPercent ??
-                          (originalPrice ? Math.round((1 - menuItem.price / originalPrice) * 100) : 0);
                         return (
-                          <div
-                            className="menu-item nb-menu-item"
-                            data-menu-item-id={menuItem.id}
-                            data-veg={menuItem.isVeg ? 'true' : 'false'}
-                            data-veg-known="true"
-                            data-egg="false"
-                            data-reordered="false"
-                            data-price={menuItem.price}
-                            data-popular={menuItem.bestseller ? 'true' : 'false'}
+                          <RestaurantMenuItem
                             key={menuItem.id}
-                            style={{ animationDelay: `${(groupIndex * 10 + itemIndex) * 0.04}s` }}
-                          >
-                            <div className="nb-item-main">
-                              {menuItem.bestseller && (
-                                <div className="nb-item-tag-row">
-                                  <span className="nb-item-badge">Bestseller</span>
-                                </div>
-                              )}
-                              <div className="nb-item-title-row">
-                                <span
-                                  className={`nb-veg-mark ${menuItem.isVeg ? 'veg' : 'nonveg'}`}
-                                  title={menuItem.isVeg ? 'Veg' : 'Non-veg'}
-                                  aria-label={menuItem.isVeg ? 'Veg' : 'Non-veg'}
-                                >
-                                  <span />
-                                </span>
-                                <h3 className="nb-item-title">{menuItem.name}</h3>
-                              </div>
-                              <div className="nb-item-price-row">
-                                <span className={`nb-item-current-price${originalPrice ? ' has-offer' : ''}`}>
-                                  <span className="nb-rupee">₹</span>
-                                  {menuItem.price}
-                                </span>
-                                {originalPrice && (
-                                  <>
-                                    <span className="nb-item-original-price">₹{originalPrice}</span>
-                                    <span className="nb-item-discount">{discount}% OFF</span>
-                                  </>
-                                )}
-                              </div>
-                              {ratingKnown && (
-                                <div className="nb-item-rating" aria-label={`Rating ${rating.toFixed(1)}`}>
-                                  <span className="nb-item-rating-star" aria-hidden="true">
-                                    ★
-                                  </span>
-                                  <span className="nb-item-rating-value">{rating.toFixed(1)}</span>
-                                  {itemRating && <span className="nb-item-rating-count">({itemRating})</span>}
-                                </div>
-                              )}
-                              {menuItem.desc && <p className="nb-item-desc">{menuItem.desc}</p>}
-                            </div>
-                            <div className="nb-item-media">
-                              <div className={`nb-item-image-wrap${menuItem.image ? ' is-loading' : ''}`}>
-                                <div className="nb-item-image-placeholder ew-food-ph" aria-hidden="true" />
-                                {menuItem.image && (
-                                  <img
-                                    className="nb-item-image"
-                                    width="128"
-                                    height="88"
-                                    src={menuItem.image}
-                                    alt={menuItem.name}
-                                    loading="lazy"
-                                    decoding="async"
-                                    onLoad={(event) => {
-                                      event.currentTarget.classList.add('is-loaded');
-                                      event.currentTarget.closest('.nb-item-image-wrap')?.classList.remove('is-loading');
-                                    }}
-                                    onError={(event) => {
-                                      event.currentTarget.closest('.nb-item-image-wrap')?.classList.remove('is-loading');
-                                      event.currentTarget.remove();
-                                    }}
-                                  />
-                                )}
-                              </div>
-                              <div className="nb-item-cta" id={`btn-container-${menuItem.id}`}>
-                                {customisable ? (
-                                  customQty > 0 ? (
-                                    <div className="nb-custom-cart-control">
-                                      <button
-                                        type="button"
-                                        className="nb-custom-remove"
-                                        onClick={() => removeCustomizedUnit(menuItem)}
-                                        aria-label={`Remove one ${menuItem.name} from cart`}
-                                      >
-                                        −
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="nb-add-btn nb-add-btn--cust has-cart-qty"
-                                        data-menu-item-id={menuItem.id}
-                                        aria-label={`Customise ${menuItem.name}, ${customQty} in cart`}
-                                        onClick={() => openCustomize(menuItem, restaurant.id)}
-                                      >
-                                        ADD <span className="nb-add-plus" aria-hidden="true">+</span>
-                                        <span className="nb-custom-qty" aria-hidden="true">{customQty}</span>
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      className="nb-add-btn nb-add-btn--cust"
-                                      data-menu-item-id={menuItem.id}
-                                      aria-label={`Customise ${menuItem.name}`}
-                                      onClick={() => openCustomize(menuItem, restaurant.id)}
-                                    >
-                                      ADD <span className="nb-add-plus" aria-hidden="true">+</span>
-                                    </button>
-                                  )
-                                ) : qty > 0 ? (
-                                  <div className="nb-qty" role="group" aria-label="Quantity">
-                                    <button
-                                      type="button"
-                                      className="nb-qty-btn"
-                                      onClick={() => decrementItem(menuItem.name)}
-                                      aria-label="Decrease quantity"
-                                    >
-                                      −
-                                    </button>
-                                    <span className="nb-qty-val">{qty}</span>
-                                    <button
-                                      type="button"
-                                      className="nb-qty-btn"
-                                      onClick={() => addItem(menuItem, restaurant.id)}
-                                      aria-label="Increase quantity"
-                                    >
-                                      +
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    className="nb-add-btn"
-                                    onClick={() => addItem(menuItem, restaurant.id)}
-                                    aria-label={`Add ${menuItem.name} to cart`}
-                                  >
-                                    ADD
-                                  </button>
-                                )}
-                              </div>
-                              <div className={customisable ? 'nb-item-customisable' : 'nb-item-customisable nb-item-customisable-spacer'}>
-                                {customisable ? 'Customisable' : ''}
-                              </div>
-                            </div>
-                          </div>
+                            menuItem={menuItem}
+                            resId={restaurant.id}
+                            qty={cart[menuItem.name]?.quantity ?? 0}
+                            customQty={customQty}
+                            ratingKnown={ratingKnown}
+                            rating={rating}
+                            itemRating={itemRating}
+                            animationDelay={`${(groupIndex * 10 + itemIndex) * 0.04}s`}
+                            onAdd={addItem}
+                            onDecrement={decrementItem}
+                            onRemoveCustom={removeCustomizedUnit}
+                            onCustomize={openCustomize}
+                          />
                         );
                       })}
                     </div>

@@ -43,6 +43,7 @@ export function PageTransition({ location, direction, swipeBack = false, render 
   const [stage, setStage] = useState<Stage>({ direction, animating: false });
   const [swipeBackLocation, setSwipeBackLocation] = useState<Location | null>(null);
   const [swiping, setSwiping] = useState(false);
+  const [preparing, setPreparing] = useState(false);
 
   const layersRef = useRef(layers);
   const historyRef = useRef<Location[]>([location]);
@@ -54,6 +55,8 @@ export function PageTransition({ location, direction, swipeBack = false, render 
   const runIdRef = useRef(0);
   const timerRef = useRef<number | null>(null);
   const swipeTimerRef = useRef<number | null>(null);
+  const prepareFrameRef = useRef<number | null>(null);
+  const elementCacheRef = useRef(new Map<string, ReactNode>());
 
   layersRef.current = layers;
 
@@ -88,6 +91,7 @@ export function PageTransition({ location, direction, swipeBack = false, render 
       runIdRef.current += 1;
       setSwipeBackLocation(null);
       setSwiping(false);
+      setPreparing(false);
       setLayers([{ key: location.key, location, phase: 'idle' }]);
       setStage((value) => ({ ...value, animating: false }));
       historyRef.current = historyRef.current.filter((entry) => entry.key !== top.location.key);
@@ -119,19 +123,48 @@ export function PageTransition({ location, direction, swipeBack = false, render 
     setSwiping(false);
     setLayers([oldLayer, newLayer]);
     setStage({ direction, animating: true });
+    setPreparing(false);
 
-    timerRef.current = window.setTimeout(() => {
+    const start = () => {
       if (runId !== runIdRef.current) return;
-      setLayers([{ key: location.key, location, phase: 'idle' }]);
-      setStage({ direction, animating: false });
-      timerRef.current = null;
-    }, duration);
+      setPreparing(false);
+      window.dispatchEvent(new CustomEvent('navereat:transition-start', { detail: { direction } }));
+      timerRef.current = window.setTimeout(() => {
+        if (runId !== runIdRef.current) return;
+        setLayers([{ key: location.key, location, phase: 'idle' }]);
+        setStage({ direction, animating: false });
+        window.dispatchEvent(new CustomEvent('navereat:transition-end', { detail: { direction } }));
+        timerRef.current = null;
+      }, duration);
+    };
+
+    if (direction === 'pop') {
+      // Mount and measure Home while it is hidden, so the pop-back animation is smooth.
+      setPreparing(true);
+      prepareFrameRef.current = window.requestAnimationFrame(() => {
+        prepareFrameRef.current = window.requestAnimationFrame(() => {
+          if (topRef.current) void topRef.current.offsetHeight;
+          start();
+        });
+      });
+    } else {
+      start();
+    }
   }, [direction, location]);
 
   useEffect(() => () => {
     clearTimer();
     if (swipeTimerRef.current !== null) window.clearTimeout(swipeTimerRef.current);
+    if (prepareFrameRef.current !== null) window.cancelAnimationFrame(prepareFrameRef.current);
   }, []);
+
+  const renderCached = (target: Location): ReactNode => {
+    const cached = elementCacheRef.current.get(target.key);
+    if (cached) return cached;
+    const element = render(target);
+    elementCacheRef.current.set(target.key, element);
+    return element;
+  };
 
   const setLayerRef = (key: string) => (element: HTMLDivElement | null) => {
     if (element) layerRefs.current.set(key, element);
@@ -219,7 +252,7 @@ export function PageTransition({ location, direction, swipeBack = false, render 
 
   return (
     <div
-      className={`route-stage direction-${stage.direction}${stage.animating ? ' is-animating' : ''}${swiping ? ' is-swiping' : ''}`}
+      className={`route-stage direction-${stage.direction}${stage.animating ? ' is-animating' : ''}${preparing ? ' is-preparing' : ''}${swiping ? ' is-swiping' : ''}`}
       onPointerMove={moveSwipe}
       onPointerUp={() => {
         if (swipeRef.current) {
@@ -232,7 +265,7 @@ export function PageTransition({ location, direction, swipeBack = false, render 
     >
       {swipeBackLocation && (
         <div className="route-layer route-layer-back" ref={backRef} aria-hidden="true">
-          {render(swipeBackLocation)}
+          {renderCached(swipeBackLocation)}
         </div>
       )}
 
@@ -257,7 +290,7 @@ export function PageTransition({ location, direction, swipeBack = false, render 
             style={{ zIndex: layer.phase === 'idle' ? 1 : zIndex }}
             aria-hidden={!isTop}
           >
-            {render(layer.location)}
+            {renderCached(layer.location)}
           </div>
         );
       })}

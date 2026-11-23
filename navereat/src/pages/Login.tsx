@@ -100,7 +100,7 @@ export function Login() {
           Skip
         </button>
         <div className="login-hero-art-wrap">
-          <img className="login-hero-art" src={heroArt} alt="Navereat food delivery" />
+          <img className="login-hero-art" src={heroArt} alt="Navereat food delivery" decoding="async" />
         </div>
         <div className="login-hero-copy">
           <h1 className="login-hero-title">

@@ -141,6 +141,7 @@ function CustomizeSheet({
               className="ewcs-thumb"
               src={item.image}
               alt=""
+              decoding="async"
               onError={(event) => {
                 event.currentTarget.hidden = true;
               }}

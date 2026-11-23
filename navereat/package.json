@@ -12,7 +12,8 @@
     "android:debug": "cd android && ./gradlew assembleDebug",
     "assets": "node scripts/generate-brand-assets.mjs && npx capacitor-assets generate --android && node scripts/patch-android-icons.mjs",
     "visual": "vite-node scripts/visual-check.ts",
-    "scroll-check": "node scripts/scroll-check.cjs"
+    "scroll-check": "node scripts/scroll-check.cjs",
+    "perf-check": "node scripts/perf-check.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.0",
@@ -45,5 +46,8 @@
     "typescript-eslint": "^8.18.2",
     "vite": "^5.4.11",
     "vite-node": "^6.0.0"
+  },
+  "allowScripts": {
+    "sharp@0.32.6": true
   }
 }

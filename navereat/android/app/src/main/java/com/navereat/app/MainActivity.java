@@ -14,10 +14,10 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        getWindow().setStatusBarColor(Color.WHITE);
+        getWindow().setStatusBarColor(Color.parseColor("#9E1535"));
         getWindow().setNavigationBarColor(Color.WHITE);
 
-        int flags = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+        int flags = 0;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
         }

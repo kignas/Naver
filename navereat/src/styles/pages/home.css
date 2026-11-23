@@ -73,8 +73,8 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  height: calc(66px + var(--sab));
-  padding-bottom: var(--sab);
+  height: calc(66px + max(12px, env(safe-area-inset-bottom, 0px)));
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
   background: #fffdf8;
   border-top: 1px solid rgba(93, 13, 24, 0.12);
   box-shadow: 0 -6px 18px rgba(93, 13, 24, 0.07);

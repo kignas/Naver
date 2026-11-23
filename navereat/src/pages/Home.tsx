@@ -1,6 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Capacitor } from '@capacitor/core';
-import { StatusBar, Style } from '@capacitor/status-bar';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import heroDish from '../assets/placeholders/hero-dish.svg';
 import { BottomNav } from '../components/BottomNav';
 import { HomeRestaurantCard } from '../components/HomeRestaurantCard';
@@ -88,8 +86,10 @@ function RestaurantSkeleton() {
 }
 
 export function Home() {
+  const perfWindow = window as Window & { __homeRenders?: number };
+  perfWindow.__homeRenders = (perfWindow.__homeRenders ?? 0) + 1;
   const nav = useAppNav();
-  const ready = useCachedReady('home', 420, 650);
+  const ready = useCachedReady('home', 220, 360);
   const patchHome = useUiStore((state) => state.patchHome);
   const cachedHome = useUiStore.getState().home;
   const cart = useAppStore((state) => state.cart);
@@ -127,13 +127,10 @@ export function Home() {
   }, [cachedHome.scrollTop, ready]);
 
   useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return;
-    void StatusBar.setStyle({ style: Style.Light });
-    void StatusBar.setBackgroundColor({ color: '#5D0D18' });
-    return () => {
-      void StatusBar.setStyle({ style: Style.Dark });
-      void StatusBar.setBackgroundColor({ color: '#ffffff' });
-    };
+    const frame = window.requestAnimationFrame(() => {
+      window.dispatchEvent(new Event('navereat:home-painted'));
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   const filteredRestaurants = useMemo(() => {
@@ -151,18 +148,31 @@ export function Home() {
     return list;
   }, [vegOnly, nearFast, rating4, under30, under100, sortBy]);
 
-  const openRestaurant = (restaurant: Restaurant) => {
-    selectRestaurant(restaurant.id);
-    nav.push(`/restaurant/${restaurant.id}`);
-  };
-
   const { openCustomize } = useCustomize();
 
-  const addFromHome = (restaurant: Restaurant, menuItem: MenuItem) => {
-    selectRestaurant(restaurant.id);
-    nav.push(`/restaurant/${restaurant.id}`);
-    toast(`${menuItem.name} — add it from the menu`);
-  };
+  const openRestaurant = useCallback(
+    (restaurant: Restaurant) => {
+      selectRestaurant(restaurant.id);
+      nav.push(`/restaurant/${restaurant.id}`);
+    },
+    [nav, selectRestaurant],
+  );
+
+  const addFromHome = useCallback(
+    (restaurant: Restaurant, menuItem: MenuItem) => {
+      selectRestaurant(restaurant.id);
+      nav.push(`/restaurant/${restaurant.id}`);
+      toast(`${menuItem.name} — add it from the menu`);
+    },
+    [nav, selectRestaurant],
+  );
+
+  const handleCustomize = useCallback(
+    (restaurant: Restaurant, menuItem: MenuItem) => {
+      openCustomize(menuItem, restaurant.id, { editExisting: true });
+    },
+    [openCustomize],
+  );
 
   const openCategory = (name: string, query: string) => {
     nav.push(`/category/${encodeURIComponent(name)}?q=${encodeURIComponent(query)}`);
@@ -311,7 +321,7 @@ export function Home() {
                         </span>
                       </button>
                     </div>
-                    <img className="header-slide__art" src={heroDish} alt="" aria-hidden="true" />
+                    <img className="header-slide__art" src={heroDish} alt="" aria-hidden="true" decoding="async" />
                   </div>
                 </article>
               </div>
@@ -423,11 +433,11 @@ export function Home() {
                     restaurant={restaurant}
                     index={index}
                     cart={cart}
-                    onOpen={() => openRestaurant(restaurant)}
-                    onAdd={(menuItem) => addFromHome(restaurant, menuItem)}
-                    onCustomize={(menuItem) => openCustomize(menuItem, restaurant.id, { editExisting: true })}
-                    onIncrement={(menuItem) => addItem(menuItem, restaurant.id)}
-                    onDecrement={(menuItem) => decrementItem(menuItem.name)}
+                    onOpen={openRestaurant}
+                    onAdd={addFromHome}
+                    onCustomize={handleCustomize}
+                    onIncrement={addItem}
+                    onDecrement={decrementItem}
                   />
                 ))}
               </div>

@@ -15,12 +15,20 @@ npm run dev          # http://localhost:5173
 
 Login is a demo: enter any 6–10 digit phone number and any 4–6 digit OTP.
 
-Quality gates:
+Quality gates and audits:
 
 ```bash
 npm run check        # tsc --noEmit + eslint
 npm run build        # typecheck + production build
+npm run scroll-check # every route + sheet at 390x844 and 360x640
+npm run visual       # pixel diff against the original reference
+npm run perf-check after  # cold start, CLS, transition FPS, bundle sizes
 ```
+
+The production bundle is route-split: Home is eager, while Restaurant, Cart,
+Orders, Tracking, Profile, Category, and ₹99 Store load on demand. Likely next
+routes are preloaded during idle so the push animation starts with the target
+chunk already available.
 
 ## Screens
 
@@ -44,14 +52,33 @@ npm run android:debug     # cd android && ./gradlew assembleDebug
 
 The generated APK is at `android/app/build/outputs/apk/debug/app-debug.apk`.
 The `android/` folder is committed. Portrait only; the hardware back button runs
-the pop transition and exits on Home. Status bar is white with dark icons and
-the layout respects safe-area insets.
+the pop transition and exits on Home. The status bar is burgundy with light icons
+on themed pages (Home, Login, Orders, Restaurant) and white with dark icons
+elsewhere; the navigation bar stays white. Safe-area insets are applied to the
+bottom nav, cart bar, and checkout footer.
+
+The app icon and splash use a gold “N” on burgundy. Android disables overscroll
+glow, text zoom, long-press selection outside inputs, and cleartext traffic.
+Release builds enable R8 minification and resource shrinking.
 
 Brand assets live in `assets/` and are regenerated with:
 
 ```bash
-npm run assets
+npm run assets   # sharp SVGs -> Android mipmaps + splash, then patch adaptive XML
 ```
+
+## Performance and offline checks
+
+`npm run perf-check after` writes `../verify/perf-after.json` with:
+
+- cold-start time to first Home paint, FCP, DOMContentLoaded, and CLS;
+- FPS during push, pop, and filter-sheet animations under 4x CPU throttling;
+- entry JS/CSS sizes and total JS size.
+
+All fonts, icons, placeholders, and demo data are bundled. The only `http`
+strings in `src/` are SVG `xmlns` declarations and the Font Awesome license
+comment; no request is made at runtime. The Android manifest requests no
+permissions and blocks cleartext traffic.
 
 ## Visual reference
 

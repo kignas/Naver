@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { BottomNav } from '../components/BottomNav';
 import { Icon } from '../components/Icon';
 import { restaurants } from '../data/demo';
-import { useSkeleton } from '../hooks/useSkeleton';
+import { useCachedReady } from '../hooks/useCachedReady';
 import { useAppNav } from '../lib/navigation';
 import { useSearchStore } from '../store/searchStore';
 import '../styles/pages/category.css';
@@ -13,7 +13,7 @@ export function Category() {
   const [searchParams] = useSearchParams();
   const nav = useAppNav();
   const openSearch = useSearchStore((state) => state.openSearch);
-  const ready = useSkeleton(400, 700);
+  const ready = useCachedReady(`category:${type ?? ''}`, 180, 320);
   const [sortRating, setSortRating] = useState(false);
   const [ratingOnly, setRatingOnly] = useState(false);
   const [vegOnly, setVegOnly] = useState(false);
@@ -118,7 +118,7 @@ export function Category() {
                   onClick={() => nav.push(`/restaurant/${restaurant.id}`)}
                 >
                   <div className="cat-result-img-wrap">
-                    <img className="cat-result-img" src={restaurant.image} alt={restaurant.name} />
+                    <img className="cat-result-img" src={restaurant.image} alt={restaurant.name} loading="lazy" decoding="async" />
                     {restaurant.offer && <span className="cat-offer">{restaurant.offer}</span>}
                   </div>
                   <div className="cat-result-body">

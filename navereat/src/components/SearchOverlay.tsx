@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { categories, restaurants, type Category, type MenuItem, type Restaurant } from '../data/demo';
 import { useAppNav } from '../lib/navigation';
@@ -9,7 +9,7 @@ import { useSearchStore, type SearchContext } from '../store/searchStore';
 import '../styles/search-overlay.css';
 
 const MIN_QUERY = 2;
-const DEBOUNCE_MS = 260;
+const DEBOUNCE_MS = 200;
 const FAKE_SEARCH_MS = 320;
 const CLOSE_MS = 320;
 const RECENT_KEY = 'nearbite_recent_searches';
@@ -161,10 +161,14 @@ export function SearchOverlay() {
 
   const [query, setQuery] = useState('');
   const [phase, setPhase] = useState<SearchPhase>('idle');
-  const [results, setResults] = useState<SearchResult[]>([]);
   const [resultQuery, setResultQuery] = useState('');
   const [recent, setRecent] = useState<string[]>(readRecent);
   const [closing, setClosing] = useState(false);
+
+  const results = useMemo(
+    () => (resultQuery.trim().length >= MIN_QUERY ? searchDemo(resultQuery, context) : []),
+    [context, resultQuery],
+  );
 
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -217,7 +221,6 @@ export function SearchOverlay() {
       if (value.length < MIN_QUERY) {
         sequenceRef.current += 1;
         setPhase('idle');
-        setResults([]);
         return;
       }
 
@@ -227,7 +230,6 @@ export function SearchOverlay() {
       searchRef.current = window.setTimeout(() => {
         if (sequence !== sequenceRef.current) return;
         const found = searchDemo(value, context);
-        setResults(found);
         setResultQuery(value);
         setPhase(found.length ? 'results' : 'empty');
         rememberSearch(value);
@@ -243,7 +245,6 @@ export function SearchOverlay() {
       if (value.trim().length < MIN_QUERY) {
         sequenceRef.current += 1;
         setPhase('idle');
-        setResults([]);
         return;
       }
       if (immediate) {
@@ -260,7 +261,6 @@ export function SearchOverlay() {
     wasOpenRef.current = true;
     setClosing(false);
     setQuery(prefill);
-    setResults([]);
     setResultQuery('');
     setPhase('idle');
     if (inputRef.current) inputRef.current.value = prefill;
@@ -328,7 +328,7 @@ export function SearchOverlay() {
     sequenceRef.current += 1;
     if (inputRef.current) inputRef.current.value = '';
     setQuery('');
-    setResults([]);
+    setResultQuery('');
     setPhase('idle');
     inputRef.current?.focus({ preventScroll: true });
   };
