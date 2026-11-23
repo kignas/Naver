@@ -249,6 +249,101 @@ const interactions = async (browser) => {
   return { homeRender, afterQty, push, pop, sheet, restaurantCls };
 };
 
+const clsInitScript = () => {
+  localStorage.setItem('nearbite_token', 'demo-token');
+  localStorage.setItem('nearbite_user', JSON.stringify({ name: 'Aarav', phone: '+91 98765 43210' }));
+  sessionStorage.setItem('ew_offers_seen_v1', '["demo"]');
+  localStorage.setItem('nearbite_cart', JSON.stringify({
+    'Masala Dosa': {
+      quantity: 1,
+      price: 99,
+      resId: 1,
+      isVeg: true,
+      image: '',
+      resName: 'Foodie Dosa Restaurant',
+      restaurantName: 'Foodie Dosa Restaurant',
+      menuItem: 'fd1',
+      name: 'Masala Dosa',
+    },
+  }));
+  window.__clsEntries = [];
+  const describe = (node) => {
+    if (!node) return 'unknown';
+    const el = node.nodeType === 3 ? node.parentElement : node;
+    if (!(el instanceof Element)) return String(node.nodeName || node);
+    return { tag: el.tagName.toLowerCase(), id: el.id || null, cls: typeof el.className === 'string' ? el.className.slice(0, 80) : null };
+  };
+  new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) {
+      window.__clsEntries.push({
+        value: entry.value,
+        hadRecentInput: entry.hadRecentInput,
+        sources: (entry.sources || []).map((source) => ({
+          node: describe(source.node),
+          previousRect: source.previousRect ? { x: source.previousRect.x, y: source.previousRect.y, w: source.previousRect.width, h: source.previousRect.height } : null,
+          currentRect: source.currentRect ? { x: source.currentRect.x, y: source.currentRect.y, w: source.currentRect.width, h: source.currentRect.height } : null,
+        })),
+      });
+    }
+  }).observe({ type: 'layout-shift', buffered: true });
+  window.__resetCls = () => { window.__clsEntries = []; };
+  window.__readCls = () => window.__clsEntries.slice();
+};
+
+const clsTransitions = async (browser) => {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+  });
+  await context.addInitScript(clsInitScript);
+  const page = await context.newPage();
+  await page.goto(`${base}/#/`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('#home-header', { timeout: 15000 });
+  await page.waitForTimeout(1100);
+
+  const measure = async (name, action, waitMs = 650) => {
+    await page.evaluate(() => window.__resetCls());
+    await action();
+    await page.waitForTimeout(waitMs);
+    const entries = await page.evaluate(() => window.__readCls());
+    const total = entries.reduce((sum, entry) => sum + entry.value, 0);
+    return {
+      name,
+      cls: Number(total.toFixed(6)),
+      entries: entries.filter((entry) => entry.value > 0.00001),
+    };
+  };
+
+  const transitions = [];
+  transitions.push(await measure('tab: Home → Under99', () => page.locator('[data-nav-item="/under99"]').click()));
+  transitions.push(await measure('tab: Under99 → Search', () => page.locator('[data-nav-item="/search"]').click()));
+  transitions.push(await measure('tab: Search → Orders', () => page.locator('[data-nav-item="/orders"]').click()));
+  transitions.push(await measure('tab: Orders → Profile', () => page.locator('[data-nav-item="/profile"]').click()));
+  transitions.push(await measure('tab: Profile → Home', () => page.locator('[data-nav-item="/"]').click()));
+  await page.waitForTimeout(400);
+
+  transitions.push(await measure('push: Home → Restaurant', () => page.locator('.u99-restaurant-head').first().click(), 900));
+  await page.waitForSelector('.menu-item', { timeout: 15000 });
+  await page.waitForTimeout(350);
+  transitions.push(await measure('push: Restaurant → Cart', () => page.locator('#es-pink-inner').click(), 900));
+  await page.waitForSelector('.ct-cta', { timeout: 15000 });
+  await page.locator('.ct-cta').first().click();
+  await page.waitForSelector('#btn-checkout', { timeout: 15000 });
+  transitions.push(await measure('push: Cart → Tracking', async () => {
+    await page.locator('#btn-checkout').click();
+    await page.waitForSelector('.ew-os__btn', { timeout: 15000 });
+    await page.locator('.ew-os__btn').click();
+  }, 1000));
+  await page.waitForSelector('.floating-back', { timeout: 15000 });
+  await page.waitForTimeout(350);
+  transitions.push(await measure('pop: Tracking → Cart', () => page.locator('.floating-back').first().click(), 700));
+
+  await context.close();
+  return transitions;
+};
+
 const bundle = async () => {
   const dir = path.join(root, 'dist', 'assets');
   const files = await readdir(dir);
@@ -280,22 +375,29 @@ try {
     measuredAt: new Date().toISOString(),
     coldStart: await coldStart(browser),
     interactions: await interactions(browser),
+    clsTransitions: await clsTransitions(browser),
     bundle: await bundle(),
   };
   const pushFps = result.interactions.push.fps;
   const popFps = result.interactions.pop.fps;
   const gateRequired = cpuRate === 1;
+  const clsBudget = Number(process.env.PERF_CLS_BUDGET || 0.01);
+  const maxTransitionCls = result.clsTransitions.reduce((max, transition) => Math.max(max, transition.cls), 0);
+  const clsPass = result.clsTransitions.every((transition) => transition.cls <= clsBudget);
   result.gate = {
     required: gateRequired,
     pushFps: Number(pushFps.toFixed(1)),
     popFps: Number(popFps.toFixed(1)),
     minFps,
-    pass: !gateRequired || (pushFps >= minFps && popFps >= minFps),
+    clsBudget,
+    maxTransitionCls: Number(maxTransitionCls.toFixed(6)),
+    clsPass,
+    pass: (!gateRequired || (pushFps >= minFps && popFps >= minFps)) && clsPass,
   };
   await writeFile(path.join(outDir, `perf-${label}.json`), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result, null, 2));
   if (!result.gate.pass) {
-    console.error(`FAIL: unthrottled push/pop FPS below ${minFps} (push ${pushFps.toFixed(1)}, pop ${popFps.toFixed(1)})`);
+    console.error(`FAIL: performance gate (push ${pushFps.toFixed(1)} fps, pop ${popFps.toFixed(1)} fps, max transition CLS ${maxTransitionCls.toFixed(6)}, budget ${clsBudget})`);
     process.exitCode = 1;
   }
 } finally {

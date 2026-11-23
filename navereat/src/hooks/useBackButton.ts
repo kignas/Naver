@@ -25,6 +25,7 @@ export function useBackButton(): void {
           void CapApp.exitApp();
           return;
         }
+        window.dispatchEvent(new CustomEvent('navereat:before-navigate'));
         setDirection('pop');
         window.history.back();
       }).then((handle) => {

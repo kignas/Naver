@@ -16,6 +16,18 @@ body,
   height: 100%;
 }
 
+/* The app is a phone surface; scrollbars must never consume layout width
+   during a transition. */
+* {
+  scrollbar-width: none;
+}
+
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -534,7 +546,7 @@ ol {
   overflow: hidden;
   background: #fff;
   transform: translate3d(0, 0, 0);
-  opacity: 1;
+  opacity: 1 !important;
   will-change: auto;
   backface-visibility: hidden;
   contain: layout paint;
@@ -565,73 +577,55 @@ ol {
 
 .route-stage.is-preparing .route-layer.is-enter {
   animation: none !important;
-  opacity: 0 !important;
+  visibility: hidden !important;
 }
 
 .route-stage.is-preparing .route-layer.is-leave {
   animation: none !important;
 }
 
+/* Cached tab pages: one layer per visited tab, switched instantly. */
+.tab-stack {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  transform: translate3d(0, 0, 0);
+  transition: transform 300ms var(--ease-toing);
+  will-change: transform;
+}
+
+.tab-stack.is-shifted {
+  transform: translate3d(-22%, 0, 0);
+}
+
+.tab-stack.has-detail {
+  pointer-events: none;
+}
+
+.route-tab-cache {
+  opacity: 1 !important;
+  transform: none;
+}
+
 @keyframes routePushIn {
-  from {
-    transform: translate3d(100%, 0, 0);
-    opacity: 0.6;
-  }
-  to {
-    transform: translate3d(0, 0, 0);
-    opacity: 1;
-  }
+  from { transform: translate3d(100%, 0, 0); }
+  to { transform: translate3d(0, 0, 0); }
 }
 
 @keyframes routePushOut {
-  from {
-    transform: translate3d(0, 0, 0);
-    opacity: 1;
-  }
-  to {
-    transform: translate3d(-22%, 0, 0);
-    opacity: 0.7;
-  }
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-22%, 0, 0); }
 }
 
 @keyframes routePopIn {
-  from {
-    transform: translate3d(-22%, 0, 0);
-    opacity: 0.85;
-  }
-  to {
-    transform: translate3d(0, 0, 0);
-    opacity: 1;
-  }
+  from { transform: translate3d(-22%, 0, 0); }
+  to { transform: translate3d(0, 0, 0); }
 }
 
 @keyframes routePopOut {
-  from {
-    transform: translate3d(0, 0, 0);
-    opacity: 1;
-  }
-  to {
-    transform: translate3d(100%, 0, 0);
-    opacity: 0.4;
-  }
-}
-
-@keyframes routeFadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes routeFadeOut {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(100%, 0, 0); }
 }
 
 .route-stage.direction-push .route-layer.is-enter {
@@ -650,12 +644,56 @@ ol {
   animation: routePopOut var(--dur-push) var(--ease-toing) both;
 }
 
-.route-stage.direction-tab .route-layer.is-enter {
-  animation: routeFadeIn var(--dur-tab) ease-out both;
+/* Tabs never animate. Only the bottom-nav indicator moves. */
+.route-stage.direction-tab .route-layer.is-enter,
+.route-stage.direction-tab .route-layer.is-leave {
+  animation: none !important;
 }
 
-.route-stage.direction-tab .route-layer.is-leave {
-  animation: routeFadeOut var(--dur-tab) ease-out both;
+/* Keep the cached tab underneath a pushed detail route frozen. The original
+   route bundles contain unscoped layout rules (for example Restaurant's
+   .mind-section/.filter-bar overrides), which must not reflow the tab that is
+   still visible during the slide. */
+.tab-stack .home-screen #mind-section {
+  padding: 8px 0 0 !important;
+  margin: 0 !important;
+}
+
+.tab-stack .home-screen #restaurants-section {
+  padding: 6px 0 4px !important;
+  margin: 0 !important;
+}
+
+.tab-stack .home-screen .filter-bar {
+  padding: 14px 18px 6px !important;
+  gap: 8px !important;
+  margin: 0 !important;
+}
+
+.tab-stack .home-screen .filter-pill {
+  height: 36.8px !important;
+  min-height: 0 !important;
+  padding: 9px 14px !important;
+  gap: 6px !important;
+}
+
+/* Route bundles contain page/card entrance fades. The app shell owns route
+   motion, so route-level opacity/entrance animations are neutralised here. */
+.route-stage .page,
+.route-stage .home-screen,
+.route-stage .u99-page,
+.route-stage .rest-page,
+.route-stage .cart-page,
+.route-stage .orders-page,
+.route-stage .track-page,
+.route-stage .profile-page,
+.route-stage .login-page,
+.route-stage .food-card-animate,
+.route-stage .animate-slide-up,
+.route-stage .res-pane,
+.route-stage .nb-menu-item {
+  animation: none !important;
+  opacity: 1 !important;
 }
 
 .swipe-edge {
@@ -667,7 +705,6 @@ ol {
   z-index: 60;
   touch-action: pan-y;
 }
-
 
 /* ---------- Touch ergonomics & platform polish ---------- */
 button,

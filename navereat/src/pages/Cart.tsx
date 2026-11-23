@@ -448,10 +448,24 @@ export function Cart() {
   const handleOrderContinue = () => {
     const order = pendingOrderRef.current;
     pendingOrderRef.current = null;
-    clearCart();
     setPlacing(false);
-    if (order) nav.push(`/track/${order.id}`);
-    else nav.tab('/orders');
+    if (order) {
+      nav.push(`/track/${order.id}`);
+      // Keep the outgoing cart intact for the slide; clearing it now would
+      // resize the page while it is still visible.
+      let cleared = false;
+      const clearAfterSlide = () => {
+        if (cleared) return;
+        cleared = true;
+        window.removeEventListener('navereat:transition-end', clearAfterSlide);
+        clearCart();
+      };
+      window.addEventListener('navereat:transition-end', clearAfterSlide, { once: true });
+      window.setTimeout(clearAfterSlide, 900);
+    } else {
+      clearCart();
+      nav.tab('/orders');
+    }
   };
 
   if (lines.length === 0) {

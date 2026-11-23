@@ -77,7 +77,7 @@ function AppRoutes() {
       pathname.startsWith('/category/') ||
       pathname.startsWith('/restaurant/'));
   const cartBarMode = pathname.startsWith('/restaurant/') ? 'pink' : 'home';
-  const cartBarAboveNav = isTabPath(pathname);
+  const cartBarAboveNav = cartBarVisible;
 
   return (
     <div className="app-shell">

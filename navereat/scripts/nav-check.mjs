@@ -108,6 +108,11 @@ try {
   await sleep(800);
   await page.evaluate(() => {
     window.__navNode = document.querySelector('.bottom-nav');
+    window.__tabNodes = {
+      under99: document.querySelector('.u99-page'),
+      orders: document.querySelector('.orders-page'),
+      profile: document.querySelector('.profile-page'),
+    };
   });
 
   const shots = {};
@@ -140,6 +145,19 @@ try {
   await page.click('[data-nav-item="/under99"]');
   await sleep(550);
   await capture('under99');
+  const scrollTarget = await page.evaluate(() => {
+    const scroller = document.querySelector('.u99-scroll');
+    if (!scroller) return 0;
+    const target = Math.max(0, Math.min(600, scroller.scrollHeight - scroller.clientHeight));
+    scroller.scrollTop = target;
+    return target;
+  });
+  await page.click('[data-nav-item="/orders"]');
+  await sleep(220);
+  await page.click('[data-nav-item="/under99"]');
+  await sleep(250);
+  const preservedScroll = await page.evaluate(() => document.querySelector('.u99-scroll')?.scrollTop ?? -1);
+  check('under99: scroll position survives tab switch', Math.abs(preservedScroll - scrollTarget) <= 2, `${preservedScroll}/${scrollTarget}`);
 
   await page.click('[data-nav-item="/search"]');
   await sleep(550);
@@ -161,6 +179,12 @@ try {
   await page.click('[data-nav-item="/profile"]');
   await sleep(550);
   await capture('profile');
+  const tabNodes = await page.evaluate(() => ({
+    under99: window.__tabNodes?.under99 === document.querySelector('.u99-page'),
+    orders: window.__tabNodes?.orders === document.querySelector('.orders-page'),
+    profile: window.__tabNodes?.profile === document.querySelector('.profile-page'),
+  }));
+  check('tab pages: DOM nodes stay mounted', tabNodes.under99 && tabNodes.orders && tabNodes.profile, JSON.stringify(tabNodes));
 
   const padding = Object.fromEntries(
     ['home', 'under99', 'orders', 'profile'].map((name) => [name, shots[name]?.paddingBottom ?? null]),
