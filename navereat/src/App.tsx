@@ -50,7 +50,7 @@ function AppRoutes() {
     pathname.startsWith('/category/') ||
     pathname.startsWith('/restaurant/');
   const cartBarMode = pathname.startsWith('/restaurant/') ? 'pink' : 'home';
-  const cartBarAboveNav = !pathname.startsWith('/restaurant/');
+  const cartBarAboveNav = false;
 
   return (
     <div className="app-shell">

@@ -85,6 +85,7 @@ export interface Restaurant {
   freeDeliveryRemaining?: number;
   freeDeliveryAbove?: number;
   verified?: boolean;
+  available?: boolean;
   pureVeg?: boolean;
   menu: MenuItem[];
 }
@@ -428,6 +429,7 @@ export const restaurants: Restaurant[] = [
     minimumOrder: 99,
     freeDeliveryRemaining: 299,
     verified: true,
+    available: false,
     pureVeg: true,
     menu: [
       withGroups(item('ms1', 'Rasgulla (2 pcs)', 30, true, 'Soft spongy cottage cheese balls in sugar syrup', dishSweets, true, 38, 20), [group('Pack', [option('2 pcs', 30), option('6 pcs', 85), option('12 pcs', 160)], { required: true, maxSelect: 1, pricingMode: 'portion' }), addOns([option('Gift box', 30)], 1)]),

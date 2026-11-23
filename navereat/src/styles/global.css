@@ -105,7 +105,6 @@ ol {
   overflow: hidden;
   background: var(--page);
   padding-top: var(--sat);
-  will-change: transform, opacity;
   backface-visibility: hidden;
 }
 
@@ -578,6 +577,8 @@ ol {
 }
 
 .route-layer.is-idle {
+  transform: none;
+  will-change: auto;
   transition: none;
 }
 

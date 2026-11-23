@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon } from '../components/Icon';
+import { CompleteYourMeal } from '../components/CompleteYourMeal';
 import { OfferPopup } from '../components/OfferPopup';
 import { OrderSuccessSheet, type OrderSuccessHandle } from '../components/OrderSuccessSheet';
 import { Sheet, type SheetHandle } from '../components/Sheet';
@@ -14,6 +15,7 @@ import {
 import { billFor, cartRestaurantId, type CartLine } from '../lib/cart';
 import { formatMoney } from '../lib/money';
 import { useAppNav } from '../lib/navigation';
+import { useCustomize } from '../lib/customizeContext';
 import { customTextFor, displayNameFor } from '../lib/customization';
 import { useAppStore } from '../store/appStore';
 import { toast } from '../store/toastStore';
@@ -32,7 +34,6 @@ interface Group {
   lines: Array<{ name: string; line: CartLine }>;
   units: number;
   subtotal: number;
-  anyMedia: boolean;
 }
 
 const addressText = DEMO_ADDRESS.includes('·')
@@ -53,19 +54,62 @@ const clockIcon = (
   </svg>
 );
 
-const plateIcon = (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <path d="M7.5 3.5v6.2a2.2 2.2 0 0 0 4.4 0V3.5M9.7 9.7V20.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M16.8 3.5c-1.2 1.4-1.8 3.2-1.8 5.2 0 1.6.6 2.6 1.8 2.9V20.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
 const trashIcon = (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
     <path d="M5.5 7h13M10 4.8h4M9.4 10.5v6M14.6 10.5v6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     <path d="M7 7h10l-.7 11.1A1.6 1.6 0 0 1 14.7 19.6H9.3a1.6 1.6 0 0 1-1.6-1.5L7 7Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
   </svg>
 );
+
+const DI_PRESETS = [
+  {
+    label: 'Directions to reach',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+        <circle cx="12" cy="10" r="2.3" stroke="currentColor" strokeWidth="1.7" />
+      </svg>
+    ),
+  },
+  {
+    label: 'Leave at the door',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M7 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16" stroke="currentColor" strokeWidth="1.7" />
+        <path d="M4 21h16" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        <circle cx="14" cy="13" r="1" fill="currentColor" />
+      </svg>
+    ),
+  },
+  {
+    label: 'Avoid calling',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M4 6c0 8 6 14 14 14l-1-3.5-3.5-1-1.5 1.5c-2.6-1.3-4.7-3.4-6-6L11 9.5 10 6H4z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M3 3l18 18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    label: 'Avoid ringing',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M6.5 16V11a5.5 5.5 0 0 1 11 0v5l1.5 2H5l1.5-2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M10 20a2 2 0 0 0 4 0" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M3 3l18 18" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    label: 'Leave at gate',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M3 21V10l9-6 9 6v11" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M9 21v-6h6v6" stroke="currentColor" strokeWidth="1.5" />
+      </svg>
+    ),
+  },
+];
 
 const cleanNote = (value: string): string =>
   value.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, NOTE_MAX);
@@ -85,10 +129,12 @@ export function Cart() {
   const coupon = useAppStore((s) => s.coupon);
   const user = useAppStore((s) => s.user);
   const setQty = useAppStore((s) => s.setQty);
+  const addItem = useAppStore((s) => s.addItem);
   const applyCoupon = useAppStore((s) => s.applyCoupon);
   const removeCoupon = useAppStore((s) => s.removeCoupon);
   const clearCart = useAppStore((s) => s.clearCart);
   const placeOrder = useAppStore((s) => s.placeOrder);
+  const { openCustomize } = useCustomize();
 
   const [sheet, setSheet] = useState<SheetName>(null);
   const sheetRef = useRef<SheetHandle>(null);
@@ -106,6 +152,8 @@ export function Cart() {
   const [cutlery, setCutlery] = useState(false);
   const [placing, setPlacing] = useState(false);
   const [offerPopup, setOfferPopup] = useState<DemoOffer[] | null>(null);
+  const [instructions, setInstructions] = useState<string[]>([]);
+  const [diOpen, setDiOpen] = useState(false);
 
   useEffect(() => {
     const style = document.createElement('style');
@@ -129,43 +177,50 @@ export function Cart() {
         lines: [],
         units: 0,
         subtotal: 0,
-        anyMedia: false,
       };
       group.lines.push({ name, line });
       group.units += line.quantity;
       group.subtotal += line.price * line.quantity;
-      group.anyMedia = group.anyMedia || Boolean(line.image);
       map.set(line.resId, group);
     });
     return [...map.values()];
   }, [cart]);
 
+  const hashParams = new URLSearchParams(window.location.hash.split('?')[1] ?? '');
+  const couponSheetEmpty = hashParams.get('coupons') === 'empty';
+  const offerMode = hashParams.get('offers');
+  const holdOrderPopup = hashParams.get('hold') === '1';
   const restaurant = findRestaurant(cartRestaurantId(cart) ?? undefined);
   const subtotal = groups[0]?.subtotal ?? 0;
-  const offers = useMemo(() => demoOffersFor(subtotal), [subtotal]);
+  const offers = useMemo(() => (offerMode === 'none' ? [] : demoOffersFor(subtotal)), [offerMode, subtotal]);
   const bill = useMemo(() => billFor(cart, coupon, offers), [cart, coupon, offers]);
   const lines = Object.values(cart);
+  const originalPriceFor = (line: CartLine): number => {
+    const explicit = Number(line.originalPrice ?? 0);
+    if (explicit > line.price) return explicit;
+    const menuItem = restaurant?.menu.find((item) => item.id === line.menuItem);
+    const fromMenu = Number(menuItem?.originalPrice ?? 0);
+    return fromMenu > line.price ? fromMenu : 0;
+  };
   const savings = lines.reduce(
-    (sum, line) => sum + Math.max(0, (line.originalPrice ?? line.price) - line.price) * line.quantity,
+    (sum, line) => sum + Math.max(0, originalPriceFor(line) - line.price) * line.quantity,
     0,
   );
   const totalSavings = savings + bill.offerDiscount;
+  const unavailable = hashParams.get('unavailable') === '1' || restaurant?.available === false;
   const freeAbove = restaurant?.freeDeliveryAbove ?? 399;
-  const freeDelivery = subtotal >= freeAbove;
+  const freeDelivery = !unavailable && subtotal >= freeAbove;
   const restaurantName = groups.length > 1 ? `${groups.length} restaurants` : groups[0]?.name ?? restaurant?.name ?? 'Your cart';
   const eta = restaurant ? `${restaurant.deliveryMin}–${restaurant.deliveryMax} mins` : '30–40 mins';
   const displayName = user?.name ?? 'Demo Foodie';
   const phone = user?.phone ?? '+91 98765 43210';
   const payTotal = bill.total + tip;
-  const hashParams = new URLSearchParams(window.location.hash.split('?')[1] ?? '');
-  const couponSheetEmpty = hashParams.get('coupons') === 'empty';
-  const offerMode = hashParams.get('offers');
-  const holdOrderPopup = hashParams.get('hold') === '1';
 
   useEffect(() => {
     try {
       const raw = JSON.parse(localStorage.getItem('nearbite_cart_extras') || '{}') as {
         restaurantNote?: string;
+        deliveryInstructions?: string;
         tipAmount?: number;
       };
       const savedNote = cleanNote(String(raw.restaurantNote ?? ''));
@@ -173,6 +228,11 @@ export function Cart() {
         setNote(savedNote);
         setNoteWasSet(true);
       }
+      const savedInstructions = String(raw.deliveryInstructions ?? '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
+      if (savedInstructions.length) setInstructions(savedInstructions);
       const savedTip = Math.max(0, Math.min(1000, Math.round(Number(raw.tipAmount) || 0)));
       if (savedTip > 0) setTip(savedTip);
     } catch {
@@ -184,12 +244,12 @@ export function Cart() {
     try {
       localStorage.setItem(
         'nearbite_cart_extras',
-        JSON.stringify({ restaurantNote: note, tipAmount: tip }),
+        JSON.stringify({ restaurantNote: note, deliveryInstructions: instructions.join(', '), tipAmount: tip }),
       );
     } catch {
       /* storage may be unavailable */
     }
-  }, [note, tip]);
+  }, [instructions, note, tip]);
 
   useEffect(() => {
     if (!offers.length || sheet !== null || placing || offerPopup || offerMode === 'none') return;
@@ -287,8 +347,18 @@ export function Cart() {
     toast('Cooking request removed');
   };
 
+  const toggleInstruction = (label: string) => {
+    setInstructions((current) =>
+      current.includes(label) ? current.filter((entry) => entry !== label) : [...current, label],
+    );
+  };
+
   const handlePlace = () => {
     if (placing) return;
+    if (unavailable) {
+      toast('Delivery is unavailable for this restaurant', 'error');
+      return;
+    }
     const order = placeOrder(payment === 'cod' ? 'Cash on Delivery' : 'UPI', { keepCart: true, tip });
     if (!order) {
       toast('Your cart is empty', 'error');
@@ -312,7 +382,7 @@ export function Cart() {
   if (lines.length === 0) {
     return (
       <div className="page cart-page">
-        <div className="ct-empty" id="empty-cart">
+        <div className="ct-empty" id="empty-cart" style={{ display: 'block' }}>
           <svg aria-hidden="true" className="ct-empty-art" fill="none" viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg">
             <path d="M22 32h52l-5 44a8 8 0 0 1-8 7H35a8 8 0 0 1-8-7L22 32Z" fill="#EFF2F4" stroke="#CBD3DA" strokeLinejoin="round" strokeWidth="3" />
             <path d="M36 32v-6a12 12 0 0 1 24 0v6" stroke="var(--hd-primary,#0b7a2a)" strokeLinecap="round" strokeWidth="3.5" />
@@ -376,20 +446,14 @@ export function Cart() {
                   {group.lines.map(({ name, line }) => {
                     const customText = customTextFor(line.customizations);
                     const shownName = displayNameFor(name, customText);
-                    const original = Number(line.originalPrice ?? 0);
+                    const original = originalPriceFor(line);
                     const hasDiscount = original > line.price;
                     const discountPct = hasDiscount ? Math.round(((original - line.price) / original) * 100) : 0;
                     const itemTotal = line.quantity * line.price;
                     const itemSavings = hasDiscount ? line.quantity * (original - line.price) : 0;
                     const last = line.quantity <= 1;
                     return (
-                      <div className={`ct-row${group.anyMedia ? ' has-media' : ''}`} data-name={name} key={name}>
-                        {group.anyMedia && (
-                          <div className="ct-media">
-                            <div className="ct-media-fallback">{plateIcon}</div>
-                            {line.image && <img src={line.image} alt="" loading="lazy" decoding="async" />}
-                          </div>
-                        )}
+                      <div className="ct-row" data-name={name} key={name}>
                         <div className="ct-info">
                           <div className="ct-name-row">
                             <VegMark value={line.isVeg} />
@@ -475,6 +539,21 @@ export function Cart() {
           </div>
         )}
 
+        <CompleteYourMeal
+          restaurant={restaurant ?? null}
+          cart={cart}
+          onSeeAll={() => nav.push(`/restaurant/${restaurant?.id ?? 2}`)}
+          onAdd={(item) => {
+            if (!restaurant) return;
+            addItem(item, restaurant.id);
+            toast(`${item.name} added to your order`, 'success');
+          }}
+          onCustomize={(item) => {
+            if (!restaurant) return;
+            openCustomize(item, restaurant.id);
+          }}
+        />
+
         <section aria-labelledby="ct-sav-title" className="ct-card ct-savings" id="ct-payment-group">
           <h2 className="ct-sec-title" id="ct-sav-title">
             Savings corner
@@ -485,11 +564,17 @@ export function Cart() {
             </span>
             <span className="ct-sav-copy">
               <span className="ct-sav-title">{coupon ? coupon.code : 'Apply coupon code'}</span>
-              <span className="ct-sav-sub" id="coupon-card-sub">
-                {coupon ? coupon.title : 'Save more on this order'}
-              </span>
+              {coupon ? (
+                <span className="ct-sav-sub" id="coupon-card-sub">
+                  {coupon.title}
+                </span>
+              ) : savings === 0 ? (
+                <span className="ct-sav-sub" id="coupon-card-sub">
+                  Save more on this order
+                </span>
+              ) : null}
             </span>
-            {coupon && (
+            {(coupon || savings > 0) && (
               <span className="ct-group-flag ct-sav-flag" id="coupon-applied-flag">
                 <Icon name="solid:check" size={13} /> Applied
               </span>
@@ -569,10 +654,41 @@ export function Cart() {
                 </span>
                 {chevron}
               </button>
-              <button className="ct-oi-dashlink" type="button" onClick={() => setSheet('note')}>
-                Add instructions for delivery partner
+              <button
+                aria-controls="ct-oi-di-panel"
+                aria-expanded={diOpen}
+                className="ct-oi-dashlink"
+                id="ct-oi-di-toggle"
+                type="button"
+                onClick={() => setDiOpen((open) => !open)}
+              >
+                {instructions.length ? 'Delivery instructions' : 'Add instructions for delivery partner'}
+                {instructions.length > 0 && (
+                  <span className="ct-oi-count" id="ct-di-count">
+                    {instructions.length}
+                  </span>
+                )}
               </button>
             </div>
+            {diOpen && (
+              <div className="ct-oi-di" id="ct-oi-di-panel">
+                <div aria-label="Delivery instructions" className="ct-di-pills" id="ct-di-pills" role="group">
+                  {DI_PRESETS.map((preset) => (
+                    <button
+                      aria-pressed={instructions.includes(preset.label)}
+                      className="ct-di-pill"
+                      data-di={preset.label}
+                      key={preset.label}
+                      type="button"
+                      onClick={() => toggleInstruction(preset.label)}
+                    >
+                      {preset.icon}
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <button className="ct-oi-row ct-oi-row--link" type="button" onClick={() => toast('Contact details are part of the demo')}>
             <span aria-hidden="true" className="ct-oi-ic">
@@ -594,7 +710,14 @@ export function Cart() {
             </span>
             <div className="ct-oi-copy">
               <span className="ct-oi-line">
-                Total Bill <b>{formatMoney(payTotal)}</b>
+                Total Bill{' '}
+                {unavailable ? (
+                  <>
+                    <s>₹{subtotal + savings}</s> <b>—</b>
+                  </>
+                ) : (
+                  <b>{formatMoney(payTotal)}</b>
+                )}
                 {totalSavings > 0 && <span className="ct-oi-saved">You saved ₹{totalSavings}</span>}
               </span>
               <span className="ct-oi-sub">Incl. taxes and charges</span>
@@ -620,12 +743,21 @@ export function Cart() {
           )}
           <div className="ct-paybar">
             <button className="ct-paybar-left tap" id="ct-view-bill" type="button" onClick={() => setSheet('bill')}>
-              <span className="ct-paybar-amt">{formatMoney(payTotal)}</span>
+              <span className="ct-paybar-amt">{unavailable ? '—' : formatMoney(payTotal)}</span>
               <span className="ct-paybar-link">View detailed bill</span>
             </button>
-            <button className="ct-cta" type="button" onClick={() => setSheet('pay')}>
-              <span className="ct-cta-text">Proceed to Pay</span>
-            </button>
+            {unavailable ? (
+              <button className="ct-cta locked" type="button" aria-disabled="true" onClick={handlePlace}>
+                <span className="ct-cta-text">
+                  Delivery unavailable
+                  <span className="ct-cta-sub">Change your address to continue</span>
+                </span>
+              </button>
+            ) : (
+              <button className="ct-cta" type="button" onClick={() => setSheet('pay')}>
+                <span className="ct-cta-text">Proceed to Pay</span>
+              </button>
+            )}
           </div>
           <div className="ct-pay-note">
             <Icon name="solid:lock" size={12} />

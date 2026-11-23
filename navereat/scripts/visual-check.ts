@@ -357,6 +357,7 @@ async function main(): Promise<void> {
           'Hyderabadi Chicken Biryani': {
             quantity: 2,
             price: 249,
+            originalPrice: 311,
             resId: 2,
             resName: 'Biryani Bhavan',
             restaurantName: 'Biryani Bhavan',
@@ -487,7 +488,7 @@ async function main(): Promise<void> {
   await originalCart.waitForTimeout(700);
 
   const appCart = await context.newPage();
-  await appCart.goto(`http://127.0.0.1:${appPort}/#/cart?offers=none`, { waitUntil: 'networkidle' });
+  await appCart.goto(`http://127.0.0.1:${appPort}/#/cart?offers=none&unavailable=1`, { waitUntil: 'networkidle' });
   await appCart.waitForSelector('#coupon-card', { timeout: 20000 });
   await appCart.waitForTimeout(500);
   await writePairDiff('cart-page', originalCart, appCart, 844);
@@ -536,8 +537,116 @@ async function main(): Promise<void> {
   await originalCart.waitForTimeout(550);
   await appCart.waitForTimeout(550);
   await writePairDiff('cart-tip', originalCart, appCart, 844);
+  for (const page of [originalCart, appCart]) {
+    await page.evaluate(() => {
+      document.querySelector('#ct-tip-sheet')?.remove();
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+    });
+  }
+  await originalCart.waitForTimeout(350);
+  await appCart.waitForTimeout(350);
+  const scrollCart = async (page: import('playwright-core').Page, target: string, offset: number) => {
+    await page.evaluate(
+      ({ target, offset }) => {
+        const element = document.querySelector(target);
+        if (!element) return;
+        const scroller = document.querySelector('.cart-page');
+        const scrollable = scroller instanceof HTMLElement && scroller.scrollHeight > scroller.clientHeight + 4;
+        const current = scrollable ? (scroller as HTMLElement).scrollTop : window.scrollY;
+        const next = Math.max(0, current + element.getBoundingClientRect().top - 160 + offset);
+        if (scrollable) (scroller as HTMLElement).scrollTop = next;
+        else window.scrollTo(0, next);
+      },
+      { target, offset },
+    );
+  };
+  await scrollCart(originalCart, '#ct-meal', -90);
+  await scrollCart(appCart, '#ct-meal', -90);
+  await originalCart.waitForTimeout(350);
+  await appCart.waitForTimeout(350);
+  await writePairDiff('cart-middle', originalCart, appCart, 844);
+
+  await originalCart.evaluate(() => {
+    const scroller = document.querySelector('.cart-page');
+    if (scroller instanceof HTMLElement) scroller.scrollTop = scroller.scrollHeight;
+    else window.scrollTo(0, document.documentElement.scrollHeight);
+  });
+  await appCart.evaluate(() => {
+    const scroller = document.querySelector('.cart-page');
+    if (scroller instanceof HTMLElement) scroller.scrollTop = scroller.scrollHeight;
+    else window.scrollTo(0, document.documentElement.scrollHeight);
+  });
+  await originalCart.waitForTimeout(350);
+  await appCart.waitForTimeout(350);
+  await writePairDiff('cart-bottom', originalCart, appCart, 844);
+
+  await originalCart.evaluate(() => {
+    const scroller = document.querySelector('.cart-page');
+    if (scroller instanceof HTMLElement) scroller.scrollTop = 0;
+    else window.scrollTo(0, 0);
+  });
+  await appCart.evaluate(() => {
+    const scroller = document.querySelector('.cart-page');
+    if (scroller instanceof HTMLElement) scroller.scrollTop = 0;
+    else window.scrollTo(0, 0);
+  });
+  await originalCart.waitForTimeout(300);
+  await appCart.waitForTimeout(300);
+  await originalCart.locator('[data-name="Raita"] .ct-step-down').click();
+  await appCart.locator('[data-name="Raita"] .ct-step-down').click();
+  await originalCart.waitForTimeout(450);
+  await appCart.waitForTimeout(450);
+  await writePairDiff('cart-item-removed', originalCart, appCart, 844);
+
   await originalCart.close();
   await appCart.close();
+
+  const emptyContext = await browser.newContext({
+    viewport,
+    deviceScaleFactor: scale,
+    isMobile: true,
+    hasTouch: true,
+    locale: 'en-IN',
+    serviceWorkers: 'block',
+  });
+  await emptyContext.addInitScript(() => {
+    try {
+      localStorage.setItem('nearbite_token', 'demo-token');
+      localStorage.setItem('token', 'demo-token');
+      localStorage.setItem('nearbite_user', JSON.stringify({ name: 'Sagnik', phone: '+91 98765 43210' }));
+      localStorage.setItem('nearbite_address', JSON.stringify({ tag: 'Home', house: 'Demo Street', area: 'Demo City…', city: 'Demo City…' }));
+      localStorage.setItem('eatswada_theme', 'light');
+      localStorage.setItem('eatswada_header_theme', 'raspberry');
+      localStorage.setItem('eatswada_new_user_location_prompt_shown', '1');
+      localStorage.setItem('eatswada_new_user_location_prompt_shown:current', '1');
+      sessionStorage.setItem('ew_gate_auto_shown', '1');
+      sessionStorage.setItem('eg_screen_dismissed', '1');
+      sessionStorage.setItem('eg_banner_closed', '1');
+      sessionStorage.setItem('eatswada_location_prompt_dismissed', '1');
+    } catch {
+      /* about:blank has no storage */
+    }
+  });
+  const originalEmpty = await emptyContext.newPage();
+  await originalEmpty.route(originalApiRoute, mockApi);
+  await originalEmpty.goto(`http://127.0.0.1:${originalPort}/cart.html`, { waitUntil: 'domcontentloaded' });
+  await originalEmpty.waitForSelector('.ct-empty', { timeout: 20000 });
+  await originalEmpty.evaluate(() => {
+    document.getElementById('ct-location-modal')?.setAttribute('hidden', '');
+    document.body.classList.remove('ct-location-modal-open');
+  });
+  await originalEmpty.evaluate(() => document.fonts.ready);
+  await originalEmpty.waitForTimeout(700);
+  const appEmpty = await emptyContext.newPage();
+  await appEmpty.goto(`http://127.0.0.1:${appPort}/#/cart?offers=none`, { waitUntil: 'networkidle' });
+  await appEmpty.waitForSelector('.ct-empty', { timeout: 20000 });
+  await appEmpty.evaluate(() => document.fonts.ready);
+  await appEmpty.waitForTimeout(500);
+  await writePairDiff('cart-empty', originalEmpty, appEmpty, 844);
+  await originalEmpty.close();
+  await appEmpty.close();
+  await emptyContext.close();
 
   const originalOffer = await context.newPage();
   await originalOffer.goto(`http://127.0.0.1:${originalPort}/offer-popup-preview.html`, { waitUntil: 'domcontentloaded' });
