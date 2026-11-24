@@ -44,6 +44,12 @@
   transition: none;
 }
 
+/* Still docked on the tab while a pushed page slides over it: painted, dimmed
+   with the page it belongs to, but no longer a tap target. */
+.bottom-nav.nav-float.is-covered {
+  pointer-events: none;
+}
+
 .nav-indicator {
   position: absolute;
   top: 4px;

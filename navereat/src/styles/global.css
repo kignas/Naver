@@ -532,12 +532,13 @@ ol {
 }
 
 /* ---------- Route transition layers ---------- */
+/* Deliberately not a stacking context: the layers below need to be ordered
+   against the app chrome that lives outside the stage. */
 .route-stage {
   position: absolute;
   inset: 0;
   overflow: hidden;
   background: #fff;
-  isolation: isolate;
 }
 
 /* While a page slides it is opaque and paints over the floating nav and the
@@ -545,8 +546,21 @@ ol {
    taken away afterwards (it is already hidden then, so nothing has to cover it),
    and the bar belongs to the settled page again once the slide is over. Keeping
    the lift scoped to the animation leaves the stacking of every sheet, overlay
-   and bar exactly as it was at rest. */
-.route-stage.has-detail.is-animating {
+   and bar exactly as it was at rest.
+
+   Only the moving page is lifted, never the whole stage: the stage also holds
+   the covered tab, and that layer is opaque, so lifting the stage painted Home
+   over the nav on the first frame of a push (the bar "vanished" while Home was
+   still the only page on screen). The lift has to clear the floating nav
+   (2147483005) so the incoming page slides over the docked bar, and the scrim
+   sits between the two so the bar is dimmed together with the page it belongs
+   to. `!important` beats the per-direction z-index the layers carry inline. */
+.route-stage.is-animating .route-layer.is-enter,
+.route-stage.is-animating .route-layer.is-leave {
+  z-index: 2147483007 !important;
+}
+
+.route-stage.has-detail.is-animating .route-scrim {
   z-index: 2147483006;
 }
 

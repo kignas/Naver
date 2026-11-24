@@ -1,0 +1,78 @@
+/* Tab-layer isolation.
+
+   Every legacy route bundle repeats one global block: `html`/`body` typography
+   and colours, `h1-h6` colours, and fuzzy matches such as `[class*="discount"]`,
+   `[class*="price"]` and `[class*="rating"]`. Those rules are global by nature,
+   and a pushed route attaches its bundle at the tap, while the tab it covers is
+   still the only page on screen. The covered tab was therefore restyled mid
+   slide: the Home offer line became a yellow pill, `text-rendering:
+   optimizeLegibility` and `letter-spacing` re-metred every line box, form
+   controls jumped to the bundle's size, and the card grew ~13 px - then snapped
+   back when the bundle was detached on pop.
+
+   This sheet is appended to the END of every route stylesheet (see
+   lib/routeStyles.ts), so on the tab layer it is the last word of the cascade
+   and outranks a foreign bundle's element-level and fuzzy rules by order.
+   Everything is scoped to `.tab-stack.has-detail`, i.e. it only applies while a
+   detail route covers the tab: at rest every tab still renders exactly as its
+   own bundle designed it. The element-level rules are `:where()`d so the tab's
+   own class rules keep their higher specificity and still win. The literal
+   values mirror tokens.css and home.bundle.css. */
+
+/* Inherited by the whole tab; a pushed bundle re-bases html/body. */
+.tab-stack.has-detail {
+  color: #1a1a1a;
+  letter-spacing: normal;
+  text-rendering: auto;
+  font-optical-sizing: auto;
+  color-scheme: normal;
+  font-synthesis-weight: auto;
+  font-synthesis-style: auto;
+  font-synthesis-small-caps: auto;
+  /* Bundles re-declare the legacy font tokens on `:root`, which swaps the tab's
+     font stack (and therefore every line box) mid transition. Declared on the
+     layer itself, the app's tokens keep winning by inheritance. */
+  --font: 'Manrope', 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: var(--font);
+  --font-micro: var(--font);
+}
+
+/* `button,input,select,textarea{font-size:inherit;font-synthesis:none;...}`
+   re-sizes and re-synthesises every unruly form control in the tab (the UA size
+   is 13.33 px). */
+:where(.tab-stack.has-detail .home-screen) button {
+  font-family: inherit;
+  font-size: revert;
+  font-synthesis-weight: auto;
+  font-synthesis-style: auto;
+  font-synthesis-small-caps: auto;
+}
+
+/* The shared numeric block turns every [class*="price"|"rating"|"count"|...]
+   into tabular figures with a stylistic set, which re-metres the card text. */
+:where(.tab-stack.has-detail .home-screen) :is([class*='price'], [class*='rating'], [class*='amount'], [class*='total'], [class*='fee'], [class*='qty'], [class*='count']) {
+  font-family: inherit;
+  font-variant-numeric: normal;
+  font-feature-settings: normal;
+}
+
+/* The offer line is a plain text row, not a chip. */
+:where(.tab-stack.has-detail .home-screen) [class*='discount'] {
+  display: block;
+  align-items: normal;
+  width: auto;
+  max-width: none;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: #d81b78;
+  font-size: 11.5px;
+  line-height: 1.1;
+  font-variant-numeric: normal;
+  font-feature-settings: normal;
+}
+
+/* Headings take the bundle's `--nb-ink` instead of the card's ink. */
+:where(.tab-stack.has-detail .home-screen) :is(.u99-restaurant-name, .u99-name-text) {
+  color: #101828;
+}

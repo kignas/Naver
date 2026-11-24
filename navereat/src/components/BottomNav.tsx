@@ -70,6 +70,10 @@ export function BottomNav() {
   // by the departing page instead of appearing after the slide has started.
   const hiddenNow = detailRoute ? hidden : false;
   const visible = onTabRoute;
+  // A pushed page is still sliding over the docked bar: it must stay painted
+  // (the nav belongs to the tab it covers) but must not take taps that belong
+  // to the incoming page.
+  const covered = detailRoute && !hidden;
 
   const navRef = useRef<HTMLElement | null>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -195,7 +199,7 @@ export function BottomNav() {
   return (
     <nav
       ref={navRef}
-      className={`bottom-nav nav-float${hiddenNow ? ' is-hidden' : ' is-visible'}${dragging ? ' is-dragging' : ''}`}
+      className={`bottom-nav nav-float${hiddenNow ? ' is-hidden' : ' is-visible'}${covered ? ' is-covered' : ''}${dragging ? ' is-dragging' : ''}`}
       style={navStyle}
       aria-label="Primary"
       aria-hidden={!visible}
