@@ -7,6 +7,8 @@ interface HomeRestaurantCardProps {
   restaurant: Restaurant;
   index: number;
   cart: Cart;
+  /** Windowed rows mount mid-scroll, so they must not replay the fade-up. */
+  animate?: boolean;
   onOpen: (restaurant: Restaurant) => void;
   onAdd: (restaurant: Restaurant, item: MenuItem) => void;
   onCustomize: (restaurant: Restaurant, item: MenuItem) => void;
@@ -119,6 +121,7 @@ function HomeRestaurantCardView({
   restaurant,
   index,
   cart,
+  animate = true,
   onOpen,
   onAdd,
   onCustomize,
@@ -139,10 +142,12 @@ function HomeRestaurantCardView({
   const offer = displayOffer(restaurant);
   const freeDelivery = restaurant.freeDeliveryRemaining;
   const minimumOrder = restaurant.minimumOrder;
-  const style: CSSProperties = {
-    animation: `cardFadeUp .28s ease forwards ${Math.min(index, 6) * 0.045}s`,
-    opacity: 0,
-  };
+  const style: CSSProperties | undefined = animate
+    ? {
+        animation: `cardFadeUp .28s ease forwards ${Math.min(index, 6) * 0.045}s`,
+        opacity: 0,
+      }
+    : undefined;
 
   const openOnKey = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -319,6 +324,7 @@ function sameCardProps(prev: HomeRestaurantCardProps, next: HomeRestaurantCardPr
   return (
     prev.restaurant === next.restaurant &&
     prev.index === next.index &&
+    (prev.animate ?? true) === (next.animate ?? true) &&
     prev.onOpen === next.onOpen &&
     prev.onAdd === next.onAdd &&
     prev.onCustomize === next.onCustomize &&

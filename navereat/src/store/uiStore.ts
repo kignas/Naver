@@ -4,6 +4,9 @@ import { restaurants, type MenuItem } from '../data/demo';
 export type HomeSort = 'recommended' | 'rating' | 'delivery' | 'distance';
 export type RestaurantTab = 'menu' | 'info';
 
+/** The boolean feed filters; the VEG toggle and the filter pills share these. */
+export type HomeFlag = 'vegOnly' | 'nearFast' | 'rating4' | 'under30' | 'under100';
+
 export interface HomeUiState {
   vegOnly: boolean;
   nearFast: boolean;
@@ -33,6 +36,10 @@ interface UiState {
   menus: Record<number, MenuItem[]>;
   markReady: (key: string) => void;
   patchHome: (patch: Partial<HomeUiState>) => void;
+  toggleHomeFlag: (key: HomeFlag) => void;
+  setHomeSort: (sortBy: HomeSort) => void;
+  setActiveFilterTab: (tab: string) => void;
+  resetHomeFilters: () => void;
   patchRestaurant: (id: number, patch: Partial<RestaurantUiState>) => void;
 }
 
@@ -68,6 +75,34 @@ export const useUiStore = create<UiState>((set) => ({
     set((state) => (state.ready[key] ? state : { ready: { ...state.ready, [key]: true } })),
 
   patchHome: (patch) => set((state) => ({ home: { ...state.home, ...patch } })),
+
+  // Each action returns the untouched state object when nothing changes, so a
+  // no-op tap cannot wake a single subscriber.
+  toggleHomeFlag: (key) =>
+    set((state) => {
+      const next = !state.home[key];
+      if (next === state.home[key]) return state;
+      return { home: { ...state.home, [key]: next } };
+    }),
+
+  setHomeSort: (sortBy) =>
+    set((state) => (state.home.sortBy === sortBy ? state : { home: { ...state.home, sortBy } })),
+
+  setActiveFilterTab: (tab) =>
+    set((state) => (state.home.activeFilterTab === tab ? state : { home: { ...state.home, activeFilterTab: tab } })),
+
+  resetHomeFilters: () =>
+    set((state) => ({
+      home: {
+        ...state.home,
+        sortBy: initialHome.sortBy,
+        vegOnly: false,
+        nearFast: false,
+        rating4: false,
+        under30: false,
+        under100: false,
+      },
+    })),
 
   patchRestaurant: (id, patch) =>
     set((state) => ({
