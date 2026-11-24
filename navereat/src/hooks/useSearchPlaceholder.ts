@@ -1,4 +1,4 @@
-import { useEffect, useState, type RefObject } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 
 export const SEARCH_DISHES = [
   'Biryani',
@@ -19,6 +19,9 @@ export const SEARCH_DISHES = [
 ] as const;
 
 const FIRST_DELAY_MS = 600;
+// Long enough that a page revealed by a pop keeps the text it was showing when
+// the user left, instead of changing a beat after the page lands.
+const RESUME_DELAY_MS = 1000;
 const INITIAL_INTERVAL_MS = 1800;
 const INITIAL_TRANSITION_MS = 600;
 
@@ -31,12 +34,18 @@ export function useSearchPlaceholder(
 } {
   const [index, setIndex] = useState(0);
   const [duration, setDuration] = useState(INITIAL_TRANSITION_MS);
+  // The rotation restarts its effect every time the page is uncovered. Resuming
+  // from the dish that is already on screen keeps the header text still on
+  // return instead of jumping back to the start of the list.
+  const indexRef = useRef(0);
+  indexRef.current = index;
+  const startedRef = useRef(false);
 
   useEffect(() => {
     // A covered page must not schedule work: the rotation stops and the effect
     // tears its listeners down until the page is the active route again.
     if (paused) return;
-    let current = 0;
+    let current = indexRef.current;
     let transitionMs = INITIAL_TRANSITION_MS;
     let intervalMs = INITIAL_INTERVAL_MS;
     let timer: number | null = null;
@@ -98,7 +107,8 @@ export function useSearchPlaceholder(
     const scrollTarget: HTMLElement | Window = scroller ?? window;
     scrollTarget.addEventListener('scroll', handleScroll, { passive: true });
     document.addEventListener('visibilitychange', handleVisibility);
-    scheduleNext(FIRST_DELAY_MS);
+    scheduleNext(startedRef.current ? RESUME_DELAY_MS : FIRST_DELAY_MS);
+    startedRef.current = true;
 
     return () => {
       stopTimer();

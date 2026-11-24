@@ -31,10 +31,13 @@ export interface RestaurantUiState {
 
 interface UiState {
   ready: Record<string, boolean>;
+  /** True once the cold-start entrance of the Home feed has finished playing. */
+  homeHasEntered: boolean;
   home: HomeUiState;
   restaurants: Record<number, RestaurantUiState>;
   menus: Record<number, MenuItem[]>;
   markReady: (key: string) => void;
+  markHomeEntered: () => void;
   patchHome: (patch: Partial<HomeUiState>) => void;
   toggleHomeFlag: (key: HomeFlag) => void;
   setHomeSort: (sortBy: HomeSort) => void;
@@ -67,12 +70,15 @@ const initialRestaurant: RestaurantUiState = {
 
 export const useUiStore = create<UiState>((set) => ({
   ready: {},
+  homeHasEntered: false,
   home: initialHome,
   restaurants: {},
   menus: Object.fromEntries(restaurants.map((restaurant) => [restaurant.id, restaurant.menu])),
 
   markReady: (key) =>
     set((state) => (state.ready[key] ? state : { ready: { ...state.ready, [key]: true } })),
+
+  markHomeEntered: () => set((state) => (state.homeHasEntered ? state : { homeHasEntered: true })),
 
   patchHome: (patch) => set((state) => ({ home: { ...state.home, ...patch } })),
 

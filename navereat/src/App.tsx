@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { SplashScreen } from '@capacitor/splash-screen';
@@ -7,11 +7,13 @@ import { BottomNav } from './components/BottomNav';
 import { CartBar } from './components/CartBar';
 import { CustomizeProvider } from './components/CustomizeSheet';
 import { PageTransition } from './components/PageTransition';
+import { LazyRoute } from './components/LazyRoute';
 import { RouteReady } from './components/RouteReady';
 import { RouteShell } from './components/RouteShell';
 import { SearchOverlay } from './components/SearchOverlay';
 import { ToastHost } from './components/ToastHost';
 import { useBackButton } from './hooks/useBackButton';
+import { useChromePathname } from './lib/chromeRoute';
 import { isTabPath, NavBridge } from './lib/navigation';
 import { useAppStore } from './store/appStore';
 import { useSearchStore } from './store/searchStore';
@@ -20,17 +22,10 @@ import { statusBarStyle, statusBarTheme } from './lib/statusBarTheme';
 import { createRoot, type Root } from 'react-dom/client';
 import { debugWanted } from './lib/debugFlag';
 import { primeFonts } from './lib/fonts';
-import { installPreloadOnIntent, preloadAllRoutes, preloadLikelyRoutes, routeLoaders } from './lib/routeLoaders';
+import { installPreloadOnIntent, preloadAllRoutes, preloadLikelyRoutes } from './lib/routeLoaders';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
 
-const Restaurant = lazy(() => routeLoaders.restaurant().then((module) => ({ default: module.Restaurant })));
-const Under99 = lazy(() => routeLoaders.under99().then((module) => ({ default: module.Under99 })));
-const Category = lazy(() => routeLoaders.category().then((module) => ({ default: module.Category })));
-const Cart = lazy(() => routeLoaders.cart().then((module) => ({ default: module.Cart })));
-const Orders = lazy(() => routeLoaders.orders().then((module) => ({ default: module.Orders })));
-const Track = lazy(() => routeLoaders.track().then((module) => ({ default: module.Track })));
-const Profile = lazy(() => routeLoaders.profile().then((module) => ({ default: module.Profile })));
 
 function AppRoutes() {
   const location = useLocation();
@@ -93,18 +88,22 @@ function AppRoutes() {
     }
   }, [token, location.pathname, navigate, setDirection]);
 
+  // Declared above the guard: hooks may not run conditionally.
+  // The shell paints one slide behind the router on a push, so the cart pill
+  // cannot move out from under a Home that is still on screen. See chromeRoute.
+  const chromePathname = useChromePathname(location.pathname);
+
   if (!token && location.pathname !== '/login') return null;
 
-  const pathname = location.pathname;
   const cartBarVisible =
     !searchOpen &&
-    (pathname === '/' ||
-      pathname === '/under99' ||
-      pathname.startsWith('/category/') ||
-      pathname.startsWith('/restaurant/'));
-  const cartBarMode = pathname.startsWith('/restaurant/') ? 'pink' : 'home';
+    (chromePathname === '/' ||
+      chromePathname === '/under99' ||
+      chromePathname.startsWith('/category/') ||
+      chromePathname.startsWith('/restaurant/'));
+  const cartBarMode = chromePathname.startsWith('/restaurant/') ? 'pink' : 'home';
   // Only the two tab routes draw the floating nav.
-  const cartBarAboveNav = cartBarVisible && isTabPath(pathname);
+  const cartBarAboveNav = cartBarVisible && isTabPath(chromePathname);
 
   return (
     <div className="app-shell">
@@ -114,20 +113,25 @@ function AppRoutes() {
           swipeBack={!isTabPath(location.pathname) && location.pathname !== '/login'}
           render={(routeLocation) => (
             <Suspense fallback={<RouteShell pathname={routeLocation.pathname} />}>
-              <RouteReady routeKey={routeLocation.key}>
-                <Routes location={routeLocation}>
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/" element={<Home />} />
-                  <Route path="/under99" element={<Under99 />} />
-                  <Route path="/category/:type" element={<Category />} />
-                  <Route path="/restaurant/:id" element={<Restaurant />} />
-                  <Route path="/cart" element={<Cart />} />
-                  <Route path="/orders" element={<Orders />} />
-                  <Route path="/track/:id" element={<Track />} />
-                  <Route path="/profile" element={<Profile />} />
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Routes>
-              </RouteReady>
+              <Routes location={routeLocation}>
+                <Route path="/login" element={<Login />} />
+                <Route
+                  path="/"
+                  element={
+                    <RouteReady>
+                      <Home />
+                    </RouteReady>
+                  }
+                />
+                <Route path="/under99" element={<LazyRoute routeKey="under99" pathname={routeLocation.pathname} />} />
+                <Route path="/category/:type" element={<LazyRoute routeKey="category" pathname={routeLocation.pathname} />} />
+                <Route path="/restaurant/:id" element={<LazyRoute routeKey="restaurant" pathname={routeLocation.pathname} />} />
+                <Route path="/cart" element={<LazyRoute routeKey="cart" pathname={routeLocation.pathname} />} />
+                <Route path="/orders" element={<LazyRoute routeKey="orders" pathname={routeLocation.pathname} />} />
+                <Route path="/track/:id" element={<LazyRoute routeKey="track" pathname={routeLocation.pathname} />} />
+                <Route path="/profile" element={<LazyRoute routeKey="profile" pathname={routeLocation.pathname} />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
             </Suspense>
           )}
         />

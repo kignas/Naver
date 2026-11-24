@@ -182,11 +182,27 @@ export function CartBar({ visible = true, mode = 'home', aboveNav = false }: Car
   const countRef = useRef<HTMLSpanElement>(null);
   const badgeRef = useRef<HTMLSpanElement>(null);
   const pinkTimer = useRef<number | null>(null);
+  const settledRef = useRef(false);
 
   useEffect(() => {
     document.body.classList.toggle('has-cart-bar', visible && count > 0);
     return () => document.body.classList.remove('has-cart-bar');
   }, [visible, count]);
+
+  // The slide-up belongs to the frame the pill appears in. `wc-enter` also
+  // re-matches when the pill switches between its home and pink shapes, so it
+  // used to replay on every return to a tab; after it has played we swap it for
+  // an inert class, which the next mode change picks up.
+  useEffect(() => {
+    if (!mounted) {
+      settledRef.current = false;
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      settledRef.current = true;
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [mounted]);
 
   useEffect(() => {
     if (!visible) {
@@ -317,7 +333,7 @@ export function CartBar({ visible = true, mode = 'home', aboveNav = false }: Car
         className={[
           mode === 'pink' ? 'wc-pink' : '',
           aboveNav ? 'wc-above-nav' : '',
-          exiting ? 'wc-exiting' : 'wc-enter',
+          exiting ? 'wc-exiting' : settledRef.current ? 'wc-settled' : 'wc-enter',
           pinkPulse,
         ]
           .filter(Boolean)

@@ -9,8 +9,8 @@ import { fontsReady } from '../lib/fonts';
 import { syncRouteStyleSheets } from '../lib/routeStyles';
 import { useNavDirection, useNavStore, type NavDirection } from '../store/navStore';
 
-const PUSH_DURATION = 420;
-const POP_DURATION = 360;
+const PUSH_DURATION = 260;
+const POP_DURATION = 220;
 // Safety net only: the slide normally starts as soon as the incoming page has
 // painted its real content (see settleIncoming).
 const PUSH_READY_TIMEOUT = 600;
@@ -411,33 +411,30 @@ export function PageTransition({ location, swipeBack = false, render }: PageTran
         check();
       });
 
-    // The slide may only start once the incoming page is mounted, laid out and
-    // its images are decoded: the layer is still hidden at this point, so the
-    // first frame of the slide already shows the finished page.
+    // The slide starts as soon as the incoming page is mounted, laid out and
+    // safe to show: the layer is still hidden here, so the first frame of the
+    // slide already shows the finished page instead of a skeleton.
+    //
+    // Every wait below is capped in the low tens of milliseconds. The old
+    // version waited for a stable height over a 200 ms budget plus a 60 ms
+    // image decode with the layer hidden, and that dead window is exactly what
+    // a tap reads as "slow to start": Home sat there while the shell chrome
+    // around it changed.
     const settleIncoming = async () => {
       const node = await waitForIncoming();
       if (!node) return;
       await waitForRouteReady(newLayer.key);
-      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
-      void node.offsetHeight;
-      // Late faces would reflow text inside the moving page.
-      await fontsReady(300);
-      // The layout itself has to be final too: two identical measurements of
-      // the page height (or the budget) before the layer is ever shown.
-      const settleStarted = performance.now();
-      let measured = -1;
-      while (performance.now() - settleStarted < 200) {
-        await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
-        const height = node.scrollHeight;
-        if (height > 0 && height === measured) break;
-        measured = height;
-      }
+      // The layer enters from off-screen, so it is laid out and painted as the
+      // slide's own first frame: no extra frame has to be awaited here.
+      void node.scrollHeight;
+      await fontsReady(24);
+      // The card images are warmed on pointerdown; anything still decoding may
+      // arrive while the page travels and lands under its own placeholder.
       const images = Array.from(node.querySelectorAll('img'));
       await Promise.race([
         Promise.all(images.map((image) => image.decode().catch(() => undefined))),
-        new Promise((resolve) => window.setTimeout(resolve, 60)),
+        new Promise((resolve) => window.setTimeout(resolve, 20)),
       ]);
-      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
     };
 
     startTimerRef.current = window.setTimeout(start, PUSH_READY_TIMEOUT);
@@ -578,6 +575,11 @@ export function PageTransition({ location, swipeBack = false, render }: PageTran
           })}
         </div>
       )}
+
+      {/* Depth cue for the page underneath: a light scrim that fades in while a
+          detail page covers the tab and fades out as it is dismissed. Both are
+          opacity/transform only, and it is fully transparent at rest. */}
+      {tabLayers.length > 0 && <div className="route-scrim" aria-hidden="true" />}
 
       {swipeBackLocation && (
         <div className="route-layer route-layer-back" ref={backRef} aria-hidden="true">

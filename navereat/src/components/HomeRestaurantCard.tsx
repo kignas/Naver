@@ -1,7 +1,8 @@
-import { memo, type CSSProperties, type KeyboardEvent } from 'react';
+import { memo, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import type { MenuItem, Restaurant } from '../data/demo';
 import type { Cart } from '../lib/cart';
 import { customizedQtyFor, isCustomisable } from '../lib/customization';
+import { useUiStore } from '../store/uiStore';
 
 interface HomeRestaurantCardProps {
   restaurant: Restaurant;
@@ -137,7 +138,11 @@ function HomeRestaurantCardView({
   const offer = displayOffer(restaurant);
   const freeDelivery = restaurant.freeDeliveryRemaining;
   const minimumOrder = restaurant.minimumOrder;
-  const style: CSSProperties | undefined = animate
+  // The fade-up is a cold-start entrance, so it is decided once per mount: a
+  // card mounted after the feed has entered (a remount, a filter change that
+  // adds rows) must appear settled instead of fading in again.
+  const [playEntrance] = useState(() => animate && !useUiStore.getState().homeHasEntered);
+  const style: CSSProperties | undefined = playEntrance
     ? {
         animation: `cardFadeUp .28s ease forwards ${Math.min(staggerIndex, 6) * 0.045}s`,
         opacity: 0,

@@ -612,7 +612,41 @@ ol {
   z-index: 0;
   overflow: hidden;
   transform: translate3d(0, 0, 0);
-  transition: transform 300ms var(--ease-toing);
+  backface-visibility: hidden;
+}
+
+/* The page underneath a push only gets a scrim. It must not translate: the
+   covered page is expected to stay pixel-identical through the whole slide
+   (perf-check's identity gate), and moving it is what used to read as jitter.
+   The scrim fades with opacity alone and is fully transparent at rest. */
+.route-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: #000;
+  opacity: 0;
+  contain: layout paint;
+}
+
+@keyframes routeScrimIn {
+  from { opacity: 0; }
+  to { opacity: 0.16; }
+}
+
+@keyframes routeScrimOut {
+  from { opacity: 0.16; }
+  to { opacity: 0; }
+}
+
+.route-stage.direction-push.is-animating .route-scrim {
+  animation: routeScrimIn var(--dur-push) linear both;
+  will-change: opacity;
+}
+
+.route-stage.direction-pop.is-animating .route-scrim {
+  animation: routeScrimOut var(--dur-pop) linear both;
+  will-change: opacity;
 }
 
 .tab-stack.has-detail {

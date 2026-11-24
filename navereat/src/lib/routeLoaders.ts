@@ -1,7 +1,18 @@
+import type { ComponentType } from 'react';
 import { findRestaurant, restaurants } from '../data/demo';
 import { useNavStore } from '../store/navStore';
 
 export type LazyRouteKey = 'restaurant' | 'cart' | 'orders' | 'track' | 'profile' | 'category' | 'under99';
+
+const NAMED_EXPORTS: Record<LazyRouteKey, string> = {
+  restaurant: 'Restaurant',
+  cart: 'Cart',
+  orders: 'Orders',
+  track: 'Track',
+  profile: 'Profile',
+  category: 'Category',
+  under99: 'Under99',
+};
 
 export const routeLoaders = {
   restaurant: () => import('../pages/Restaurant'),
@@ -12,6 +23,38 @@ export const routeLoaders = {
   category: () => import('../pages/Category'),
   under99: () => import('../pages/Under99'),
 } satisfies Record<LazyRouteKey, () => Promise<unknown>>;
+
+const components = new Map<LazyRouteKey, ComponentType>();
+const componentLoads = new Map<LazyRouteKey, Promise<ComponentType | null>>();
+
+/**
+ * The page component for a route, or null while its chunk is still loading.
+ *
+ * Routes are not `React.lazy` on purpose. A lazy component suspends even when
+ * its module is already in memory, so the first visit rendered the route shell
+ * and then the real page — two commits, and the slide had to wait for the
+ * second one. Remembering the resolved component lets a preloaded route paint
+ * in its first commit.
+ */
+export function routeComponent(key: LazyRouteKey): ComponentType | null {
+  return components.get(key) ?? null;
+}
+
+export function loadRouteComponent(key: LazyRouteKey): Promise<ComponentType | null> {
+  const cached = components.get(key);
+  if (cached) return Promise.resolve(cached);
+  const pending = componentLoads.get(key);
+  if (pending) return pending;
+  const load = routeLoaders[key]().then((module) => {
+    const record = module as Record<string, ComponentType | undefined>;
+    const component = record[NAMED_EXPORTS[key]] ?? record.default ?? null;
+    if (component) components.set(key, component);
+    componentLoads.delete(key);
+    return component;
+  });
+  componentLoads.set(key, load);
+  return load;
+}
 
 export function routeKeyFor(pathname: string): LazyRouteKey | null {
   if (pathname.startsWith('/restaurant/')) return 'restaurant';
@@ -72,17 +115,16 @@ export function preloadRouteAssets(pathname: string): Promise<void> {
 export function preloadRoute(pathname: string): Promise<unknown> {
   const key = routeKeyFor(pathname);
   if (!key) return Promise.resolve();
-  const chunk = routeLoaders[key]();
   // Images must never gate a tap: the route shell frames the slide while they
   // decode in the background.
   void preloadRouteAssets(pathname);
-  return chunk;
+  return loadRouteComponent(key);
 }
 
 /** Loads every route chunk once, after the first screen has painted. */
 export function preloadAllRoutes(): void {
-  Object.values(routeLoaders).forEach((load) => {
-    void load();
+  (Object.keys(routeLoaders) as LazyRouteKey[]).forEach((key) => {
+    void loadRouteComponent(key);
   });
 }
 

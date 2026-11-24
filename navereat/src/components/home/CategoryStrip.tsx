@@ -1,6 +1,7 @@
-import { memo, useCallback, type CSSProperties } from 'react';
+import { memo, useCallback, useState, type CSSProperties } from 'react';
 import { categories } from '../../data/demo';
 import { useAppNav } from '../../lib/navigation';
+import { useUiStore } from '../../store/uiStore';
 import { Icon } from '../Icon';
 
 /** Allocated once: the stagger never changes, so it must not be rebuilt per render. */
@@ -17,6 +18,12 @@ const PLACEHOLDER_MARK = (
 
 export const CategoryStrip = memo(function CategoryStrip() {
   const nav = useAppNav();
+  // The stagger belongs to the cold start only. Read at mount, not subscribed:
+  // a subscription would re-render ten tiles (and cut whatever animation is
+  // still running) the moment the flag flips, and a revisit would replay the
+  // entrance. On every later mount the strip renders settled, exactly like the
+  // first one looks once the animation has finished.
+  const [playEntrance] = useState(() => !useUiStore.getState().homeHasEntered);
   const openCategory = useCallback(
     (name: string, query: string) => {
       nav.push(`/category/${encodeURIComponent(name)}?q=${encodeURIComponent(query)}`);
@@ -35,7 +42,7 @@ export const CategoryStrip = memo(function CategoryStrip() {
             href={`#${encodeURIComponent(category.name)}`}
             data-category-name={category.name}
             key={category.id}
-            style={CATEGORY_STYLES[index]}
+            style={playEntrance ? CATEGORY_STYLES[index] : undefined}
             onClick={(event) => {
               event.preventDefault();
               openCategory(category.name, category.query);

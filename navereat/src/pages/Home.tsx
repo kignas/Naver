@@ -33,6 +33,7 @@ export function Home() {
   const nav = useAppNav();
   const ready = useCachedReady('home', 220, 360);
   const patchHome = useUiStore((state) => state.patchHome);
+  const markHomeEntered = useUiStore((state) => state.markHomeEntered);
   const openSearch = useSearchStore((state) => state.openSearch);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -62,6 +63,15 @@ export function Home() {
     });
     return () => window.cancelAnimationFrame(frame);
   }, []);
+
+  // The entrance stagger (280 ms + up to 8 x 30 ms of category delay, 6 x 45 ms
+  // of card delay) has fully landed by 620 ms. Only after that does the feed
+  // count as entered, so flipping the flag can never cut a running animation.
+  useEffect(() => {
+    if (useUiStore.getState().homeHasEntered) return;
+    const timer = window.setTimeout(() => markHomeEntered(), 620);
+    return () => window.clearTimeout(timer);
+  }, [markHomeEntered]);
 
   const pickLocation = useCallback(() => toast(DEMO_LOCATION), []);
   const openUnder99 = useCallback(() => nav.push('/under99'), [nav]);
