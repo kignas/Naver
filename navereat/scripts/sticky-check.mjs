@@ -82,6 +82,14 @@ async function state(page) {
       headerTop: header ? getComputedStyle(header).top : '',
       hp: screen ? getComputedStyle(screen).getPropertyValue('--hp').trim() : '',
       pinTop: screen ? getComputedStyle(screen).getPropertyValue('--pin-top').trim() : '',
+      pinInset: screen ? getComputedStyle(screen).getPropertyValue('--pin-inset').trim() : '',
+      stripHit: (() => {
+        const inset = parseFloat(screen ? getComputedStyle(screen).getPropertyValue('--pin-inset') : '0') || 0;
+        if (inset < 2) return 'n/a';
+        const node = document.elementFromPoint(3, Math.round(inset / 2));
+        if (!node) return 'none';
+        return node.closest('.hero-header') ? 'header' : String(node.className).slice(0, 40) || node.tagName;
+      })(),
       flowHeight: header && sheet ? Math.round((header.offsetHeight + sheet.offsetHeight) * 100) / 100 : -1,
       scrollHeight: scroller ? scroller.scrollHeight : -1,
       feedTop: document.querySelector('.home-main') ? document.querySelector('.home-main').offsetTop : -1,
@@ -207,12 +215,14 @@ try {
     const rest = await state(page);
     check(`[${label}] header is sticky`, rest.headerPosition === 'sticky', `${rest.headerPosition} top=${rest.headerTop}`);
     check(`[${label}] pin distance measured`, parseInt(rest.pinTop, 10) > 0, rest.pinTop);
+    const pinInset = parseFloat(rest.pinInset) || 0;
+    check(`[${label}] pin inset keeps a strip above the row`, pinInset >= 4 && pinInset <= 10, `--pin-inset=${rest.pinInset}`);
     check(`[${label}] at rest the row is in flow`, rest.row.y > 0, `row.y=${rest.row.y}`);
     const rowHeight = rest.row.height;
     const flowHeight = rest.flowHeight;
     await page.screenshot({ path: path.join(outDir, `sticky-${label}-scroll-0.png`) });
 
-    report.viewports[label] = { rest, rowHeight, flowHeight, positions: {} };
+    report.viewports[label] = { rest, rowHeight, flowHeight, pinInset, positions: {} };
 
     for (const target of TARGETS) {
       await page.evaluate(() => window.__resetCls?.());
@@ -226,8 +236,9 @@ try {
       }
       const now = await state(page);
       report.viewports[label].positions[target] = now;
-      const pinned = Math.abs(now.row.y) <= 1;
-      check(`[${label}] scrollTop ${target}: row pinned at top`, pinned, `row.y=${now.row.y} scrollTop=${now.scrollTop}`);
+      const pinned = Math.abs(now.row.y - pinInset) <= 1;
+      check(`[${label}] scrollTop ${target}: row pinned below the status bar`, pinned, `row.y=${now.row.y} inset=${pinInset} scrollTop=${now.scrollTop}`);
+      check(`[${label}] scrollTop ${target}: strip above the row is the header`, now.stripHit === 'header', now.stripHit);
       check(`[${label}] scrollTop ${target}: row keeps its height`, Math.abs(now.row.height - rowHeight) <= 0.5, `${now.row.height} vs ${rowHeight}`);
       check(`[${label}] scrollTop ${target}: collapse complete`, now.hp === '1.000', `--hp=${now.hp}`);
       check(`[${label}] scrollTop ${target}: search box is hittable`, now.hitInRow, now.hitClass);
@@ -251,7 +262,7 @@ try {
     const flingTop = await state(page);
     report.viewports[label].fling = { samples: flingSamples.map((entry) => ({ scrollTop: entry.scrollTop, rowY: entry.row.y })), cls: flingTop.cls };
     check(`[${label}] fling: momentum carried past the finger`, flingTop.scrollTop > flingSamples[0].scrollTop + 40, flingSamples.map((entry) => entry.scrollTop).join(','));
-    check(`[${label}] fling: row pinned through every sample`, flingSamples.every((entry) => Math.abs(entry.row.y) <= 1) && Math.abs(flingTop.row.y) <= 1, flingSamples.map((entry) => entry.row.y).join(','));
+    check(`[${label}] fling: row pinned through every sample`, flingSamples.every((entry) => Math.abs(entry.row.y - pinInset) <= 1) && Math.abs(flingTop.row.y - pinInset) <= 1, flingSamples.map((entry) => entry.row.y).join(','));
     check(`[${label}] fling: no layout shift`, flingTop.cls <= 0.01, `cls=${flingTop.cls}`);
     await page.screenshot({ path: path.join(outDir, `sticky-${label}-fling.png`) });
 
@@ -265,7 +276,7 @@ try {
     await sleep(550);
     const afterOverlay = await state(page);
     report.viewports[label].afterOverlay = afterOverlay;
-    check(`[${label}] after search open/close: row still pinned`, Math.abs(afterOverlay.row.y) <= 1, `row.y=${afterOverlay.row.y} scrollTop=${afterOverlay.scrollTop}`);
+    check(`[${label}] after search open/close: row still pinned`, Math.abs(afterOverlay.row.y - pinInset) <= 1, `row.y=${afterOverlay.row.y} scrollTop=${afterOverlay.scrollTop}`);
     check(`[${label}] after search open/close: tap target alive`, afterOverlay.hitInRow, afterOverlay.hitClass);
     await page.screenshot({ path: path.join(outDir, `sticky-${label}-after-search.png`) });
 
@@ -280,7 +291,7 @@ try {
     const afterBack = await state(page);
     report.viewports[label].afterBack = afterBack;
     check(`[${label}] after Home -> Restaurant -> back: scroll restored`, Math.abs(afterBack.scrollTop - 1500) <= 40, `scrollTop=${afterBack.scrollTop}`);
-    check(`[${label}] after back: row pinned`, Math.abs(afterBack.row.y) <= 1, `row.y=${afterBack.row.y}`);
+    check(`[${label}] after back: row pinned`, Math.abs(afterBack.row.y - pinInset) <= 1, `row.y=${afterBack.row.y}`);
     check(`[${label}] after back: collapse matches scroll`, afterBack.scrollTop < 100 ? afterBack.hp === '0.000' : afterBack.hp === '1.000', `--hp=${afterBack.hp}`);
     await page.screenshot({ path: path.join(outDir, `sticky-${label}-after-back.png`) });
 
@@ -295,7 +306,7 @@ try {
     await sleep(500);
     const afterBg = await state(page);
     report.viewports[label].afterBackground = afterBg;
-    check(`[${label}] after background/foreground: row pinned`, Math.abs(afterBg.row.y) <= 1, `row.y=${afterBg.row.y} scrollTop=${afterBg.scrollTop}`);
+    check(`[${label}] after background/foreground: row pinned`, Math.abs(afterBg.row.y - pinInset) <= 1, `row.y=${afterBg.row.y} scrollTop=${afterBg.scrollTop}`);
     check(`[${label}] after background/foreground: no stale collapse`, afterBg.hp === '1.000', `--hp=${afterBg.hp}`);
     await page.screenshot({ path: path.join(outDir, `sticky-${label}-after-background.png`) });
     await other.close();
@@ -325,14 +336,15 @@ try {
   console.log('\n| viewport | scrollTop | row.y | row.h | --hp | cls | pinned |');
   console.log('| --- | --- | --- | --- | --- | --- | --- |');
   for (const [label, data] of Object.entries(report.viewports)) {
+    const inset = data.pinInset ?? 0;
     for (const target of TARGETS) {
       const entry = data.positions[target];
       if (!entry) continue;
-      console.log(`| ${label} | ${entry.scrollTop} | ${entry.row.y} | ${entry.row.height} | ${entry.hp} | ${entry.cls} | ${Math.abs(entry.row.y) <= 1 ? 'yes' : 'no'} |`);
+      console.log(`| ${label} | ${entry.scrollTop} | ${entry.row.y} | ${entry.row.height} | ${entry.hp} | ${entry.cls} | ${Math.abs(entry.row.y - inset) <= 1 ? 'yes' : 'no'} |`);
     }
     for (const [name, entry] of Object.entries({ afterSearch: data.afterOverlay, afterBack: data.afterBack, afterBackground: data.afterBackground, backToTop: data.backToTop })) {
       if (!entry) continue;
-      console.log(`| ${label} | ${name} (${entry.scrollTop}) | ${entry.row.y} | ${entry.row.height} | ${entry.hp} | ${entry.cls} | ${Math.abs(entry.row.y) <= 1 || name === 'backToTop' ? 'n/a' : 'no'} |`);
+      console.log(`| ${label} | ${name} (${entry.scrollTop}) | ${entry.row.y} | ${entry.row.height} | ${entry.hp} | ${entry.cls} | ${Math.abs(entry.row.y - inset) <= 1 || name === 'backToTop' ? 'n/a' : 'no'} |`);
     }
   }
 

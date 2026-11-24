@@ -114,6 +114,9 @@
 
   /* Motion */
   --ease-toing: cubic-bezier(0.22, 0.61, 0.36, 1);
-  --dur-push: 300ms;
+  /* Route pushes: a long decelerate so the page arrives softly. */
+  --ease-route: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-push: 420ms;
+  --dur-pop: 360ms;
   --dur-tab: 200ms;
 }

@@ -427,11 +427,14 @@ body {
   --hp: 0;
   --hsy: 0;
   --pin-top: 59px;
+  --pin-inset: 6px;
 }
 
+/* Pinning at -pin-top would put the row flush against the status bar; the
+   inset keeps a strip of the header's own burgundy above the box. */
 .hero-header {
   position: sticky;
-  top: calc(-1 * var(--pin-top, 59px));
+  top: calc(var(--pin-inset, 6px) - var(--pin-top, 59px));
 }
 
 /* Burgundy shell for the banner + strip. Mirrors .hero-header's shell (the

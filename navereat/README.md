@@ -73,7 +73,10 @@ npm run assets   # sharp SVGs -> Android mipmaps + splash, then patch adaptive X
 `npm run perf-check` writes `../verify/perf-<label>.json` with cold-start time to
 first Home paint, FCP, DOMContentLoaded, CLS, push/pop/sheet FPS, and bundle
 sizes. The default run is unthrottled and **exits non-zero if push or pop is
-below 55 fps**. Use `PERF_RATE=4 npm run perf-check stress` for the 4x CPU
+below 55 fps**, if the covered page drifts from an identity transform/opacity on
+any frame of a push or pop (`gate.outgoing`), if Home re-renders more than once
+under a push, if tap → first painted frame exceeds 60 ms, or if tap → slide start
+exceeds 200 ms at 1×. Use `PERF_RATE=4 npm run perf-check stress` for the 4x CPU
 stress run. `npm run perf-transitions` measures Home → Restaurant → Cart →
 Tracking and the pop back, and writes the seven-frame strip to
 `../verify/frames/home-restaurant-strip.png`.
@@ -103,12 +106,16 @@ permissions and blocks cleartext traffic.
 
 The Home header is split into two blocks: `.hero-header` (location row + search
 row) and `.hero-sheet` (hero banner + offer strip). `.hero-header` is
-`position: sticky` with `top: -1 * --pin-top`, so the location row scrolls out of
-view and the search row stays pinned to the top of the viewport for the whole
-feed — no scroll range limit, no per-frame layout, no clone.
+`position: sticky` with `top: calc(--pin-inset - --pin-top)`, so the location row
+scrolls out of view and the search row stays pinned near the top of the viewport
+for the whole feed — no scroll range limit, no per-frame layout, no clone.
 
 * `--pin-top` is measured once per resize in `src/lib/scrollHeaderMotion.ts`
   (59 px at 390 and 360 wide: 8 px padding + 44 px location row + 7 px gap).
+* `--pin-inset: 6px` keeps a strip of the header's own burgundy (`#5D0D18`, the
+  status-bar colour) above the pinned search box: the row pins at y = 6 and the
+  strip is the header surface itself, so there is no seam and no gap. It is a
+  constant, so the transform-only compaction is unaffected.
 * `--hp` (0–1 collapse progress) and `--hsy` (parallax shift) are written once
   per frame from the same passive scroll listener. They live on `:root`, not on
   the screen element, because a route transition freezes and restores every
@@ -126,6 +133,41 @@ feed — no scroll range limit, no per-frame layout, no clone.
 * `node scripts/scroll0-diff.mjs <tag>` captures Home at scrollTop 0 so two
   builds can be pixel-diffed; the pinned bar build is pixel-identical to the
   previous build at rest (0 px at 390×844 and 360×640).
+
+## Route motion: only the new page moves
+
+A push slides the **incoming** page in from the right; the page it covers keeps
+its identity transform and full opacity for the whole slide (no parallax, no
+dim, no scale, no fade). A pop slides the dismissed page away and leaves the
+page underneath exactly where it was. Tab switches stay instant.
+
+* CSS in `src/styles/global.css`: `routePushIn` on `.is-enter` (420 ms) and
+  `routePopOut` on `.is-leave` (360 ms), both on
+  `cubic-bezier(0.22, 1, 0.36, 1)` (`--ease-route`). `.tab-stack` never moves.
+  Timings live in `src/styles/tokens.css` (`--dur-push`, `--dur-pop`).
+* The sliding page casts a soft leading-edge `box-shadow`, scoped to
+  `.route-stage.is-animating` so a page at rest carries no shadow paint.
+* The slide only starts once the incoming page is mounted, laid out, its images
+  decoded and painted — the layer is still `visibility: hidden` at that point
+  (`settleIncoming` in `src/components/PageTransition.tsx`), so the first frame
+  of the slide already shows the finished page and nothing swaps a skeleton
+  mid-slide. `PUSH_READY_TIMEOUT` (600 ms) is only a safety net for a route that
+  never reports ready.
+* The page underneath is frozen (`layoutSnapshot`) and does not re-render on
+  every frame of the slide (at 4× CPU the click's own React commit can land one
+  frame late, which is the one extra commit the gate tolerates); `perf-check`
+  fails if any covered layer's transform/opacity leaves identity on any frame of
+  a push/pop, or if Home renders more than once under a push.
+* Left-edge swipe-back moves only the top page; the page underneath is revealed
+  in place.
+* Budgets: tap → first painted frame ≤ 60 ms, tap → slide start ≤ 200 ms at 1×
+  (content-first cost: mount + layout + decode), push/pop FPS ≥ 55.
+
+`npm run route-motion-check` records real frames of Home → Restaurant and back,
+writes 8-frame strips plus `route-motion.json` to `../verify/item12c/`, and
+asserts all of the above. Measured at 1× in this workspace: push 420 ms / 59.4
+fps, pop 361 ms / 61.0 fps, covered page identity on every sampled frame, tap →
+first painted frame 23 ms.
 
 ## Visual reference
 

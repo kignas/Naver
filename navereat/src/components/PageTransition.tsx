@@ -8,9 +8,12 @@ import { routeKeyFor } from '../lib/routeLoaders';
 import { syncRouteStyleSheets } from '../lib/routeStyles';
 import { useNavDirection, useNavStore, type NavDirection } from '../store/navStore';
 
-const PUSH_DURATION = 300;
-const PUSH_START_BUDGET = 16;
-const EASE = 'cubic-bezier(0.22, 0.61, 0.36, 1)';
+const PUSH_DURATION = 420;
+const POP_DURATION = 360;
+// Safety net only: the slide normally starts as soon as the incoming page has
+// painted its real content (see settleIncoming).
+const PUSH_READY_TIMEOUT = 600;
+const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
 const SWIPE_THRESHOLD = 0.35;
 // Cap the freeze snapshot: the visible top of the page is what can shift during
 // a slide, and every captured node costs 50 pinned properties on apply.
@@ -313,7 +316,7 @@ export function PageTransition({ location, swipeBack = false, render }: PageTran
           setStage({ direction: 'pop', animating: false });
           window.dispatchEvent(new CustomEvent('navereat:transition-end', { detail: { direction: 'pop' } }));
           timerRef.current = null;
-        }, PUSH_DURATION);
+        }, POP_DURATION);
         return;
       }
 
@@ -392,6 +395,9 @@ export function PageTransition({ location, swipeBack = false, render }: PageTran
         check();
       });
 
+    // The slide may only start once the incoming page is mounted, laid out and
+    // its images are decoded: the layer is still hidden at this point, so the
+    // first frame of the slide already shows the finished page.
     const settleIncoming = async () => {
       const node = await waitForIncoming();
       if (!node) return;
@@ -401,13 +407,12 @@ export function PageTransition({ location, swipeBack = false, render }: PageTran
       const images = Array.from(node.querySelectorAll('img'));
       await Promise.race([
         Promise.all(images.map((image) => image.decode().catch(() => undefined))),
-        new Promise((resolve) => window.setTimeout(resolve, 120)),
+        new Promise((resolve) => window.setTimeout(resolve, 60)),
       ]);
-      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
       await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
     };
 
-    startTimerRef.current = window.setTimeout(start, PUSH_START_BUDGET);
+    startTimerRef.current = window.setTimeout(start, PUSH_READY_TIMEOUT);
     void settleIncoming().then(start);
   }, [direction, location]);
 
@@ -453,20 +458,14 @@ export function PageTransition({ location, swipeBack = false, render }: PageTran
     const width = window.innerWidth || 390;
     const dx = Math.max(0, Math.min(width, event.clientX - gesture.startX));
     gesture.dx = dx;
-    const progress = Math.min(1, dx / width);
     top.style.transition = 'none';
     top.style.transform = `translate3d(${dx}px, 0, 0)`;
 
-    if (swipeUnderTabRef.current) {
-      const stack = tabStackRef.current;
-      if (stack) {
-        stack.style.transition = 'none';
-        stack.style.transform = `translate3d(${-22 + 22 * progress}%, 0, 0)`;
-      }
-    } else if (backRef.current) {
+    // The page underneath is only revealed; it never moves.
+    if (!swipeUnderTabRef.current && backRef.current) {
       backRef.current.style.visibility = 'visible';
       backRef.current.style.transition = 'none';
-      backRef.current.style.transform = `translate3d(${-22 + 22 * progress}%, 0, 0)`;
+      backRef.current.style.transform = 'translate3d(0, 0, 0)';
     }
   };
 
@@ -480,36 +479,20 @@ export function PageTransition({ location, swipeBack = false, render }: PageTran
       return;
     }
 
-    const transition = `transform ${PUSH_DURATION}ms ${EASE}`;
-    top.style.transition = transition;
-    if (swipeUnderTabRef.current) {
-      if (tabStackRef.current) tabStackRef.current.style.transition = transition;
-    } else if (backRef.current) {
-      backRef.current.style.transition = transition;
-    }
-
     if (complete) {
       setStage((value) => ({ ...value, animating: true }));
+      top.style.transition = `transform ${POP_DURATION}ms ${EASE}`;
       top.style.transform = 'translate3d(100%, 0, 0)';
-      if (swipeUnderTabRef.current) {
-        if (tabStackRef.current) tabStackRef.current.style.transform = 'translate3d(0, 0, 0)';
-      } else if (backRef.current) {
-        backRef.current.style.transform = 'translate3d(0, 0, 0)';
-      }
       skipNextPopRef.current = true;
       swipeTimerRef.current = window.setTimeout(() => {
         setSwiping(false);
         nav.back();
-      }, PUSH_DURATION);
+      }, POP_DURATION);
       return;
     }
 
+    top.style.transition = `transform ${PUSH_DURATION}ms ${EASE}`;
     top.style.transform = 'translate3d(0, 0, 0)';
-    if (swipeUnderTabRef.current) {
-      if (tabStackRef.current) tabStackRef.current.style.transform = 'translate3d(-22%, 0, 0)';
-    } else if (backRef.current) {
-      backRef.current.style.transform = 'translate3d(-22%, 0, 0)';
-    }
     swipeTimerRef.current = window.setTimeout(() => {
       setSwiping(false);
       setSwipeBackLocation(null);
@@ -585,7 +568,10 @@ export function PageTransition({ location, swipeBack = false, render }: PageTran
             aria-hidden={!isTop}
           >
             <RouteShell pathname={layer.location.pathname} />
-            {layer.phase !== 'enter' && <CachedRoute content={renderCached(layer.location)} />}
+            {/* Mounted for every phase: the incoming page is laid out, its
+                images decoded and painted while the layer is still hidden, so
+                the slide never swaps a skeleton in behind the moving page. */}
+            <CachedRoute content={renderCached(layer.location)} />
           </div>
         );
       })}

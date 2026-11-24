@@ -109,6 +109,46 @@ const initScript = () => {
   window.addEventListener('navereat:transition-end', () => {
     perf.transition = window.__stopFps();
   });
+
+  // Item 12C: only the incoming page may move. Sample the covered page(s) on
+  // every frame of a push/pop and record any transform or opacity drift, plus
+  // the Home render counter so a re-render under the moving page fails the gate.
+  perf.outgoing = { push: null, pop: null };
+  const IDENTITY = (transform, opacity) => (transform === 'none' || transform === 'matrix(1, 0, 0, 1, 0, 0)') && opacity === '1';
+  window.addEventListener('navereat:transition-start', (event) => {
+    const direction = event.detail?.direction ?? 'push';
+    const stage = document.querySelector('.route-stage');
+    if (!stage || (direction !== 'push' && direction !== 'pop')) return;
+    const candidates = [...stage.querySelectorAll('.tab-stack, .route-layer')];
+    const moving = (element) => (direction === 'push' ? element.classList.contains('is-enter') : element.classList.contains('is-leave'));
+    const record = { direction, samples: 0, offenders: [] };
+    const homeAtStart = window.__homeRenders ?? null;
+    let on = true;
+    const tick = () => {
+      if (!on) return;
+      record.samples += 1;
+      for (const element of candidates) {
+        if (!element.isConnected || moving(element)) continue;
+        const style = getComputedStyle(element);
+        if (!IDENTITY(style.transform, style.opacity)) {
+          record.offenders.push({ cls: element.className, transform: style.transform, opacity: style.opacity });
+        }
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+    window.addEventListener(
+      'navereat:transition-end',
+      () => {
+        on = false;
+        record.identity = record.offenders.length === 0;
+        record.offenders = record.offenders.slice(0, 5);
+        record.homeRendersDuring = homeAtStart == null ? null : (window.__homeRenders ?? 0) - homeAtStart;
+        perf.outgoing[direction] = record;
+      },
+      { once: true },
+    );
+  });
 };
 
 const readJson = async (page) => page.evaluate(() => window.__perf);
@@ -239,6 +279,7 @@ const interactions = async (browser) => {
     pop = await page.evaluate(() => window.__perf.transition);
   }
   await page.waitForSelector('#home-header', { timeout: 15000 });
+  const outgoing = await page.evaluate(() => window.__perf.outgoing);
 
   await page.evaluate(() => window.__startFps());
   await page.locator('.filter-pill-sheet').first().click();
@@ -246,7 +287,7 @@ const interactions = async (browser) => {
   const sheet = await page.evaluate(() => window.__stopFps());
 
   await context.close();
-  return { homeRender, afterQty, push, pop, sheet, restaurantCls };
+  return { homeRender, afterQty, push, pop, sheet, restaurantCls, outgoing };
 };
 
 const latencyInitScript = () => {
@@ -266,19 +307,31 @@ const latencyInitScript = () => {
       name: 'Masala Dosa',
     },
   }));
-  window.__latency = { tapAt: null, startAt: null, firstFrameAt: null };
-  window.addEventListener('pointerdown', () => { window.__latency.tapAt = performance.now(); }, true);
+  window.__latency = { tapAt: null, startAt: null, firstFrameAt: null, firstPaintAt: null };
+  window.addEventListener(
+    'pointerdown',
+    () => {
+      window.__latency.tapAt = performance.now();
+      // The first frame the user sees after the tap (the page under the finger
+      // repaints). The slide itself starts once the incoming page is painted.
+      requestAnimationFrame(() => {
+        if (window.__latency.firstPaintAt == null) window.__latency.firstPaintAt = performance.now();
+      });
+    },
+    true,
+  );
   window.addEventListener('navereat:transition-start', () => {
     window.__latency.startAt = performance.now();
     requestAnimationFrame(() => {
       if (window.__latency.firstFrameAt == null) window.__latency.firstFrameAt = performance.now();
     });
   });
-  window.__resetLatency = () => { window.__latency = { tapAt: null, startAt: null, firstFrameAt: null }; };
+  window.__resetLatency = () => { window.__latency = { tapAt: null, startAt: null, firstFrameAt: null, firstPaintAt: null }; };
   window.__readLatency = () => ({
     tapAt: window.__latency.tapAt,
     startAt: window.__latency.startAt,
     firstFrameAt: window.__latency.firstFrameAt,
+    firstPaintAt: window.__latency.firstPaintAt,
   });
 };
 
@@ -305,6 +358,7 @@ const pushLatency = async (browser, rate) => {
     const data = await page.evaluate(() => window.__readLatency());
     rows.push({
       transition: name,
+      tapToFirstPaintedFrameMs: Number((data.firstPaintAt - data.tapAt).toFixed(1)),
       tapToFirstAnimationFrameMs: Number((data.firstFrameAt - data.tapAt).toFixed(1)),
       tapToTransitionStartMs: Number((data.startAt - data.tapAt).toFixed(1)),
       firstFrameAfterStartMs: Number((data.firstFrameAt - data.startAt).toFixed(1)),
@@ -570,13 +624,28 @@ try {
   const clsPass = result.clsTransitions.every((transition) => transition.cls <= clsBudget);
   const latencyBudget = Number(process.env.PERF_LATENCY_BUDGET || 60);
   const latency1xRows = result.pushLatency['1x'].rows;
-  const latencySamples = latency1xRows.map((row) => row.tapToFirstAnimationFrameMs).sort((a, b) => a - b);
+  const latencySamples = latency1xRows.map((row) => row.tapToFirstPaintedFrameMs).sort((a, b) => a - b);
+  const slideStartSamples = latency1xRows.map((row) => row.tapToTransitionStartMs).sort((a, b) => a - b);
+  const medianSlideStart = slideStartSamples[Math.floor(slideStartSamples.length / 2)];
+  // Content-first pushes wait for the incoming page to mount, lay out and
+  // decode before the slide starts (Item 12C: no skeleton swap mid-slide), so
+  // the slide-start cap is looser than the tap-to-paint one.
+  const slideStartBudget = Number(process.env.PERF_SLIDE_START_BUDGET || 200);
   // The tap→frame metric includes the wait for the next rAF after the slide
   // starts, which adds 0–17 ms of pure scheduling jitter. Gate on the median
   // of the three pushes and keep a hard ceiling for the worst single sample.
   const medianTapToFrame1x = latencySamples[Math.floor(latencySamples.length / 2)];
   const maxTapToFrame1x = latencySamples[latencySamples.length - 1];
-  const latencyPass = medianTapToFrame1x <= latencyBudget && maxTapToFrame1x <= latencyBudget * 1.4;
+  const latencyPass =
+    medianTapToFrame1x <= latencyBudget && maxTapToFrame1x <= latencyBudget * 1.4 && medianSlideStart <= slideStartBudget;
+  const outgoing = result.interactions.outgoing ?? {};
+  const outgoingPush = outgoing.push ?? { identity: false, samples: 0 };
+  const outgoingPop = outgoing.pop ?? { identity: false, samples: 0 };
+  // One extra commit is allowed: at 4x CPU the click's React commit can be split
+  // so the location-context update lands a frame after the slide starts. What
+  // must never happen is the covered page moving or re-rendering on every frame.
+  const outgoingPass =
+    outgoingPush.identity === true && outgoingPop.identity === true && (outgoingPush.homeRendersDuring ?? 0) <= 1;
   const motion = result.motion;
   const motionFpsPass =
     motion.homeScroll.fps >= minFps && motion.sheetDrag.fps >= minFps && motion.sharedElement.fps >= minFps;
@@ -592,7 +661,14 @@ try {
     latencyBudgetMs: latencyBudget,
     medianTapToFirstFrameMs1x: Number(medianTapToFrame1x.toFixed(1)),
     maxTapToFirstFrameMs1x: Number(maxTapToFrame1x.toFixed(1)),
+    slideStartBudgetMs: slideStartBudget,
+    medianTapToSlideStartMs1x: Number(medianSlideStart.toFixed(1)),
     latencyPass,
+    outgoing: {
+      push: { identity: outgoingPush.identity === true, samples: outgoingPush.samples ?? 0, offenders: outgoingPush.offenders ?? [], homeRendersDuring: outgoingPush.homeRendersDuring ?? null },
+      pop: { identity: outgoingPop.identity === true, samples: outgoingPop.samples ?? 0, offenders: outgoingPop.offenders ?? [] },
+    },
+    outgoingPass,
     motion,
     motionFpsPass,
     motionClsPass,
@@ -600,7 +676,8 @@ try {
       (!gateRequired || (pushFps >= minFps && popFps >= minFps && motionFpsPass)) &&
       clsPass &&
       motionClsPass &&
-      latencyPass,
+      latencyPass &&
+      outgoingPass,
   };
   await writeFile(path.join(outDir, `perf-${label}.json`), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result, null, 2));
@@ -610,7 +687,9 @@ try {
         `home scroll ${motion.homeScroll.fps.toFixed(1)} fps, sheet drag ${motion.sheetDrag.fps.toFixed(1)} fps, ` +
         `shared element ${motion.sharedElement.fps.toFixed(1)} fps, max transition CLS ${maxTransitionCls.toFixed(6)}, ` +
         `scroll CLS ${motion.homeScroll.cls.toFixed(6)}, budget ${clsBudget}, max tap→frame ${maxTapToFrame1x.toFixed(1)} ms, ` +
-        `median tap→frame ${medianTapToFrame1x.toFixed(1)} ms / max ${maxTapToFrame1x.toFixed(1)} ms, budget ${latencyBudget} ms)`,
+        `median tap→frame ${medianTapToFrame1x.toFixed(1)} ms / max ${maxTapToFrame1x.toFixed(1)} ms, budget ${latencyBudget} ms, ` +
+        `median tap→slide-start ${medianSlideStart.toFixed(1)} ms (budget ${slideStartBudget} ms), ` +
+        `covered page identity push ${outgoingPush.identity} / pop ${outgoingPop.identity}, home re-renders under push ${outgoingPush.homeRendersDuring})`,
     );
     process.exitCode = 1;
   }

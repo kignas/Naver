@@ -585,6 +585,8 @@ ol {
 }
 
 /* Cached tab pages: one layer per visited tab, switched instantly. */
+/* Cached tab pages never move: a detail route slides over them instead of
+   pushing them aside, so the page underneath stays perfectly still. */
 .tab-stack {
   position: absolute;
   inset: 0;
@@ -592,11 +594,6 @@ ol {
   overflow: hidden;
   transform: translate3d(0, 0, 0);
   transition: transform 300ms var(--ease-toing);
-  will-change: transform;
-}
-
-.tab-stack.is-shifted {
-  transform: translate3d(-22%, 0, 0);
 }
 
 .tab-stack.has-detail {
@@ -608,18 +605,11 @@ ol {
   transform: none;
 }
 
+/* Only the incoming page moves. The page it covers keeps its identity
+   transform and full opacity for the whole push, and on pop only the page being
+   dismissed slides away while the one underneath stays put. */
 @keyframes routePushIn {
   from { transform: translate3d(100%, 0, 0); }
-  to { transform: translate3d(0, 0, 0); }
-}
-
-@keyframes routePushOut {
-  from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(-22%, 0, 0); }
-}
-
-@keyframes routePopIn {
-  from { transform: translate3d(-22%, 0, 0); }
   to { transform: translate3d(0, 0, 0); }
 }
 
@@ -629,19 +619,20 @@ ol {
 }
 
 .route-stage.direction-push .route-layer.is-enter {
-  animation: routePushIn var(--dur-push) var(--ease-toing) both;
-}
-
-.route-stage.direction-push .route-layer.is-leave {
-  animation: routePushOut var(--dur-push) var(--ease-toing) both;
-}
-
-.route-stage.direction-pop .route-layer.is-enter {
-  animation: routePopIn var(--dur-push) var(--ease-toing) both;
+  animation: routePushIn var(--dur-push) var(--ease-route) both;
 }
 
 .route-stage.direction-pop .route-layer.is-leave {
-  animation: routePopOut var(--dur-push) var(--ease-toing) both;
+  animation: routePopOut var(--dur-pop) var(--ease-route) both;
+}
+
+/* Soft leading-edge shadow on the page that slides. It is painted outside the
+   layer, so it falls on the page underneath while the layer is off-centre and
+   is clipped by the stage once the layer lands. Scoped to the animation so a
+   page at rest never carries the shadow's paint work. */
+.route-stage.is-animating .route-layer.is-enter,
+.route-stage.is-animating .route-layer.is-leave {
+  box-shadow: -18px 0 32px -10px rgba(15, 23, 42, 0.34);
 }
 
 /* Tabs never animate. Only the bottom-nav indicator moves. */
