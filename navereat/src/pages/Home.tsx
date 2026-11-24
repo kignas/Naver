@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react';
+import { useLocation } from 'react-router-dom';
 import heroDish from '../assets/placeholders/hero-dish.svg';
 import { HomeRestaurantCard } from '../components/HomeRestaurantCard';
 import { Icon } from '../components/Icon';
@@ -16,6 +17,8 @@ import {
 import { useCachedReady } from '../hooks/useCachedReady';
 import { useScrollHeaderMotion } from '../lib/scrollHeaderMotion';
 import { useSearchPlaceholder } from '../hooks/useSearchPlaceholder';
+import { useOverlayOpen } from '../hooks/useOverlayOpen';
+import { useNavStore } from '../store/navStore';
 import { useAppNav } from '../lib/navigation';
 import { createRouteStyleSheet } from '../lib/routeStyles';
 import { useCustomize } from '../lib/customizeContext';
@@ -88,6 +91,32 @@ function RestaurantSkeleton() {
   );
 }
 
+/**
+ * The rotating search placeholder lives in its own component: its timer used to
+ * re-render the whole Home page every ~2 s, including while Home was covered by
+ * a pushed route or another tab. Now a tick re-renders this span only, and the
+ * rotation is paused whenever Home is not the visible top route or a sheet or
+ * the search overlay is open.
+ */
+function SearchPlaceholderText({ scrollerRef }: { scrollerRef: RefObject<HTMLDivElement | null> }) {
+  const { pathname } = useLocation();
+  const overlayOpen = useOverlayOpen();
+  const detailOpen = useNavStore((state) => state.detailDepth > 0);
+  const { dish, duration } = useSearchPlaceholder(scrollerRef, pathname !== '/' || overlayOpen || detailOpen);
+  return (
+    <span className="search-text" id="search-placeholder" aria-label={`Search "${dish}"`}>
+      <span className="search-static">Search&nbsp;</span>
+      <span
+        className="search-dish is-sliding"
+        key={dish}
+        style={{ '--search-dish-duration': `${duration}ms` } as CSSProperties}
+      >
+        &quot;{dish}&quot;
+      </span>
+    </span>
+  );
+}
+
 export function Home() {
   const perfWindow = window as Window & { __homeRenders?: number };
   perfWindow.__homeRenders = (perfWindow.__homeRenders ?? 0) + 1;
@@ -117,7 +146,6 @@ export function Home() {
   const headerRef = useRef<HTMLElement>(null);
   const screenRef = useRef<HTMLDivElement>(null);
   const openSearch = useSearchStore((state) => state.openSearch);
-  const { dish: searchDish, duration: searchDishDuration } = useSearchPlaceholder(scrollRef);
 
   const initial = (user?.name ?? demoUser.name).charAt(0).toUpperCase();
 
@@ -253,16 +281,7 @@ export function Home() {
               aria-haspopup="dialog"
             >
               <Icon name="solid:magnifying-glass" size={18} className="search-icon" />
-              <span className="search-text" id="search-placeholder" aria-label={`Search "${searchDish}"`}>
-                <span className="search-static">Search&nbsp;</span>
-                <span
-                  className="search-dish is-sliding"
-                  key={searchDish}
-                  style={{ '--search-dish-duration': `${searchDishDuration}ms` } as CSSProperties}
-                >
-                  &quot;{searchDish}&quot;
-                </span>
-              </span>
+              <SearchPlaceholderText scrollerRef={scrollRef} />
               <span
                 className="search-mic"
                 role="button"

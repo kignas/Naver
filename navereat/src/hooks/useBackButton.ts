@@ -14,8 +14,11 @@ export function useBackButton(): void {
   useEffect(() => {
     const setDirection = useNavStore.getState().setDirection;
 
+    // Capture phase: the router's own popstate listener must not commit the
+    // new location before the transition knows it is a pop, or the reverse
+    // slide is skipped and the page swaps instantly.
     const onPopState = () => setDirection('pop');
-    window.addEventListener('popstate', onPopState);
+    window.addEventListener('popstate', onPopState, true);
 
     let remove: (() => void) | undefined;
     if (Capacitor.isNativePlatform()) {
@@ -34,7 +37,7 @@ export function useBackButton(): void {
     }
 
     return () => {
-      window.removeEventListener('popstate', onPopState);
+      window.removeEventListener('popstate', onPopState, true);
       remove?.();
     };
   }, []);

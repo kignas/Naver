@@ -540,6 +540,32 @@ ol {
   isolation: isolate;
 }
 
+/* A detail route is opaque and paints over the floating nav and the cart bar
+   area for the whole slide, so the nav is simply covered and never has to move.
+   Sheets, the search overlay and toasts are portaled to <body>, so they are
+   lifted above the page while a detail route is on screen (they only need to
+   clear the page, not the nav, which is hidden by then). */
+.route-stage.has-detail {
+  z-index: 2147483006;
+}
+
+body.has-detail .filter-sheet.nb-sheet,
+body.has-detail .ct-sheet-root.nb-sheet {
+  z-index: 2147483007 !important;
+}
+
+body.has-detail .ewcs-backdrop {
+  z-index: 2147483007 !important;
+}
+
+body.has-detail .ewcs-sheet {
+  z-index: 2147483008 !important;
+}
+
+body.has-detail .ew-search-root {
+  z-index: 2147483009 !important;
+}
+
 .route-layer {
   position: absolute;
   inset: 0;

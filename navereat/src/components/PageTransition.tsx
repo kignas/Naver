@@ -57,6 +57,8 @@ interface PageTransitionProps {
 export function PageTransition({ location, swipeBack = false, render }: PageTransitionProps) {
   const nav = useAppNav();
   const direction = useNavDirection();
+  const directionLatestRef = useRef(direction);
+  directionLatestRef.current = direction;
   const startsOnTab = isTabPath(location.pathname);
   const [layers, setLayers] = useState<Layer[]>(
     startsOnTab ? [] : [{ key: location.key, location, phase: 'idle' }],
@@ -227,6 +229,12 @@ export function PageTransition({ location, swipeBack = false, render }: PageTran
     const current = layersRef.current;
     const top = current[current.length - 1];
     const targetIsTab = isTabPath(location.pathname);
+    // A hash-only history navigation (Android hardware back, the browser's own
+    // back) can arrive with the previous 'push' flag still set: the router
+    // commits the new hash before the popstate handler runs. Leaving a detail
+    // page for a tab route is always a pop, so the reverse slide still runs.
+    const direction: NavDirection =
+      top && !isTabPath(top.location.pathname) && targetIsTab ? 'pop' : directionLatestRef.current;
 
     if (skipNextPopRef.current) {
       skipNextPopRef.current = false;
@@ -275,7 +283,11 @@ export function PageTransition({ location, swipeBack = false, render }: PageTran
       setActiveTab(location.pathname);
       activeTabRef.current = location.pathname;
 
-      if (direction === 'tab' || (!top && !stageRef.current.animating)) {
+      // A tab route reached while a detail page is on top is a pop: the page
+      // that is leaving must slide away, whether the direction flag arrived
+      // from the router's own history handling or from nav.back(). Tab-to-tab
+      // switches (no detail layer) still swap instantly.
+      if ((direction === 'tab' && !top) || (!top && !stageRef.current.animating)) {
         clearTimer();
         runIdRef.current += 1;
         setLayers([]);
@@ -517,9 +529,23 @@ export function PageTransition({ location, swipeBack = false, render }: PageTran
     }, PUSH_DURATION);
   };
 
+  const setDetailDepth = useNavStore((state) => state.setDetailDepth);
+
+  // A tab page needs a cheap, non-rendering way to know it is covered: the
+  // store carries the number of detail layers on screen, and the body class
+  // lets CSS lift sheets above the detail page.
+  useEffect(() => {
+    const depth = layers.length;
+    setDetailDepth(depth);
+    document.body.classList.toggle('has-detail', depth > 0);
+    return () => {
+      document.body.classList.remove('has-detail');
+    };
+  }, [layers.length, setDetailDepth]);
+
   return (
     <div
-      className={`route-stage direction-${stage.direction}${stage.animating ? ' is-animating' : ''}${preparing ? ' is-preparing' : ''}${swiping ? ' is-swiping' : ''}`}
+      className={`route-stage direction-${stage.direction}${stage.animating ? ' is-animating' : ''}${preparing ? ' is-preparing' : ''}${swiping ? ' is-swiping' : ''}${layers.length ? ' has-detail' : ''}`}
       onPointerMove={moveSwipe}
       onPointerUp={() => {
         if (swipeRef.current) {

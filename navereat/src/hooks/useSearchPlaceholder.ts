@@ -22,7 +22,10 @@ const FIRST_DELAY_MS = 600;
 const INITIAL_INTERVAL_MS = 1800;
 const INITIAL_TRANSITION_MS = 600;
 
-export function useSearchPlaceholder(scrollerRef: RefObject<HTMLElement | null>): {
+export function useSearchPlaceholder(
+  scrollerRef: RefObject<HTMLElement | null>,
+  paused = false,
+): {
   dish: string;
   duration: number;
 } {
@@ -30,6 +33,9 @@ export function useSearchPlaceholder(scrollerRef: RefObject<HTMLElement | null>)
   const [duration, setDuration] = useState(INITIAL_TRANSITION_MS);
 
   useEffect(() => {
+    // A covered page must not schedule work: the rotation stops and the effect
+    // tears its listeners down until the page is the active route again.
+    if (paused) return;
     let current = 0;
     let transitionMs = INITIAL_TRANSITION_MS;
     let intervalMs = INITIAL_INTERVAL_MS;
@@ -101,7 +107,7 @@ export function useSearchPlaceholder(scrollerRef: RefObject<HTMLElement | null>)
       scrollTarget.removeEventListener('scroll', handleScroll);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [scrollerRef]);
+  }, [paused, scrollerRef]);
 
   return { dish: SEARCH_DISHES[index], duration };
 }

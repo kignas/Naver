@@ -33,10 +33,15 @@
   -webkit-user-select: none;
 }
 
+/* Hidden without motion: the nav is only taken away once a pushed page has
+   finished covering it, and it is put back before a pop slide starts, so it is
+   never seen moving. No transform, so it cannot drift across the screen. */
 .bottom-nav.nav-float.is-hidden {
   opacity: 0;
-  transform: translate3d(0, calc(100% + 24px), 0);
+  visibility: hidden;
   pointer-events: none;
+  transform: none;
+  transition: none;
 }
 
 .nav-indicator {

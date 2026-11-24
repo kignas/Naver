@@ -39,7 +39,37 @@ export function BottomNav() {
   const searchOpen = useSearchStore((state) => state.isOpen);
   const activeIndex = activeIndexFor(pathname);
   // A full-screen search hides the bar; the two tabs are the only tab routes.
-  const visible = isTabPath(pathname) && !searchOpen;
+  const onTabRoute = isTabPath(pathname) && !searchOpen;
+  // The bar never moves. A detail route is opaque and paints over it, so it is
+  // taken away only after that page has finished covering it, and it is put
+  // back the moment the pop slide starts so the departing page reveals it.
+  const detailRoute = !isTabPath(pathname);
+  const [hidden, setHidden] = useState(false);
+
+  useEffect(() => {
+    if (searchOpen) {
+      setHidden(true);
+      return;
+    }
+    if (!detailRoute) {
+      setHidden(false);
+      return;
+    }
+    const onEnd = () => setHidden(true);
+    window.addEventListener('navereat:transition-end', onEnd, { once: true });
+    // A deep link straight to a detail route never gets an end event.
+    const fallback = window.setTimeout(onEnd, 1400);
+    return () => {
+      window.removeEventListener('navereat:transition-end', onEnd);
+      window.clearTimeout(fallback);
+    };
+  }, [detailRoute, searchOpen]);
+
+  // Show synchronously on the render that leaves a detail route: that render
+  // happens before the pop slide's first frame, so the bar is simply revealed
+  // by the departing page instead of appearing after the slide has started.
+  const hiddenNow = detailRoute ? hidden : false;
+  const visible = onTabRoute;
 
   const navRef = useRef<HTMLElement | null>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -165,7 +195,7 @@ export function BottomNav() {
   return (
     <nav
       ref={navRef}
-      className={`bottom-nav nav-float${visible ? ' is-visible' : ' is-hidden'}${dragging ? ' is-dragging' : ''}`}
+      className={`bottom-nav nav-float${hiddenNow ? ' is-hidden' : ' is-visible'}${dragging ? ' is-dragging' : ''}`}
       style={navStyle}
       aria-label="Primary"
       aria-hidden={!visible}
