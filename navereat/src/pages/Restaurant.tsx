@@ -66,11 +66,25 @@ function categoryId(name: string, index: number): string {
 export function Restaurant() {
   const { id } = useParams<{ id: string }>();
   const routeId = Number(id);
-  const restaurant = findRestaurant(id);
+  const resolvedRestaurant = findRestaurant(id);
+  // A route that is leaving is still on screen while the next one slides in, but
+  // useParams() already reports the new route, so findRestaurant() returns
+  // undefined and the page would swap itself for "Restaurant not found" mid
+  // slide (a full-page jump at the bottom of the screen). Keep the last real
+  // restaurant for the lifetime of the layer.
+  const lastRestaurantRef = useRef(resolvedRestaurant);
+  if (resolvedRestaurant) lastRestaurantRef.current = resolvedRestaurant;
+  const restaurant = resolvedRestaurant ?? lastRestaurantRef.current;
+  // Same reason as above: while the page is leaving, useParams() reports the new
+  // route (no id), so every store read keyed by routeId would miss and the page
+  // would re-render in its empty state mid slide. Keep the last real id.
+  const lastRouteIdRef = useRef(routeId);
+  if (Number.isFinite(routeId)) lastRouteIdRef.current = routeId;
+  const stableRouteId = Number.isFinite(routeId) ? routeId : lastRouteIdRef.current;
   const nav = useAppNav();
-  const ready = useCachedReady(`restaurant:${routeId}`, 200, 340);
-  const cachedRestaurant = useUiStore.getState().restaurants[routeId];
-  const cachedMenu = useUiStore((s) => s.menus[routeId]);
+  const ready = useCachedReady(`restaurant:${stableRouteId}`, 200, 340);
+  const cachedRestaurant = useUiStore.getState().restaurants[stableRouteId];
+  const cachedMenu = useUiStore((s) => s.menus[stableRouteId]);
   const patchRestaurant = useUiStore((s) => s.patchRestaurant);
   const cart = useAppStore((s) => s.cart);
   const addItem = useAppStore((s) => s.addItem);
@@ -135,7 +149,14 @@ export function Restaurant() {
     if (!preparing && menuSearchOpen) searchRef.current?.focus();
   }, [menuSearchOpen, preparing]);
 
-  const menu = useMemo(() => cachedMenu ?? restaurant?.menu ?? [], [cachedMenu, restaurant]);
+  // A page that is no longer the current route keeps rendering, and a store
+  // reset can empty its menu for a moment. Swapping to the empty state then
+  // collapses the menu list and its footer while the page is still on screen,
+  // so keep the last non-empty menu for the life of the page.
+  const liveMenu = cachedMenu ?? restaurant?.menu ?? [];
+  const lastMenuRef = useRef(liveMenu);
+  if (liveMenu.length) lastMenuRef.current = liveMenu;
+  const menu = liveMenu.length ? liveMenu : lastMenuRef.current;
   const groups = useMemo<MenuGroup[]>(() => {
     if (!restaurant) return [];
     const grouped = new Map<string, MenuItem[]>();
@@ -166,7 +187,11 @@ export function Restaurant() {
       .filter((group) => group.items.length > 0);
   }, [filters, groups, query, restaurant]);
 
-  const empty = ready && visibleGroups.length === 0;
+  // Never swap to the empty state while a transition is in flight: the page is
+  // still on screen and a momentary miss (a store read keyed by the incoming
+  // route) would collapse the menu, and the menu footer with it.
+  const empty = ready && !preparing && visibleGroups.length === 0;
+
 
   if (!restaurant) {
     return (

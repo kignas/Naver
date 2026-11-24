@@ -183,9 +183,14 @@ export function Track() {
             <circle cx="40" cy="184" r="4" fill="#23956D" />
             <circle cx="340" cy="50" r="11" fill="#23956D" />
             <path d="m334 50 4 4 8-9" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-            <circle r="7" fill="#fff" stroke="#23956D" strokeWidth="3" className="track-map-rider">
-              <animateMotion dur="10s" repeatCount="indefinite" path="M40 184C92 176 86 126 142 114S238 132 272 82s42-28 68-32" />
-            </circle>
+            {/* The rider moves on a CSS transform, not on an SVG geometry
+                attribute: a <g> translated along the route is a compositor
+                transform, while animateMotion/attribute changes are layout. */}
+            <g transform="translate(40 184)">
+              <g className="track-map-rider-move">
+                <circle r="7" fill="#fff" stroke="#23956D" strokeWidth="3" className="track-map-rider" />
+              </g>
+            </g>
             <text x="40" y="166" textAnchor="middle" fill="#5C6B61" fontSize="10" fontWeight="700">Restaurant</text>
             <text x="340" y="75" textAnchor="middle" fill="#5C6B61" fontSize="10" fontWeight="700">You</text>
           </svg>

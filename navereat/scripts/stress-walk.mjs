@@ -106,6 +106,49 @@ const initScript = (scale, debugPanel = false) => {
     return parts.join('>');
   };
   const probe = (window.__stress = { entries: [], actionAt: 0 });
+  const opaque = (color) => {
+    const match = /rgba?\(([^)]+)\)/.exec(color || '');
+    if (!match) return false;
+    const parts = match[1].split(',').map((value) => Number(value.trim()));
+    return parts.length < 4 || parts[3] >= 1;
+  };
+  // Assertion for "a shift behind the page you are looking at does not count":
+  //  1. the route stage is not animating (no slide is in progress, so no part of
+  //     an outgoing page is still on screen),
+  //  2. the top route layer is opaque, untransformed and covers the viewport, so
+  //     nothing behind it can be seen,
+  //  3. every source of the shift either belongs to a route layer that is not
+  //     the top one, or is no longer in the document (the outgoing page being
+  //     replaced). React reuses the layer element, so a source can still resolve
+  //     closest('.route-layer') to the top layer while being detached.
+  // A shift that moves anything on the visible page fails (3): that node is
+  // attached and inside the top layer. Detached sources are the outgoing page
+  // being torn down; their collapse is reported by Chrome with the layer's own
+  // elements as sources, and any visible consequence would surface as an extra,
+  // attached source.
+  const topSettled = () => {
+    const stage = document.querySelector('.route-stage');
+    if (stage && stage.classList.contains('is-animating')) return false;
+    const top = document.querySelector('.route-layer.is-top');
+    if (!top) return false;
+    const style = getComputedStyle(top);
+    if (style.visibility !== 'visible' || Number(style.opacity) !== 1) return false;
+    if (style.transform !== 'none' && style.transform !== 'matrix(1, 0, 0, 1, 0, 0)') return false;
+    if (!opaque(style.backgroundColor)) return false;
+    const rect = top.getBoundingClientRect();
+    return rect.left <= 0 && rect.top <= 0 && rect.right >= window.innerWidth && rect.bottom >= window.innerHeight;
+  };
+  const behindTop = (node) => {
+    if (!node || node.nodeType !== 1) return true;
+    // Not in the document any more: the outgoing page is being torn down. React
+    // can reuse the layer element for the incoming page, so closest() still
+    // finds a (now top) layer; membership is the honest test.
+    if (!document.contains(node)) return true;
+    const layer = node.closest('.route-layer');
+    return !!layer && !layer.classList.contains('is-top');
+  };
+  const coveredNow = (sources) =>
+    sources.length > 0 && topSettled() && sources.every((source) => behindTop(source.node));
   new PerformanceObserver((list) => {
     for (const entry of list.getEntries()) {
       probe.entries.push({
@@ -117,8 +160,12 @@ const initScript = (scale, debugPanel = false) => {
         overlay: !!document.querySelector(
           '.ew-os, .ewcs-sheet, .ct-sheet-root, .sheet-panel, #ew-search-root.is-open, .ew-theme-intro',
         ),
+        covered: coveredNow(entry.sources || []),
         sources: (entry.sources || []).slice(0, 4).map((source) => ({
           selector: describe(source.node),
+          layer: source.node && source.node.closest
+            ? (source.node.closest('.route-layer') || { className: 'outside' }).className
+            : 'detached',
           previous: source.previousRect
             ? {
                 x: Math.round(source.previousRect.x),
@@ -230,7 +277,8 @@ const record = async (page, name, action, settle = 1200) => {
     }
     return entries;
   });
-  const nonInput = entries.filter((entry) => !entry.input && !entry.overlay);
+  const coveredDriven = entries.filter((entry) => !entry.input && !entry.overlay && entry.covered);
+  const nonInput = entries.filter((entry) => !entry.input && !entry.overlay && !entry.covered);
   const overlayDriven = entries.filter((entry) => !entry.input && entry.overlay);
   const inputDriven = entries.filter((entry) => entry.input);
   const selectors = [...new Set(nonInput.flatMap((entry) => entry.sources.map((source) => source.selector)))];
@@ -239,6 +287,7 @@ const record = async (page, name, action, settle = 1200) => {
     skipped,
     nonInputTotal: Number(nonInput.reduce((sum, entry) => sum + entry.value, 0).toFixed(5)),
     overlayTotal: Number(overlayDriven.reduce((sum, entry) => sum + entry.value, 0).toFixed(5)),
+    coveredTotal: Number(coveredDriven.reduce((sum, entry) => sum + entry.value, 0).toFixed(5)),
     inputDrivenTotal: Number(inputDriven.reduce((sum, entry) => sum + entry.value, 0).toFixed(5)),
     shifts: entries
       .filter((entry) => entry.value > reportFloor)
@@ -246,6 +295,7 @@ const record = async (page, name, action, settle = 1200) => {
         t: entry.t,
         value: entry.value,
         input: entry.input,
+        covered: !!entry.covered,
         sources: entry.sources,
       })),
     selectors,
@@ -253,11 +303,12 @@ const record = async (page, name, action, settle = 1200) => {
   };
   scenarios.push(scenario);
   const worst = nonInput.reduce((max, entry) => Math.max(max, entry.value), 0);
-  const flag = worst > budget ? 'FAIL' : 'PASS';
+  const flag = skipped || worst > budget ? 'FAIL' : 'PASS';
   console.log(
     `${flag} [${scenario.name}] non-input ${scenario.nonInputTotal.toFixed(4)} (worst ${worst.toFixed(4)}), ` +
       `input ${scenario.inputDrivenTotal.toFixed(4)}` +
       (scenario.overlayTotal > 0 ? `, modal-exit ${scenario.overlayTotal.toFixed(4)}` : '') +
+      (scenario.coveredTotal > 0 ? `, covered ${scenario.coveredTotal.toFixed(4)}` : '') +
       (selectors.length ? ` :: ${selectors.slice(0, 3).join(' | ')}` : '') +
       (skipped ? ` [SKIPPED: ${skipped}]` : ''),
   );
@@ -567,10 +618,14 @@ for (const scenario of scenarios) {
 // failure, not only a shift that reproduces in every pass.
 const overBudget = [];
 for (const scenario of scenarios) {
+  if (scenario.skipped) {
+    overBudget.push(`${scenario.name}: did not run (${scenario.skipped}) — a skipped scenario is a failure`);
+  }
   for (const shift of scenario.shifts) {
-    if (shift.input || shift.value <= budget) continue;
+    if (shift.input || shift.covered || shift.value <= budget) continue;
     const source = shift.sources.map((item) => item.selector).filter(Boolean).slice(0, 2).join(' | ') || 'unknown';
     overBudget.push(`${scenario.name}: entry ${shift.value.toFixed(4)} > ${budget} :: ${source}`);
+    if (process.env.STRESS_TRACE_SHIFT) console.log(`  shift detail: ${JSON.stringify(shift)}`);
   }
 }
 const failures = overBudget;

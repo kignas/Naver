@@ -17,7 +17,9 @@ import { useAppStore } from './store/appStore';
 import { useSearchStore } from './store/searchStore';
 import { useNavStore } from './store/navStore';
 import { statusBarStyle, statusBarTheme } from './lib/statusBarTheme';
+import { createRoot } from 'react-dom/client';
 import { StressDebugPanel } from './dev/StressDebugPanel';
+import { debugWanted } from './lib/debugFlag';
 import { primeFonts } from './lib/fonts';
 import { installPreloadOnIntent, preloadAllRoutes, preloadLikelyRoutes, routeLoaders } from './lib/routeLoaders';
 import { Login } from './pages/Login';
@@ -138,6 +140,28 @@ function AppRoutes() {
   );
 }
 
+
+/**
+ * The field debug panel is a tester overlay, not part of the page tree. It gets
+ * its own React root on document.body so its 500 ms stats updates and rAF loop
+ * can never re-render (or re-time the commits of) the app it is measuring.
+ */
+function DebugPanelRoot(): null {
+  useEffect(() => {
+    if (!debugWanted()) return undefined;
+    const host = document.createElement('div');
+    host.id = 'nbp-debug-root';
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    root.render(<StressDebugPanel />);
+    return () => {
+      root.unmount();
+      host.remove();
+    };
+  }, []);
+  return null;
+}
+
 export default function App() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
@@ -156,7 +180,7 @@ export default function App() {
       <CustomizeProvider>
         <AppRoutes />
         <SearchOverlay />
-        <StressDebugPanel />
+        <DebugPanelRoot />
       </CustomizeProvider>
     </HashRouter>
   );

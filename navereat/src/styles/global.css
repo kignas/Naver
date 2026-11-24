@@ -584,6 +584,15 @@ ol {
   animation: none !important;
 }
 
+/* Once the slide is over the outgoing page is covered by the incoming one, so
+   hide it. Any re-render of a page that is being torn down (a store reset, a
+   late chunk) then cannot move anything a user can see, and Chrome's layout
+   shift accounting ignores hidden boxes. During the slide the stage carries
+   .is-animating and the layer stays visible, which is the design. */
+.route-stage:not(.is-animating) .route-layer.is-leave {
+  visibility: hidden;
+}
+
 /* Cached tab pages: one layer per visited tab, switched instantly. */
 /* Cached tab pages never move: a detail route slides over them instead of
    pushing them aside, so the page underneath stays perfectly still. */

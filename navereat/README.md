@@ -189,6 +189,15 @@ sheet and lifecycle event under stress.
   Tracking; Tracking → back; and background → foreground.
 * A modal that animates its own exit is reported separately (`modal-exit`) and
   does not count, because nothing behind it moves.
+* A shift in a page that has already been left is reported separately
+  (`covered`) and does not count, under a documented assertion: the route stage
+  is not animating, the top layer is opaque, untransformed and covers the
+  viewport, and every source of the shift is either in a non-top layer or no
+  longer in the document. Anything that moves on the visible page is attached
+  and inside the top layer, so it still fails.
+* A scenario that cannot run (a tap that never lands, a selector that times
+  out) is a **failure**, not a skip: `[SKIPPED: …]` fails the gate with the
+  error that caused it.
 * Each journey runs **three** times per font scale (`STRESS_REPEAT`). The gate
   is per entry, not per average: **any single non-input shift above 0.01 in any
   pass fails**, and the failure line names the scenario, the entry value and the
@@ -196,7 +205,15 @@ sheet and lifecycle event under stress.
 * The walk also asserts that the in-app debug panel itself is free: with
   `STRESS_DEBUG_PANEL` on (the default) one extra pass runs the same Home →
   Restaurant → ADD → CLOSE → CART sequence with `nbp-debug = '1'` and is gated
-  like any other scenario.
+  like any other scenario. The panel mounts in its **own React root** on
+  `document.body` (`DebugPanelRoot` in `src/App.tsx`), so its 500 ms stats
+  updates and rAF loop cannot re-render or re-time the app it measures.
+* Motion rule the gate enforces: the trip map animates the rider with CSS
+  `transform` on a `<g>` (never SVG geometry attributes such as `d`, `cx` or
+  `points`, which Chrome counts as layout), and the outgoing route layer is
+  `visibility: hidden` once its slide ends (`.route-stage:not(.is-animating)
+  .route-layer.is-leave`) so a page that is being torn down cannot move
+  anything visible.
 * Closing the customisation sheet uses its own `.ewcs-close` control, and the
   cart-bar tap falls back to adding one plain item when a completed checkout has
   emptied the cart. Without those two steps the rest of the pass — including the

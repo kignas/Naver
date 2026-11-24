@@ -94,9 +94,34 @@
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.18));
 }
 
+/* Rider marker: sampled from the route path (M40 184C92 176 86 126 142 114S238
+   132 272 82s42-28 68-32) into 12 stops and animated as a transform, so the
+   marker never touches SVG geometry (x/y/points/d) and never re-lays out the
+   map. The parent <g> carries the path start as a static attribute. */
+.track-page .track-map-rider-move {
+  animation: track-rider-move 10s linear infinite;
+  will-change: transform;
+}
+
+@keyframes track-rider-move {
+  0% { transform: translate3d(0, 0, 0); }
+  8.3% { transform: translate3d(27px, -10.4px, 0); }
+  16.7% { transform: translate3d(47.5px, -31px, 0); }
+  25% { transform: translate3d(66.9px, -52.8px, 0); }
+  33.3% { transform: translate3d(92px, -67.3px, 0); }
+  41.7% { transform: translate3d(120.6px, -72.7px, 0); }
+  50% { transform: translate3d(149.8px, -72.7px, 0); }
+  58.3% { transform: translate3d(179px, -71.8px, 0); }
+  66.7% { transform: translate3d(207.2px, -78.5px, 0); }
+  75% { transform: translate3d(228.9px, -97.7px, 0); }
+  83.3% { transform: translate3d(246.5px, -120.9px, 0); }
+  91.7% { transform: translate3d(271px, -135.4px, 0); }
+  100% { transform: translate3d(300px, -134px, 0); }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .track-map-rider animateMotion {
-    display: none;
+  .track-page .track-map-rider-move {
+    animation: none;
   }
 }
 
