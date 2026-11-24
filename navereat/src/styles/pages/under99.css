@@ -4,12 +4,13 @@
   background: #fff;
 }
 .u99-page .u99-scroll{
-  padding-bottom: calc(var(--nav-reserve) + 16px);
+  /* Pushed page: no floating nav to clear, only the home indicator/cart bar. */
+  padding-bottom: calc(var(--sab) + 16px);
   overflow-anchor: none;
 }
 
 body.has-cart-bar .u99-page .u99-scroll{
-  padding-bottom: calc(var(--nav-reserve) + 88px);
+  padding-bottom: calc(var(--sab) + 88px);
 }
 .u99-page .u99-hero{
   padding-top: calc(var(--sat) + 12px);

@@ -403,11 +403,15 @@ const clsTransitions = async (browser) => {
   };
 
   const transitions = [];
-  transitions.push(await measure('tab: Home → Under99', () => page.locator('[data-nav-item="/under99"]').click()));
-  transitions.push(await measure('tab: Under99 → Search', () => page.locator('[data-nav-item="/search"]').click()));
-  transitions.push(await measure('tab: Search → Orders', () => page.locator('[data-nav-item="/orders"]').click()));
-  transitions.push(await measure('tab: Orders → Profile', () => page.locator('[data-nav-item="/profile"]').click()));
-  transitions.push(await measure('tab: Profile → Home', () => page.locator('[data-nav-item="/"]').click()));
+  // Two-tab nav: Home <-> History switch instantly; the rest are pushed pages.
+  transitions.push(await measure('tab: Home → History', () => page.locator('[data-nav-item="/orders"]').click()));
+  transitions.push(await measure('tab: History → Home', () => page.locator('[data-nav-item="/"]').click()));
+  transitions.push(await measure('push: Home → Under99 Store', () => page.locator('.btn-store').first().click(), 900));
+  transitions.push(await measure('pop: Under99 Store → Home', () => page.locator('.u99-circle-btn[aria-label="Back"]').first().click(), 700));
+  transitions.push(await measure('push: Home → Profile', () => page.locator('.btn-profile').first().click(), 900));
+  transitions.push(await measure('pop: Profile → Home', () => page.locator('.profile-page .icon-btn.back').first().click(), 700));
+  transitions.push(await measure('overlay: Home → Search', () => page.locator('.search-box').first().click(), 700));
+  transitions.push(await measure('overlay: Search → Home', () => page.keyboard.press('Escape'), 700));
   await page.waitForTimeout(400);
 
   transitions.push(await measure('push: Home → Restaurant', () => page.locator('.u99-restaurant-head').first().click(), 900));

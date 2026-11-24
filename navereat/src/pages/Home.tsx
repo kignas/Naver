@@ -237,7 +237,7 @@ export function Home() {
                 type="button"
                 className="btn-profile tap"
                 aria-label="Profile"
-                onClick={() => nav.tab('/profile')}
+                onClick={() => nav.push('/profile')}
               >
                 <span className="profile-initial">{initial}</span>
               </button>

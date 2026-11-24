@@ -65,7 +65,7 @@ function Row({
   );
 }
 
-const profileStyle = createRouteStyleSheet(`${profileShellCss}\n${profileBundleCss}`, 'navereatProfile', '/profile');
+const profileStyle = createRouteStyleSheet(`${profileShellCss}\n${profileBundleCss}`, 'navereatProfile');
 
 export function Profile() {
   const nav = useAppNav();
@@ -104,7 +104,7 @@ export function Profile() {
       <div className="app">
         <header className="header">
           <div className="top">
-            <button className="icon-btn back" type="button" aria-label="Back" onClick={() => nav.tab('/')}>
+            <button className="icon-btn back" type="button" aria-label="Back" onClick={nav.back}>
               <SpriteIcon name="back" />
             </button>
             <div className="title pf-sr">Profile</div>

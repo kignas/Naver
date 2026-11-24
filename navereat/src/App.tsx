@@ -90,7 +90,8 @@ function AppRoutes() {
       pathname.startsWith('/category/') ||
       pathname.startsWith('/restaurant/'));
   const cartBarMode = pathname.startsWith('/restaurant/') ? 'pink' : 'home';
-  const cartBarAboveNav = cartBarVisible;
+  // Only the two tab routes draw the floating nav.
+  const cartBarAboveNav = cartBarVisible && isTabPath(pathname);
 
   return (
     <div className="app-shell">

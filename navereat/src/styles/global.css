@@ -706,6 +706,15 @@ ol {
   touch-action: pan-y;
 }
 
+/* The edge-swipe catcher spans the full height, so a header back arrow that
+   starts inside its 24px band must still receive taps. */
+.icon-btn.back,
+.cat-back,
+.u99-circle-btn[aria-label="Back"] {
+  position: relative;
+  z-index: 61;
+}
+
 /* ---------- Touch ergonomics & platform polish ---------- */
 button,
 a,

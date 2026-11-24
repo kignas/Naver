@@ -12,7 +12,7 @@ import { useSearchStore } from '../store/searchStore';
 import under99BundleCss from '../styles/original/under99.bundle.css?raw';
 import under99PageCss from '../styles/pages/under99.css?raw';
 
-const under99Styles = createRouteStyleSheet(`${under99BundleCss}\n${under99PageCss}`, 'navereatUnder99', '/under99');
+const under99Styles = createRouteStyleSheet(`${under99BundleCss}\n${under99PageCss}`, 'navereatUnder99');
 
 type Band = '99' | '100' | '150';
 type FoodType = 'all' | 'veg' | 'nonveg';
@@ -240,7 +240,7 @@ export function Under99() {
             <div className="u99-hero-fallback" aria-hidden="true" />
             <img className="u99-hero-art loaded" src={heroDish} alt="" width="320" height="400" />
             <div className="u99-topbar">
-              <button className="u99-circle-btn tap" type="button" onClick={() => nav.tab('/')} aria-label="Back">
+              <button className="u99-circle-btn tap" type="button" onClick={nav.back} aria-label="Back">
                 <U99Icon name="back" size={22} />
               </button>
               <button className="u99-location" type="button" aria-label="Change delivery location">

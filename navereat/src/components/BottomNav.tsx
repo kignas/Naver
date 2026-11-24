@@ -10,26 +10,17 @@ interface NavEntry {
   to: string;
   label: string;
   icon: IconName;
-  indicatorWidth: number;
 }
 
 const ITEMS: NavEntry[] = [
-  { to: '/', label: 'Home', icon: 'solid:house', indicatorWidth: 84 },
-  { to: '/under99', label: '₹99 Store', icon: 'solid:tag', indicatorWidth: 98 },
-  { to: '/search', label: 'Search', icon: 'solid:magnifying-glass', indicatorWidth: 88 },
-  { to: '/orders', label: 'Orders', icon: 'solid:list', indicatorWidth: 88 },
-  { to: '/profile', label: 'Profile', icon: 'solid:user', indicatorWidth: 90 },
+  { to: '/', label: 'Home', icon: 'solid:house' },
+  { to: '/orders', label: 'History', icon: 'solid:receipt' },
 ];
 
-const SEARCH_INDEX = 2;
 const DRAG_THRESHOLD = 6;
 
-function activeIndexFor(pathname: string, searchOpen: boolean): number {
-  if (searchOpen) return SEARCH_INDEX;
-  if (pathname === '/') return 0;
-  if (pathname === '/under99') return 1;
-  if (pathname === '/orders') return 3;
-  if (pathname === '/profile') return 4;
+function activeIndexFor(pathname: string): number {
+  if (pathname === '/orders') return 1;
   return 0;
 }
 
@@ -44,15 +35,14 @@ function hapticTick(): void {
 export function BottomNav() {
   const { pathname } = useLocation();
   const nav = useAppNav();
-  const openSearch = useSearchStore((state) => state.openSearch);
   const closeSearch = useSearchStore((state) => state.closeSearch);
   const searchOpen = useSearchStore((state) => state.isOpen);
-  const activeIndex = activeIndexFor(pathname, searchOpen);
-  const visible = isTabPath(pathname);
+  const activeIndex = activeIndexFor(pathname);
+  // A full-screen search hides the bar; the two tabs are the only tab routes.
+  const visible = isTabPath(pathname) && !searchOpen;
 
   const navRef = useRef<HTMLElement | null>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const indicatorRef = useRef<HTMLSpanElement | null>(null);
   const dragRef = useRef<{ pointerId: number; startX: number; startIndicatorX: number; moved: boolean; captured: boolean } | null>(null);
   const suppressClickRef = useRef(false);
   const [dragging, setDragging] = useState(false);
@@ -61,7 +51,7 @@ export function BottomNav() {
     document.body.classList.toggle('has-bottom-nav', visible);
     return () => document.body.classList.remove('has-bottom-nav');
   }, [visible]);
-  const [metrics, setMetrics] = useState({ x: 0, width: ITEMS[0].indicatorWidth });
+  const [metrics, setMetrics] = useState({ x: 0, width: 0 });
 
   const measure = useCallback(() => {
     const element = navRef.current;
@@ -69,13 +59,12 @@ export function BottomNav() {
     if (!element || !tab) return;
     const navRect = element.getBoundingClientRect();
     const tabRect = tab.getBoundingClientRect();
-    const width = ITEMS[activeIndex].indicatorWidth;
-    setMetrics({ x: tabRect.left - navRect.left + tabRect.width / 2 - width / 2, width });
+    setMetrics({ x: tabRect.left - navRect.left, width: tabRect.width });
   }, [activeIndex]);
 
   useLayoutEffect(() => {
     measure();
-  }, [measure, visible, pathname, searchOpen]);
+  }, [measure, visible, pathname]);
 
   useEffect(() => {
     if (!visible) return;
@@ -87,14 +76,6 @@ export function BottomNav() {
   const select = (index: number) => {
     const item = ITEMS[index];
     if (!item) return;
-    if (item.to === '/search') {
-      if (searchOpen) {
-        closeSearch(true);
-      } else {
-        openSearch(pathname === '/under99' ? 'under99' : 'home');
-      }
-      return;
-    }
     if (searchOpen) closeSearch(true);
     if (pathname !== item.to) {
       hapticTick();
@@ -158,9 +139,12 @@ export function BottomNav() {
         nearest = index;
       }
     });
-    const target = ITEMS[nearest];
-    const targetCenter = centers[nearest] ?? 0;
-    setMetrics({ x: targetCenter - target.indicatorWidth / 2, width: target.indicatorWidth });
+    const target = tabRefs.current[nearest];
+    if (target && navRef.current) {
+      const navRect = navRef.current.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      setMetrics({ x: targetRect.left - navRect.left, width: targetRect.width });
+    }
     if (nearest !== activeIndex) select(nearest);
     window.setTimeout(() => {
       suppressClickRef.current = false;
@@ -170,7 +154,7 @@ export function BottomNav() {
   const cancelDrag = () => {
     dragRef.current = null;
     setDragging(false);
-    setMetrics((current) => ({ ...current }));
+    measure();
   };
 
   const navStyle = {
@@ -190,7 +174,7 @@ export function BottomNav() {
       onPointerUp={endDrag}
       onPointerCancel={cancelDrag}
     >
-      <span className="nav-indicator" ref={indicatorRef} aria-hidden="true" />
+      <span className="nav-indicator" aria-hidden="true" />
       {ITEMS.map((item, index) => {
         const active = index === activeIndex;
         return (
@@ -214,7 +198,7 @@ export function BottomNav() {
             }}
           >
             <span className="nav-icon" aria-hidden="true">
-              <Icon name={item.icon} size={21} />
+              <Icon name={item.icon} size={20} />
             </span>
             <span className="nav-label">{item.label}</span>
           </button>

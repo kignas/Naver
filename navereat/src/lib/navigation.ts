@@ -3,7 +3,8 @@ import { useNavigate, type NavigateFunction } from 'react-router-dom';
 import { useNavStore } from '../store/navStore';
 import { preloadRoute } from './routeLoaders';
 
-export const TAB_PATHS = ['/', '/under99', '/orders', '/profile'] as const;
+// Navigation tabs only. UNDER ₹99, Category and Profile are pushed pages.
+export const TAB_PATHS = ['/', '/orders'] as const;
 
 export const isTabPath = (pathname: string): boolean =>
   (TAB_PATHS as readonly string[]).includes(pathname);

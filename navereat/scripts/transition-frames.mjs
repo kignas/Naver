@@ -225,11 +225,12 @@ try {
     return result;
   };
 
-  await measure('tab-home-under99', () => page.locator('[data-nav-item="/under99"]').click());
-  await measure('tab-under99-search', () => page.locator('[data-nav-item="/search"]').click());
-  await measure('tab-search-orders', () => page.locator('[data-nav-item="/orders"]').click());
-  await measure('tab-orders-profile', () => page.locator('[data-nav-item="/profile"]').click());
-  await measure('tab-profile-home', () => page.locator('[data-nav-item="/"]').click());
+  await measure('tab-home-history', () => page.locator('[data-nav-item="/orders"]').click());
+  await measure('tab-history-home', () => page.locator('[data-nav-item="/"]').click());
+  await measure('push-home-under99', () => page.locator('.btn-store').first().click());
+  await measure('pop-under99-home', () => page.locator('.u99-circle-btn[aria-label="Back"]').first().click());
+  await measure('push-home-profile', () => page.locator('.btn-profile').first().click());
+  await measure('pop-profile-home', () => page.locator('.profile-page .icon-btn.back').first().click());
   await sleep(400);
 
   await measure('push-home-restaurant', () => page.locator('.u99-restaurant-head').first().click());
