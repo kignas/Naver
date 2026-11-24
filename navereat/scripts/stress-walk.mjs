@@ -10,7 +10,8 @@
  *
  * Environment:
  *   STRESS_FONT_SCALES=1,1.15,1.3   text scales to run (text-size-adjust)
- *   STRESS_CLS_BUDGET=0.01          non-input budget per scenario
+ *   STRESS_CLS_BUDGET=0.01          budget for any single non-input shift
+ *   STRESS_DEBUG_PANEL=1            also assert the in-app debug panel adds no CLS
  *   STRESS_RATE=4                   CPU throttle (Playwright rate)
  *   STRESS_OFFLINE_NET=0            skip the slow-3G throttling
  *
@@ -31,7 +32,8 @@ const budget = Number(process.env.STRESS_CLS_BUDGET || 0.01);
 const reportFloor = 0.001;
 const cpuRate = Number(process.env.STRESS_RATE || 4);
 const slowNetwork = process.env.STRESS_OFFLINE_NET !== '0';
-const passes = Math.max(1, Number(process.env.STRESS_REPEAT || 2));
+const debugPanel = process.env.STRESS_DEBUG_PANEL !== '0';
+const passes = Math.max(1, Number(process.env.STRESS_REPEAT || 3));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 await mkdir(outDir, { recursive: true });
@@ -55,8 +57,9 @@ const waitServer = async () => {
   throw new Error(`preview server did not start on ${port}`);
 };
 
-const initScript = (scale) => {
+const initScript = (scale, debugPanel = false) => {
   try {
+  if (debugPanel) localStorage.setItem('nbp-debug', '1');
   localStorage.setItem('nearbite_token', 'demo-token');
   localStorage.setItem('nearbite_user', JSON.stringify({ name: 'Aarav', phone: '+91 98765 43210' }));
   sessionStorage.setItem('ew_offers_seen_v1', '["demo"]');
@@ -175,6 +178,16 @@ const browser = await chromium.launch({
   args: ['--no-sandbox'],
 });
 
+const ensureCartBar = async (page) => {
+  // Closing the customization sheet cancels the pending add, and a completed
+  // checkout empties the cart, so later passes can reach this step with an
+  // empty cart and no bar to tap. Add one plain item (no sheet) in that case.
+  if (await page.locator('#es-pink-inner').count()) return;
+  const plain = page.locator('.nb-add-btn:not(.nb-add-btn--cust)').first();
+  await plain.click({ timeout: 15000 });
+  await page.waitForSelector('#es-pink-inner', { timeout: 15000 });
+};
+
 const scenarios = [];
 
 const record = async (page, name, action, settle = 1200) => {
@@ -274,8 +287,8 @@ try {
     }
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpuRate });
 
-    const runJourney = async (pass) => {
-      const tag = `font-scale ${scale}, pass ${pass}`;
+    const runJourney = async (pass, suffix = '') => {
+      const tag = `font-scale ${scale}, pass ${pass}${suffix}`;
       const visit = async (hash, readySelector) => {
         await page.goto(`${base}/#${hash}`, { waitUntil: 'domcontentloaded' });
         if (readySelector) await page.waitForSelector(readySelector, { timeout: 90000 });
@@ -342,15 +355,27 @@ try {
           await customise.click();
           await page.waitForSelector('.ewcs-sheet.show', { timeout: 30000 });
           await sleep(600);
-          // Close it for good, otherwise the backdrop keeps the ADD buttons
-          // covered and the next scenario (Restaurant -> Cart) cannot tap.
+          // Close it for good, otherwise the backdrop keeps the ADD buttons and
+          // the cart bar covered and the next scenario cannot tap. The explicit
+          // close control is the only path that survives a large text scale at
+          // 4x CPU, where Escape and the backdrop tap can both land on a
+          // still-animating layer.
           for (const attempt of [0, 1, 2]) {
             if (!(await page.locator('.ewcs-sheet.show').count())) break;
-            if (attempt === 0) await page.keyboard.press('Escape');
-            else await page.locator('.ewcs-backdrop.show').first().click({ timeout: 3000 }).catch(() => undefined);
-            await page.waitForSelector('.ewcs-sheet.show', { state: 'detached', timeout: 4000 }).catch(() => undefined);
+            if (attempt === 0) {
+              await page.locator('#ewcs-sheet .ewcs-close').first().click({ timeout: 5000 }).catch(() => undefined);
+            } else if (attempt === 1) {
+              await page.keyboard.press('Escape');
+            } else {
+              await page.locator('.ewcs-backdrop.show').first().click({ timeout: 3000 }).catch(() => undefined);
+            }
+            await page.waitForSelector('.ewcs-sheet.show', { state: 'detached', timeout: 5000 }).catch(() => undefined);
           }
-          await page.waitForSelector('.ewcs-backdrop.show', { state: 'detached', timeout: 4000 }).catch(() => undefined);
+          await page
+            .waitForSelector('.ewcs-backdrop.show', { state: 'detached', timeout: 8000 })
+            .catch(() => {
+              throw new Error('customize sheet did not close; next scenario would tap a covered layer');
+            });
         },
         1200,
       );
@@ -359,7 +384,35 @@ try {
         page,
         `push: Restaurant -> Cart (${tag})`,
         async () => {
-          await page.locator('#es-pink-inner').click();
+          try {
+            await ensureCartBar(page);
+            await page.locator('#es-pink-inner').click({ timeout: 8000 });
+          } catch (error) {
+            const state = await page.evaluate(() => {
+              const bar = document.querySelector('#white-cart-root');
+              const inner = document.querySelector('#es-pink-inner');
+              if (!bar || !inner) return { bar: false, inner: false, body: document.body.className };
+              const r = bar.getBoundingClientRect();
+              const ri = inner.getBoundingClientRect();
+              const hit = document.elementFromPoint(Math.round(ri.x + ri.width / 2), Math.round(ri.y + ri.height / 2));
+              const cs = getComputedStyle(bar);
+              return {
+                bar: `${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.width)}x${Math.round(r.height)}`,
+                inner: `${Math.round(ri.x)},${Math.round(ri.y)} ${Math.round(ri.width)}x${Math.round(ri.height)}`,
+                display: cs.display,
+                opacity: cs.opacity,
+                transform: cs.transform,
+                pointerEvents: cs.pointerEvents,
+                animations: bar.getAnimations().map((a) => `${a.animationName || a.id}:${a.playState}`),
+                hit: hit ? `${hit.tagName.toLowerCase()}${hit.id ? '#' + hit.id : ''}` : 'none',
+                sheetsOpen: document.querySelectorAll('.ewcs-sheet.show, .ewcs-backdrop.show').length,
+                body: document.body.className,
+                vh: innerHeight,
+              };
+            });
+            console.log(`  cart-bar state on failed tap: ${JSON.stringify(state)}`);
+            throw error;
+          }
           await page.waitForSelector('.ct-cta', { timeout: 60000 });
         },
         1300,
@@ -427,6 +480,59 @@ try {
       await runJourney(pass);
     }
     await context.close();
+
+    // The field debug panel must not move anything: same cart sequence with the
+    // overlay mounted, gated like every other scenario.
+    if (debugPanel && scale === fontScales[0]) {
+      const debugContext = await browser.newContext({
+        viewport: { width: 390, height: 844 },
+        deviceScaleFactor: 2.75,
+        isMobile: true,
+        hasTouch: true,
+      });
+      await debugContext.addInitScript(initScript, [scale, true]);
+      const debugPage = await debugContext.newPage();
+      const debugCdp = await debugContext.newCDPSession(debugPage);
+      if (slowNetwork) {
+        await debugCdp.send('Network.enable');
+        await debugCdp.send('Network.emulateNetworkConditions', {
+          offline: false,
+          latency: 400,
+          downloadThroughput: (400 * 1024) / 8,
+          uploadThroughput: (400 * 1024) / 8,
+          connectionType: 'cellular3g',
+        });
+      }
+      await debugCdp.send('Emulation.setCPUThrottlingRate', { rate: cpuRate });
+      // Settle Home outside the probe: the panel assertion is about the cart
+      // sequence, not about the cold first paint of the home tab.
+      await debugPage.goto(`${base}/#/`, { waitUntil: 'domcontentloaded' });
+      await debugPage.waitForSelector('.u99-restaurant-head', { timeout: 90000 });
+      await sleep(1500);
+      await record(
+        debugPage,
+        `push: Restaurant -> Cart (debug panel on, font-scale ${scale})`,
+        async () => {
+          await debugPage.locator('.u99-restaurant-head').first().click();
+          await debugPage.waitForSelector('.menu-item', { timeout: 60000 });
+          await sleep(600);
+          await debugPage.locator('.nb-add-btn--cust, .nb-add-btn').first().click();
+          await debugPage.waitForSelector('.ewcs-sheet.show', { timeout: 30000 });
+          await sleep(500);
+          await debugPage.locator('#ewcs-sheet .ewcs-close').first().click({ timeout: 5000 }).catch(() => undefined);
+          await debugPage.waitForSelector('.ewcs-sheet.show', { state: 'detached', timeout: 8000 }).catch(() => undefined);
+          await debugPage
+            .waitForSelector('.ewcs-backdrop.show', { state: 'detached', timeout: 8000 })
+            .catch(() => undefined);
+          await sleep(300);
+          await ensureCartBar(debugPage);
+          await debugPage.locator('#es-pink-inner').click();
+          await debugPage.waitForSelector('.ct-cta', { timeout: 60000 });
+        },
+        1300,
+      );
+      await debugContext.close();
+    }
   }
 } finally {
   await browser.close();
@@ -457,9 +563,17 @@ for (const scenario of scenarios) {
   scenario.reproducible = entry.totals.every((total) => total > budget) && entry.worst > budget;
   scenario.flaky = !scenario.reproducible && entry.worst > budget;
 }
-const failures = reproducible.map(
-  (entry) => `${entry.key}: ${Math.max(...entry.totals).toFixed(4)} > ${budget} in every pass`,
-);
+// Gate on single entries: one non-input shift above the budget in any pass is a
+// failure, not only a shift that reproduces in every pass.
+const overBudget = [];
+for (const scenario of scenarios) {
+  for (const shift of scenario.shifts) {
+    if (shift.input || shift.value <= budget) continue;
+    const source = shift.sources.map((item) => item.selector).filter(Boolean).slice(0, 2).join(' | ') || 'unknown';
+    overBudget.push(`${scenario.name}: entry ${shift.value.toFixed(4)} > ${budget} :: ${source}`);
+  }
+}
+const failures = overBudget;
 
 const summary = {
   label,
@@ -469,6 +583,7 @@ const summary = {
   failures,
   flaky: flaky.map((entry) => `${entry.key}: worst ${entry.worst.toFixed(4)} on one pass only`),
   skipped: scenarios.filter((scenario) => scenario.skipped).length,
+  failuresByEntry: overBudget,
   pass: failures.length === 0,
 };
 await writeFile(path.join(outDir, 'stress-walk.json'), `${JSON.stringify(summary, null, 2)}\n`);
@@ -490,10 +605,10 @@ await writeFile(path.join(outDir, 'stress-walk.md'), `${rows.join('\n')}\n`);
 
 console.log(`\nSaved ${path.relative(path.resolve('..'), outDir)}`);
 if (summary.flaky.length) {
-  console.warn(`\nFlaky (one pass only, reported but not gated):\n${summary.flaky.join('\n')}`);
+  console.warn(`\nSingle-pass shifts above the budget (now gated by entry):\n${summary.flaky.join('\n')}`);
 }
 if (failures.length) {
-  console.error(`\n${failures.length} reproducible stress-walk CLS failure(s):\n${failures.join('\n')}`);
+  console.error(`\n${failures.length} stress-walk CLS failure(s) (any entry > budget):\n${failures.join('\n')}`);
   process.exit(1);
 }
 console.log('\nStress walk clean: no non-input shift above the budget.');

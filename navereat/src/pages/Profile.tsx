@@ -1,9 +1,11 @@
-import { useLayoutEffect } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import { createRouteStyleSheet } from '../lib/routeStyles';
 import { useAppNav } from '../lib/navigation';
 import { useSearchStore } from '../store/searchStore';
 import { useAppStore } from '../store/appStore';
 import { toast } from '../store/toastStore';
+import { APP_VERSION } from '../lib/appVersion';
+import { setDebugEnabled } from '../lib/debugFlag';
 import profileBundleCss from '../styles/original/profile.bundle.css?raw';
 import profileShellCss from '../styles/original/profile-shell.css?raw';
 import '../styles/pages/profile.css';
@@ -69,6 +71,7 @@ const profileStyle = createRouteStyleSheet(`${profileShellCss}\n${profileBundleC
 
 export function Profile() {
   const nav = useAppNav();
+  const versionTapsRef = useRef<number[]>([]);
   const openSearch = useSearchStore((state) => state.openSearch);
   const user = useAppStore((s) => s.user);
   const logout = useAppStore((s) => s.logout);
@@ -252,6 +255,22 @@ export function Profile() {
               </button>
             </div>
           </section>
+          <p
+            className="profile-version"
+            id="profile-version"
+            onClick={() => {
+              const now = Date.now();
+              const taps = [...versionTapsRef.current.filter((at) => now - at < 4000), now];
+              versionTapsRef.current = taps;
+              if (taps.length >= 7) {
+                versionTapsRef.current = [];
+                setDebugEnabled(true);
+                toast('Debug panel enabled');
+              }
+            }}
+          >
+            Navereat v{APP_VERSION} · demo
+          </p>
         </main>
       </div>
 

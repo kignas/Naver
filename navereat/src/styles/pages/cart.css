@@ -66,3 +66,29 @@
   }
 }
 
+
+/* Secondary captions in the order-info card stay on one line. The bundled
+   contact row had no width guard, so while a fallback face was still in use it
+   wrapped to a second line and pushed the whole cart up ~9px when the real face
+   swapped in. Ellipsising it (as the address row already does) reserves the
+   height for good. */
+body.ct-page #ct-order-info .ct-oi-sub {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The veg mark also exists in the restaurant bundle, and a restaurant page is
+   still mounted (and its stylesheet still active) while the cart slides in. Its
+   rules and the cart's own disagree on the size, so the marks used to resize the
+   moment the restaurant route unmounted and took the cart's rows with them. Pin
+   the cart's own sizes with page scope so the value cannot flip. */
+body.ct-page .ct-name-row .nb-veg-mark {
+  width: 14px;
+  height: 14px;
+}
+
+body.ct-page .ct-cym-name .nb-veg-mark {
+  width: 12px;
+  height: 12px;
+}

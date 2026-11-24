@@ -48,3 +48,16 @@
 .profile-page .bottom-nav {
   z-index: 90;
 }
+
+/* Version line: also the hidden entry point for the field debug panel
+   (seven quick taps unlocks it, see src/dev/StressDebugPanel.tsx). */
+.profile-version {
+  margin: 18px 0 6px;
+  padding: 6px 0;
+  text-align: center;
+  font: 500 11px/1.5 var(--font-ui, system-ui, -apple-system, sans-serif);
+  color: var(--muted, #8a8f98);
+  letter-spacing: 0.01em;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}

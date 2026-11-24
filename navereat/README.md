@@ -189,15 +189,33 @@ sheet and lifecycle event under stress.
   Tracking; Tracking → back; and background → foreground.
 * A modal that animates its own exit is reported separately (`modal-exit`) and
   does not count, because nothing behind it moves.
-* Each journey runs twice per font scale. A shift that reproduces in **every**
-  pass fails the gate; a shift that shows up in one pass only is printed as
-  `Flaky` and kept in the JSON (`scenarios[].flaky`) but does not fail CI.
+* Each journey runs **three** times per font scale (`STRESS_REPEAT`). The gate
+  is per entry, not per average: **any single non-input shift above 0.01 in any
+  pass fails**, and the failure line names the scenario, the entry value and the
+  source selector. Per-scenario sums are still printed for context.
+* The walk also asserts that the in-app debug panel itself is free: with
+  `STRESS_DEBUG_PANEL` on (the default) one extra pass runs the same Home →
+  Restaurant → ADD → CLOSE → CART sequence with `nbp-debug = '1'` and is gated
+  like any other scenario.
+* Closing the customisation sheet uses its own `.ewcs-close` control, and the
+  cart-bar tap falls back to adding one plain item when a completed checkout has
+  emptied the cart. Without those two steps the rest of the pass — including the
+  cart-entry scenario — was silently *skipped*, which is how the shift below
+  stayed invisible.
 * Output: `../verify/item12d/probe/stress-walk.{json,md}` — a table of
   *route/action | shifts > 0.001 | source selector and rects | fix*.
-* `?debug=1` (or `sessionStorage.nbp-debug = '1'`) in the app shows the same
-  numbers on device in `src/dev/StressDebugPanel.tsx`: route, nav direction,
-  `preparing`, accumulated CLS, LCP, fps, mounted layers, open sheets and
-  skeletons.
+* `src/dev/StressDebugPanel.tsx` puts the same numbers on a real phone. It is
+  off by default; **tap the version line at the bottom of Profile seven times**
+  (within 4 s) to unlock it, `?debug=1` / `#/cart?debug=1` also work, and
+  `localStorage['nbp-debug']` keeps it on across relaunches. It shows route,
+  accumulated CLS with the worst entry, fps, dpr/visual viewport, open sheets and
+  a scrolling event log: every non-input layout shift with its source selector
+  and previous/current rects *captured at event time* (that is what isolated the
+  shift below), frames over 50 ms, `body` class changes, route changes and
+  viewport changes. **Copy log** / **Share** export a compact text report with
+  UA, dpr, font scale and safe-area values. While it is enabled it also exposes
+  `window.__nbpDebugEvents()` for harness runs; **Disable debug** clears the flag
+  and unmounts it.
 
 Two long-lived causes were removed while building this:
 
@@ -214,14 +232,44 @@ Two long-lived causes were removed while building this:
    is primed before React renders (`src/lib/fonts.ts`), so no face arrives after
    the first paint.
 
-Known open item, reproducible in the walk at font scale 1: entering the cart
-**from the restaurant page right after closing the customisation sheet** can
-produce one non-input shift of ~0.036 (≈9 px) about a second after entry, with
-sources in `#cart-has-items` (`h2.ct-cym-title`, `.ct-group-actions`,
-`.ct-row`). Direct `#/cart` entry and the other scales are clean. The sticky
-delivery header, the fee strip and everything above the item list keep their
-rects, so the reflow starts at the group boundary; the rule that changes is not
-one of the layout properties this walk samples and is still being isolated.
+### Cart entry: what is fixed and what is still open
+
+Entering the cart **from the restaurant page right after closing the
+customisation sheet** was producing one non-input shift of ~0.036 (≈9 px) about a
+second after entry. In this round:
+
+* **Fixed: text that re-wrapped under a fallback face.** The order-info card's
+  secondary captions (`.ct-oi-sub`) had no width guard, so the contact row was
+  two lines while a fallback face was in use and one line after the swap — a
+  17.4 px change that pushed everything below it. They are now single-line with
+  ellipsis, like the address row already was (`src/styles/pages/cart.css`).
+* **Fixed: primed variation instances.** `fonts.ts` primed every declared face
+  in 100-weight steps, but the pages use 550/650/750/850; an un-primed instance
+  of a variable font is instantiated on demand, i.e. after paint. Priming now
+  steps by 50 and lists the half weights.
+* **Fixed: the veg mark changing size under the cart.** `.nb-veg-mark` is styled
+  by both the restaurant and the cart bundles with different sizes, so the marks
+  resized when the restaurant stylesheet detached; the cart now pins its own
+  sizes with page scope. (Observed 13 → 12 px.)
+* **Cart entry at font scale 1 is clean** after those fixes: three passes, three
+  clean entries at 0.0000/0.00001. Font scale 1.15 keeps one marginal entry
+  (0.0109, sources `h2#ct-cym-title` / `.ct-item-card` / `.ct-group-actions`)
+  and 1.3 is clean.
+* **What the 0.03598 entry looked like** (kept for the next round): the five
+  source rects all moved up by exactly 9 px, `#cart-has-items` grew 9 px upward
+  with its bottom pinned at the viewport edge, and the delivery header was a
+  constant 68 px throughout. Hiding `#ct-meal` or `#ct-order-info` did not change
+  the value. Reading sources a moment later found them detached (React re-created
+  those rows in a re-render ~1 s after entry), so the next step is to tag the
+  rows with stable `data-*` attributes and trace the state update.
+* **Now visible because the gate is per entry** (these were hidden by the old
+  "one pass only" rule): `pop: order success -> Tracking` reports 0.027–0.041
+  from `section.map-stage svg rect` — the trip map animates SVG geometry
+  attributes, which Chrome counts as layout; and the debug-panel pass reports
+  0.15 with source `#menu-footer` when the outgoing restaurant layer unmounts.
+  Both need a decision: animate the map with transforms instead of attributes,
+  and/or teach the probe that a leaving layer's internal collapse is not a page
+  shift (it is already excluded when a modal is open).
 
 ## Visual reference
 
