@@ -1,14 +1,18 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Icon } from '../components/Icon';
-import { RestaurantMenuItem } from '../components/RestaurantMenuItem';
+import { MenuCatNav } from '../components/menu/MenuCatNav';
+import { MenuFilterBar } from '../components/menu/MenuFilterBar';
+import { MenuFiltersProvider } from '../components/menu/MenuFiltersProvider';
+import { MenuFreeDeliveryStrip } from '../components/menu/MenuFreeDeliveryStrip';
+import { MenuSearchRow } from '../components/menu/MenuSearchRow';
+import { MenuSection } from '../components/menu/MenuSection';
+import type { MenuGroup } from '../components/menu/menuTypes';
 import { findRestaurant } from '../data/demo';
 import type { MenuItem } from '../data/demo';
 import { useCachedReady } from '../hooks/useCachedReady';
 import { createRouteStyleSheet } from '../lib/routeStyles';
 import { useAppNav } from '../lib/navigation';
-import { useCustomize } from '../lib/customizeContext';
-import { customizedQtyFor, isCustomisable } from '../lib/customization';
 import { useAppStore } from '../store/appStore';
 import { useNavStore } from '../store/navStore';
 import { useUiStore } from '../store/uiStore';
@@ -19,21 +23,7 @@ import '../styles/pages/restaurant.css';
 
 const restaurantStyle = createRouteStyleSheet(`${restaurantBundleCss}\n${restaurantShellCss}`, 'navereatRestaurant');
 
-type MenuFilter = 'popular' | 'rating' | 'price' | 'veg' | 'nonveg';
 type MenuTab = 'menu' | 'info';
-
-interface MenuGroup {
-  name: string;
-  items: MenuItem[];
-}
-
-const FILTER_CHIPS: { id: MenuFilter; label: string; className?: string }[] = [
-  { id: 'popular', label: 'Popular' },
-  { id: 'rating', label: '4.0+ rating' },
-  { id: 'price', label: '₹99–₹149' },
-  { id: 'veg', label: 'Veg', className: 'veg-chip veg-type diet-chip' },
-  { id: 'nonveg', label: 'Non-veg', className: 'veg-chip nonveg-type diet-chip' },
-];
 
 function compactCount(value: number | undefined): string {
   const count = Number(value);
@@ -58,12 +48,9 @@ function itemCount(value: number | undefined): string {
   return `${Number((count / 1000000).toFixed(1))}M`;
 }
 
-function categoryId(name: string, index: number): string {
-  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  return `cat-${slug || 'menu'}-${index}`;
-}
-
 export function Restaurant() {
+  const perfWindow = window as Window & { __menuRenders?: number };
+  perfWindow.__menuRenders = (perfWindow.__menuRenders ?? 0) + 1;
   const { id } = useParams<{ id: string }>();
   const routeId = Number(id);
   const resolvedRestaurant = findRestaurant(id);
@@ -86,25 +73,13 @@ export function Restaurant() {
   const cachedRestaurant = useUiStore.getState().restaurants[stableRouteId];
   const cachedMenu = useUiStore((s) => s.menus[stableRouteId]);
   const patchRestaurant = useUiStore((s) => s.patchRestaurant);
-  const cart = useAppStore((s) => s.cart);
-  const addItem = useAppStore((s) => s.addItem);
-  const decrementItem = useAppStore((s) => s.decrementItem);
-  const removeCustomizedUnit = useAppStore((s) => s.removeCustomizedUnit);
-  const { openCustomize } = useCustomize();
   const selectRestaurant = useAppStore((s) => s.selectRestaurant);
   const preparing = useNavStore((s) => s.preparing);
 
   const [tab, setTab] = useState<MenuTab>(cachedRestaurant?.tab ?? 'menu');
-  const [filters, setFilters] = useState<Set<MenuFilter>>(
-    () => new Set((cachedRestaurant?.filters ?? []) as MenuFilter[]),
-  );
-  const [query, setQuery] = useState(cachedRestaurant?.query ?? '');
   const [menuSearchOpen, setMenuSearchOpen] = useState(cachedRestaurant?.menuSearchOpen ?? false);
   const [saved, setSaved] = useState(cachedRestaurant?.saved ?? false);
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set(cachedRestaurant?.collapsed ?? []));
-  const [activeCategory, setActiveCategory] = useState(cachedRestaurant?.activeCategory ?? 0);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
 
   useLayoutEffect(() => {
     const detach = restaurantStyle.attach();
@@ -128,16 +103,8 @@ export function Restaurant() {
 
   useEffect(() => {
     if (!Number.isFinite(routeId) || preparing) return;
-    patchRestaurant(routeId, {
-      tab,
-      filters: [...filters],
-      query,
-      menuSearchOpen,
-      saved,
-      collapsed: [...collapsed],
-      activeCategory,
-    });
-  }, [activeCategory, collapsed, filters, menuSearchOpen, patchRestaurant, preparing, query, routeId, saved, tab]);
+    patchRestaurant(routeId, { tab, menuSearchOpen, saved });
+  }, [menuSearchOpen, patchRestaurant, preparing, routeId, saved, tab]);
 
   useLayoutEffect(() => {
     const scroller = scrollRef.current;
@@ -145,9 +112,15 @@ export function Restaurant() {
     scroller.scrollTop = cachedRestaurant?.scrollTop ?? 0;
   }, [cachedRestaurant?.scrollTop, ready, routeId]);
 
-  useEffect(() => {
-    if (!preparing && menuSearchOpen) searchRef.current?.focus();
-  }, [menuSearchOpen, preparing]);
+  // Scroll position only: the category spy lives in MenuCatNav, next to the
+  // pills it drives.
+  const handleMenuScroll = useCallback(() => {
+    const scroller = scrollRef.current;
+    if (!scroller || !Number.isFinite(routeId)) return;
+    patchRestaurant(routeId, { scrollTop: scroller.scrollTop });
+  }, [patchRestaurant, routeId]);
+
+  const closeSearch = useCallback(() => setMenuSearchOpen(false), []);
 
   // A page that is no longer the current route keeps rendering, and a store
   // reset can empty its menu for a moment. Swapping to the empty state then
@@ -168,29 +141,6 @@ export function Restaurant() {
     });
     return Array.from(grouped, ([name, items]) => ({ name, items }));
   }, [menu, restaurant]);
-
-  const visibleGroups = useMemo(() => {
-    const search = query.trim().toLowerCase();
-    return groups
-      .map((group) => ({
-        ...group,
-        items: group.items.filter((menuItem) => {
-          if (filters.has('popular') && !menuItem.bestseller) return false;
-          if (filters.has('rating') && Number(restaurant?.rating ?? 0) < 4) return false;
-          if (filters.has('price') && (menuItem.price < 99 || menuItem.price > 149)) return false;
-          if (filters.has('veg') && !menuItem.isVeg) return false;
-          if (filters.has('nonveg') && menuItem.isVeg) return false;
-          if (search && !`${menuItem.name} ${menuItem.desc}`.toLowerCase().includes(search)) return false;
-          return true;
-        }),
-      }))
-      .filter((group) => group.items.length > 0);
-  }, [filters, groups, query, restaurant]);
-
-  // Never swap to the empty state while a transition is in flight: the page is
-  // still on screen and a momentary miss (a store read keyed by the incoming
-  // route) would collapse the menu, and the menu footer with it.
-  const empty = ready && !preparing && visibleGroups.length === 0;
 
 
   if (!restaurant) {
@@ -225,65 +175,18 @@ export function Restaurant() {
   const offer = (restaurant.offer || 'UP TO 30% OFF').trim();
   const freeAbove = restaurant.freeDeliveryAbove ?? 399;
   const itemRating = itemCount(restaurant.ratingCount);
-  const restaurantSubtotal = Object.values(cart)
-    .filter((line) => line.resId === restaurant.id)
-    .reduce((sum, line) => sum + line.price * line.quantity, 0);
-  const freeDeliveryUnlocked = restaurantSubtotal >= freeAbove;
-  const freeDeliveryAmount = Math.max(0, freeAbove - restaurantSubtotal);
-
-  const toggleFilter = (filter: MenuFilter) => {
-    setFilters((current) => {
-      const next = new Set(current);
-      if (next.has(filter)) next.delete(filter);
-      else next.add(filter);
-      return next;
-    });
-  };
-
-  const resetFilters = () => {
-    setFilters(new Set());
-    setQuery('');
-  };
-
-  const toggleCategory = (name: string) => {
-    setCollapsed((current) => {
-      const next = new Set(current);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
-      return next;
-    });
-  };
-
-  const scrollToCategory = (index: number) => {
-    const group = visibleGroups[index];
-    const scroller = scrollRef.current;
-    if (!group || !scroller) return;
-    const target = document.getElementById(categoryId(group.name, index));
-    if (!target) return;
-    const top =
-      target.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 118;
-    scroller.scrollTo({ top, behavior: 'smooth' });
-    setActiveCategory(index);
-  };
-
-  const handleMenuScroll = () => {
-    const scroller = scrollRef.current;
-    if (!scroller || !visibleGroups.length) return;
-    const threshold = scroller.scrollTop + 145;
-    let next = 0;
-    visibleGroups.forEach((group, index) => {
-      const target = document.getElementById(categoryId(group.name, index));
-      if (!target) return;
-      const top = target.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
-      if (top <= threshold) next = index;
-    });
-    if (next !== activeCategory) setActiveCategory(next);
-    patchRestaurant(routeId, { scrollTop: scroller.scrollTop, activeCategory: next });
-  };
-
   return (
     <div className="page rest-page">
       <div className="rest-scroll" ref={scrollRef} onScroll={handleMenuScroll}>
+        <MenuFiltersProvider
+          groups={groups}
+          rating={rating}
+          routeId={routeId}
+          preparing={preparing}
+          initialFilters={cachedRestaurant?.filters}
+          initialQuery={cachedRestaurant?.query}
+          initialCollapsed={cachedRestaurant?.collapsed}
+        >
         <div className="top-bar ew-themed-header">
           <button type="button" className="ew-hd-circle ew-hd-back" onClick={nav.back} aria-label="Back">
             <Icon name="solid:chevron-left" size={22} />
@@ -315,44 +218,7 @@ export function Restaurant() {
           </div>
         </div>
 
-        {menuSearchOpen && (
-          <div className="menu-search-inline" id="menu-search-row">
-            <label className="menu-search-inline-field" htmlFor="menu-search-input">
-              <Icon name="solid:magnifying-glass" size={16} />
-              <input
-                id="menu-search-input"
-                ref={searchRef}
-                type="search"
-                inputMode="search"
-                autoComplete="off"
-                placeholder="Search dishes in this menu"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-              {query && (
-                <button
-                  type="button"
-                  id="menu-search-clear"
-                  className="menu-search-clear"
-                  aria-label="Clear search"
-                  onClick={() => setQuery('')}
-                >
-                  <Icon name="solid:xmark" size={14} />
-                </button>
-              )}
-            </label>
-            <button
-              type="button"
-              className="menu-search-cancel"
-              onClick={() => {
-                setMenuSearchOpen(false);
-                setQuery('');
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        )}
+        {menuSearchOpen && <MenuSearchRow preparing={preparing} onClose={closeSearch} />}
 
         <div className="res-card">
           <div className="res-card-body">
@@ -436,46 +302,7 @@ export function Restaurant() {
               </div>
             )}
           </div>
-          <div className="delivery-strip">
-            <div className="delivery-banner-line" aria-hidden="true">
-              <span />
-              <span />
-            </div>
-            <div className="delivery-copy">
-              <span className="del-chip" id="res-free-delivery">
-                <span className={freeDeliveryUnlocked ? 'is-free' : ''}>
-                  {freeDeliveryUnlocked ? (
-                    'Free delivery unlocked'
-                  ) : (
-                    <>
-                      Add <strong>₹{freeDeliveryAmount}</strong> more to unlock free delivery
-                    </>
-                  )}
-                </span>
-              </span>
-            </div>
-            <div className="delivery-rider" aria-hidden="true">
-              <svg id="delivery-rider-fallback" role="presentation" viewBox="0 0 110 58">
-                <g fill="none" stroke="none">
-                  <circle cx="80" cy="43" fill="#222936" r="9" />
-                  <circle cx="32" cy="43" fill="#222936" r="9" />
-                  <path
-                    d="M31 42h26l8-17h15l8 9H70l-8 8H43"
-                    style={{ fill: 'var(--hd-primary,#E9546B)' }}
-                  />
-                  <path
-                    d="M61 25c5-8 12-12 19-11 5 1 8 5 9 9l-10 3-7-5-5 8z"
-                    style={{ fill: 'var(--hd-primary,#E9546B)' }}
-                  />
-                  <circle cx="82" cy="10" fill="#151A24" r="6" />
-                  <path d="M79 16c-3 5-5 11-4 16l10 2 5-10-5-7z" fill="#1D8F62" />
-                  <path d="M76 22l-13 7" stroke="#151A24" strokeLinecap="round" strokeWidth="3" />
-                  <path d="M90 20l8 6" stroke="#151A24" strokeLinecap="round" strokeWidth="3" />
-                </g>
-              </svg>
-            </div>
-            <div className="order-hint" id="order-hint" hidden />
-          </div>
+          <MenuFreeDeliveryStrip restaurantId={restaurant.id} freeAbove={freeAbove} />
         </div>
 
         <div className="menu-tabs" id="res-tabs" role="tablist" aria-label="Restaurant sections">
@@ -504,125 +331,20 @@ export function Restaurant() {
         </div>
 
         {tab === 'menu' && (
-          <>
-            <div className="cat-nav-sentinel" id="cat-nav-sentinel" />
-            <div className="cat-nav" id="cat-nav" aria-hidden="true">
-              <div className="cat-nav-inner" id="cat-nav-inner">
-                {visibleGroups.map((group, index) => (
-                  <div
-                    key={group.name}
-                    className={`cat-nav-pill${activeCategory === index ? ' active' : ''}`}
-                    data-target={categoryId(group.name, index)}
-                    onClick={() => scrollToCategory(index)}
-                  >
-                    {group.name}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
+          <MenuCatNav scrollRef={scrollRef} routeId={routeId} initialActive={cachedRestaurant?.activeCategory ?? 0} />
         )}
 
         <div className="res-pane" id="menu-pane" role="tabpanel" aria-labelledby="res-tab-menu" hidden={tab !== 'menu'}>
-          <div className="filter-bar ew-menu-quick-filters" id="restaurant-filter-bar" aria-label="Quick menu filters">
-            <div className="ew-filter-chip-row" id="quick-filter-row">
-              {FILTER_CHIPS.map((chip) => (
-                <button
-                  key={chip.id}
-                  type="button"
-                  className={`ew-filter-chip${chip.className ? ` ${chip.className}` : ''}${
-                    filters.has(chip.id) ? ' active' : ''
-                  }`}
-                  id={`filter-${chip.id}`}
-                  aria-pressed={filters.has(chip.id)}
-                  onClick={() => toggleFilter(chip.id)}
-                >
-                  {(chip.id === 'veg' || chip.id === 'nonveg') && (
-                    <span className="veg-dot-icon" aria-hidden="true" />
-                  )}
-                  {chip.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          <MenuFilterBar />
 
-          <div className="menu-section">
-            {!ready && (
-              <div id="menu-skeleton">
-                <div className="skeleton" style={{ height: 20, width: 130, marginBottom: 16 }} />
-                {[0, 1].map((row) => (
-                  <div className="skel-item" key={row}>
-                    <div className="skel-left">
-                      <div className="skeleton" style={{ height: 14, width: 56, borderRadius: 6 }} />
-                      <div className="skeleton" style={{ height: 16, width: row === 0 ? '62%' : '48%' }} />
-                      <div className="skeleton" style={{ height: 15, width: 52 }} />
-                      <div className="skeleton" style={{ height: 12, width: row === 0 ? '92%' : '78%' }} />
-                    </div>
-                    <div className="skel-media">
-                      <div className="skeleton skel-img" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div id="menu-container" style={{ display: ready ? 'block' : 'none' }}>
-              {visibleGroups.map((group, groupIndex) => {
-                const groupCollapsed = collapsed.has(group.name);
-                return (
-                  <div className="menu-cat-group" id={categoryId(group.name, groupIndex)} key={group.name}>
-                    <div
-                      className={`menu-cat-header${groupCollapsed ? ' collapsed' : ''}`}
-                      onClick={() => toggleCategory(group.name)}
-                    >
-                      <span className="menu-cat-title">
-                        {group.name} <span className="menu-cat-count">({group.items.length})</span>
-                      </span>
-                      <Icon name="solid:chevron-down" size={14} className="menu-cat-chevron" />
-                    </div>
-                    <div className={`menu-cat-items${groupCollapsed ? ' collapsed' : ''}`}>
-                      {group.items.map((menuItem, itemIndex) => {
-                        const customisable = isCustomisable(menuItem);
-                        const customQty = customisable ? customizedQtyFor(cart, menuItem) : 0;
-                        return (
-                          <RestaurantMenuItem
-                            key={menuItem.id}
-                            menuItem={menuItem}
-                            resId={restaurant.id}
-                            qty={cart[menuItem.name]?.quantity ?? 0}
-                            customQty={customQty}
-                            ratingKnown={ratingKnown}
-                            rating={rating}
-                            itemRating={itemRating}
-                            animationDelay={`${(groupIndex * 10 + itemIndex) * 0.04}s`}
-                            onAdd={addItem}
-                            onDecrement={decrementItem}
-                            onRemoveCustom={removeCustomizedUnit}
-                            onCustomize={openCustomize}
-                          />
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="empty-filter-msg" id="empty-filter-msg" style={{ display: empty ? 'block' : 'none' }}>
-              <Icon name="solid:sliders" size={32} className="empty-filter-icon" />
-              <p id="empty-filter-title">No dishes match these filters</p>
-              <p id="empty-filter-sub">Try changing your filters.</p>
-              <button
-                type="button"
-                className="empty-filter-clear"
-                id="empty-filter-clear"
-                onClick={resetFilters}
-                hidden={filters.size === 0 && !query}
-              >
-                Clear filters
-              </button>
-            </div>
-          </div>
+          <MenuSection
+            ready={ready}
+            preparing={preparing}
+            restaurantId={restaurant.id}
+            ratingKnown={ratingKnown}
+            rating={rating}
+            itemRating={itemRating}
+          />
 
           {/* The disclaimer belongs to the menu that is on screen. Rendering it
               while the menu is still being prepared lays it out under a short
@@ -727,7 +449,8 @@ export function Restaurant() {
               </div>
             )}
           </div>
-        </div>
+          </div>
+        </MenuFiltersProvider>
       </div>
 
     </div>

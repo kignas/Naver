@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import { Icon } from '../components/Icon';
 import { findRestaurant, type Order } from '../data/demo';
 import { formatMoney } from '../lib/money';
@@ -45,7 +45,15 @@ const orderDate = (iso: string): string =>
 const initial = (name: string): string => (name ? name.charAt(0).toUpperCase() : 'N');
 const orderLabel = (order: Order): string => order.id.slice(-6).toUpperCase();
 
-function PastCard({ order, onReorder }: { order: Order; onReorder: (order: Order) => void }) {
+const PastCard = memo(function PastCard({
+  order,
+  onReorder,
+}: {
+  order: Order;
+  onReorder: (order: Order) => void;
+}) {
+  const perfWindow = window as Window & { __orderCardRenders?: number };
+  perfWindow.__orderCardRenders = (perfWindow.__orderCardRenders ?? 0) + 1;
   const nav = useAppNav();
   const items = order.lines.slice(0, 3);
   const rest = order.lines.length - items.length;
@@ -118,9 +126,11 @@ function PastCard({ order, onReorder }: { order: Order; onReorder: (order: Order
       </div>
     </article>
   );
-}
+});
 
-function LiveCard({ order }: { order: Order }) {
+const LiveCard = memo(function LiveCard({ order }: { order: Order }) {
+  const perfWindow = window as Window & { __orderCardRenders?: number };
+  perfWindow.__orderCardRenders = (perfWindow.__orderCardRenders ?? 0) + 1;
   const nav = useAppNav();
   const stage = order.status === 'confirmed' ? 1 : order.status === 'preparing' ? 2 : order.status === 'picked_up' ? 3 : 4;
   const labels = ['Placed', 'Preparing', 'Partner', 'On the way'];
@@ -191,11 +201,13 @@ function LiveCard({ order }: { order: Order }) {
       </div>
     </div>
   );
-}
+});
 
 const ordersStyle = createRouteStyleSheet(`${ordersShellCss}\n${ordersBundleCss}`, 'navereatOrders', '/orders');
 
 export function Orders() {
+  const perfWindow = window as Window & { __ordersRenders?: number };
+  perfWindow.__ordersRenders = (perfWindow.__ordersRenders ?? 0) + 1;
   const nav = useAppNav();
   const orders = useAppStore((s) => s.orders);
   const addItem = useAppStore((s) => s.addItem);
@@ -217,7 +229,7 @@ export function Orders() {
   const live = filtered.filter((order) => ACTIVE_STATUSES.has(order.status));
   const past = filtered.filter((order) => !ACTIVE_STATUSES.has(order.status));
 
-  const reorder = (order: Order) => {
+  const reorder = useCallback((order: Order) => {
     const restaurant = findRestaurant(order.restaurantId);
     if (!restaurant) {
       toast('This restaurant is not available in the demo', 'error');
@@ -236,7 +248,7 @@ export function Orders() {
     }
     toast(`${added} item${added === 1 ? '' : 's'} added to cart`, 'success');
     nav.push('/cart');
-  };
+  }, [addItem, nav]);
 
   return (
     <div className="page orders-page">

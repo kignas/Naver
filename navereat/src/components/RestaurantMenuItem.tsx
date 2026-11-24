@@ -1,12 +1,11 @@
 import { memo } from 'react';
 import type { MenuItem } from '../data/demo';
-import { isCustomisable } from '../lib/customization';
+import { customizedQtyFor, isCustomisable } from '../lib/customization';
+import { useAppStore } from '../store/appStore';
 
 export interface RestaurantMenuItemProps {
   menuItem: MenuItem;
   resId: number;
-  qty: number;
-  customQty: number;
   ratingKnown: boolean;
   rating: number;
   itemRating: string;
@@ -20,8 +19,6 @@ export interface RestaurantMenuItemProps {
 function RestaurantMenuItemView({
   menuItem,
   resId,
-  qty,
-  customQty,
   ratingKnown,
   rating,
   itemRating,
@@ -31,7 +28,13 @@ function RestaurantMenuItemView({
   onRemoveCustom,
   onCustomize,
 }: RestaurantMenuItemProps) {
+  const perfWindow = window as Window & { __menuItemRenders?: number };
+  perfWindow.__menuItemRenders = (perfWindow.__menuItemRenders ?? 0) + 1;
   const customisable = isCustomisable(menuItem);
+  // Own cart slice: a tap on another dish leaves this row's selector value
+  // untouched, so only the tapped row re-renders.
+  const qty = useAppStore((state) => state.cart[menuItem.name]?.quantity ?? 0);
+  const customQty = useAppStore((state) => (customisable ? customizedQtyFor(state.cart, menuItem) : 0));
   const originalPrice =
     menuItem.originalPrice && menuItem.originalPrice > menuItem.price ? menuItem.originalPrice : null;
   const discount =
