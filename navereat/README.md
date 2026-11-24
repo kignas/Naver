@@ -169,6 +169,60 @@ asserts all of the above. Measured at 1× in this workspace: push 420 ms / 59.4
 fps, pop 361 ms / 61.0 fps, covered page identity on every sampled frame, tap →
 first painted frame 23 ms.
 
+## Layout-shift stress walk (Item 12D)
+
+Real devices reported a page that "jumps sometimes" after navigation. The gate
+for that class of bug is now CLS at 4× CPU, and a script that walks every route,
+sheet and lifecycle event under stress.
+
+* `npm run perf-check` measures the three content routes (Home → Restaurant →
+  Cart → Tracking) a second time with `Emulation.setCPUThrottlingRate 4` and
+  fails when any non-input layout shift there exceeds `PERF_CLS_BUDGET`
+  (0.01). The result is `gate.maxTransitionCls4x`.
+* `npm run stress-walk` (`scripts/stress-walk.mjs`) runs the whole app in
+  Chromium at 390×844@2.75 with slow 3G (400 ms latency, 400 kbit/s) **and** 4×
+  CPU throttling, for font scales 1, 1.15 and 1.3 (`STRESS_FONT_SCALES`). Each
+  scenario measures only shifts that were *not* caused by the tap that started
+  it. It covers: cold load of Home; tab switch; Home filter sheet; search
+  overlay; Home → Restaurant; the customisation sheet; Restaurant → Cart; the
+  coupon sheet; Cart → Tracking (checkout + order-success sheet); success →
+  Tracking; Tracking → back; and background → foreground.
+* A modal that animates its own exit is reported separately (`modal-exit`) and
+  does not count, because nothing behind it moves.
+* Each journey runs twice per font scale. A shift that reproduces in **every**
+  pass fails the gate; a shift that shows up in one pass only is printed as
+  `Flaky` and kept in the JSON (`scenarios[].flaky`) but does not fail CI.
+* Output: `../verify/item12d/probe/stress-walk.{json,md}` — a table of
+  *route/action | shifts > 0.001 | source selector and rects | fix*.
+* `?debug=1` (or `sessionStorage.nbp-debug = '1'`) in the app shows the same
+  numbers on device in `src/dev/StressDebugPanel.tsx`: route, nav direction,
+  `preparing`, accumulated CLS, LCP, fps, mounted layers, open sheets and
+  skeletons.
+
+Two long-lived causes were removed while building this:
+
+1. **The incoming page rendered its final state too late.** `PageTransition`
+   now mounts the real page (never a skeleton), waits for `prefers`-safe
+   fonts, and only starts the slide once the page height has been stable for two
+   consecutive frames (≤ 200 ms). Home → Restaurant at 4× went from 0.068 to
+   0.0000.
+2. **Route stylesheets restyled pages that were already on screen.** Each
+   bundle declares `:root` font tokens (`--ew-font-family`, `--ew-font-heading`
+   …); attaching or detaching the sheet changed every element that used them, so
+   text re-measured and shifted by 1–9 px. Those tokens are now declared once in
+   `src/styles/tokens.css` with the bundles' own values, and every bundled face
+   is primed before React renders (`src/lib/fonts.ts`), so no face arrives after
+   the first paint.
+
+Known open item, reproducible in the walk at font scale 1: entering the cart
+**from the restaurant page right after closing the customisation sheet** can
+produce one non-input shift of ~0.036 (≈9 px) about a second after entry, with
+sources in `#cart-has-items` (`h2.ct-cym-title`, `.ct-group-actions`,
+`.ct-row`). Direct `#/cart` entry and the other scales are clean. The sticky
+delivery header, the fee strip and everything above the item list keep their
+rects, so the reflow starts at the group boundary; the rule that changes is not
+one of the layout properties this walk samples and is still being isolated.
+
 ## Visual reference
 
 The original reference frontend is kept outside this public repository as a

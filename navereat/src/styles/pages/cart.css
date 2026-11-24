@@ -21,6 +21,14 @@
   background: #fff;
 }
 
+/* One row, always: a long restaurant name (or a face a hair wider) must not
+   wrap the sticky header and push the whole cart down behind it. */
+.cart-page .ct-dh-copy {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .cart-page .ct-footer {
   z-index: 70;
 }

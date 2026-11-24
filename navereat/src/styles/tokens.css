@@ -74,7 +74,20 @@
   /* Typography — original Eatswada uses Manrope + Caveat */
   --font: 'Manrope', 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-sans: var(--font);
+  --font-micro: var(--font);
   --font-display: 'Caveat', 'Manrope', cursive;
+
+  /* The route bundles declare these on :root, so every rule that uses them
+     changed value whenever a bundle sheet was attached or detached - a font
+     swap that reflowed the page already on screen. Declared once here with the
+     bundles' own values, so a route sheet can no longer restyle the app. */
+  --ew-font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --ew-font-display: 800;
+  --ew-font-heading: 750;
+  --ew-font-body: 500;
+  --ew-font-label: 700;
+  --ew-ui-font: 'Manrope', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --u99-font: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
 
   /* Radii */
   --r-xs: 6px;

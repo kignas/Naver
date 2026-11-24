@@ -17,6 +17,8 @@ import { useAppStore } from './store/appStore';
 import { useSearchStore } from './store/searchStore';
 import { useNavStore } from './store/navStore';
 import { statusBarStyle, statusBarTheme } from './lib/statusBarTheme';
+import { StressDebugPanel } from './dev/StressDebugPanel';
+import { primeFonts } from './lib/fonts';
 import { installPreloadOnIntent, preloadAllRoutes, preloadLikelyRoutes, routeLoaders } from './lib/routeLoaders';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
@@ -69,6 +71,16 @@ function AppRoutes() {
   }, [token]);
 
   useEffect(() => installPreloadOnIntent(), []);
+
+  useEffect(() => {
+    const run = () => void primeFonts();
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(run, { timeout: 900 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(run, 400);
+    return () => window.clearTimeout(id);
+  }, []);
 
   useEffect(() => {
     if (!token && location.pathname !== '/login') {
@@ -144,6 +156,7 @@ export default function App() {
       <CustomizeProvider>
         <AppRoutes />
         <SearchOverlay />
+        <StressDebugPanel />
       </CustomizeProvider>
     </HashRouter>
   );

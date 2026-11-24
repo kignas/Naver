@@ -488,6 +488,61 @@ const clsTransitions = async (browser) => {
   return transitions;
 };
 
+// Item 12D: the same three route transitions, now at 4x CPU. A page that grows
+// while (or right after) it slides is what users see as "it jumps sometimes on
+// a real phone"; the incoming page has to be at its final size before the slide.
+const routeClsAt4x = async (browser) => {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+  });
+  await context.addInitScript(clsInitScript);
+  const page = await context.newPage();
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+  await page.goto(`${base}/#/`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('#home-header', { timeout: 30000 });
+  await page.waitForTimeout(1400);
+
+  const measure = async (name, action, waitMs = 1800) => {
+    await page.evaluate(() => window.__resetCls());
+    await action();
+    await page.waitForTimeout(waitMs);
+    const entries = await page.evaluate(() => window.__readCls());
+    const sum = (list) => list.reduce((total, entry) => total + entry.value, 0);
+    const expected = entries.filter((entry) => !entry.hadRecentInput);
+    return {
+      name,
+      cpuRate: 4,
+      cls: Number(sum(expected).toFixed(6)),
+      inputDrivenCls: Number(sum(entries.filter((entry) => entry.hadRecentInput)).toFixed(6)),
+      entries: expected.filter((entry) => entry.value > 0.00001),
+    };
+  };
+
+  const transitions = [];
+  transitions.push(
+    await measure('1x→4x push: Home → Restaurant', () => page.locator('.u99-restaurant-head').first().click()),
+  );
+  await page.waitForSelector('.menu-item', { timeout: 30000 });
+  await page.waitForTimeout(500);
+  transitions.push(await measure('4x push: Restaurant → Cart', () => page.locator('#es-pink-inner').click()));
+  await page.waitForSelector('.ct-cta', { timeout: 30000 });
+  await page.locator('.ct-cta').first().click();
+  await page.waitForSelector('#btn-checkout', { timeout: 30000 });
+  transitions.push(
+    await measure('4x push: Cart → Tracking', async () => {
+      await page.locator('#btn-checkout').click();
+      await page.waitForSelector('.ew-os__btn', { timeout: 30000 });
+      await page.locator('.ew-os__btn').click();
+    }, 2200),
+  );
+  await context.close();
+  return transitions;
+};
+
 const motionChecks = async (browser) => {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
@@ -613,6 +668,7 @@ try {
       '4x': await pushLatency(browser, 4),
     },
     clsTransitions: await clsTransitions(browser),
+    clsTransitions4x: await routeClsAt4x(browser),
     motion: await motionChecks(browser),
     bundle: await bundle(),
   };
@@ -621,7 +677,10 @@ try {
   const gateRequired = cpuRate === 1;
   const clsBudget = Number(process.env.PERF_CLS_BUDGET || 0.01);
   const maxTransitionCls = result.clsTransitions.reduce((max, transition) => Math.max(max, transition.cls), 0);
-  const clsPass = result.clsTransitions.every((transition) => transition.cls <= clsBudget);
+  const maxTransitionCls4x = result.clsTransitions4x.reduce((max, transition) => Math.max(max, transition.cls), 0);
+  const clsPass =
+    result.clsTransitions.every((transition) => transition.cls <= clsBudget) &&
+    result.clsTransitions4x.every((transition) => transition.cls <= clsBudget);
   const latencyBudget = Number(process.env.PERF_LATENCY_BUDGET || 60);
   const latency1xRows = result.pushLatency['1x'].rows;
   const latencySamples = latency1xRows.map((row) => row.tapToFirstPaintedFrameMs).sort((a, b) => a - b);
@@ -657,6 +716,7 @@ try {
     minFps,
     clsBudget,
     maxTransitionCls: Number(maxTransitionCls.toFixed(6)),
+    maxTransitionCls4x: Number(maxTransitionCls4x.toFixed(6)),
     clsPass,
     latencyBudgetMs: latencyBudget,
     medianTapToFirstFrameMs1x: Number(medianTapToFrame1x.toFixed(1)),
@@ -686,7 +746,7 @@ try {
       `FAIL: performance gate (push ${pushFps.toFixed(1)} fps, pop ${popFps.toFixed(1)} fps, ` +
         `home scroll ${motion.homeScroll.fps.toFixed(1)} fps, sheet drag ${motion.sheetDrag.fps.toFixed(1)} fps, ` +
         `shared element ${motion.sharedElement.fps.toFixed(1)} fps, max transition CLS ${maxTransitionCls.toFixed(6)}, ` +
-        `scroll CLS ${motion.homeScroll.cls.toFixed(6)}, budget ${clsBudget}, max tap→frame ${maxTapToFrame1x.toFixed(1)} ms, ` +
+        `4x transition CLS ${maxTransitionCls4x.toFixed(6)}, scroll CLS ${motion.homeScroll.cls.toFixed(6)}, budget ${clsBudget}, max tap→frame ${maxTapToFrame1x.toFixed(1)} ms, ` +
         `median tap→frame ${medianTapToFrame1x.toFixed(1)} ms / max ${maxTapToFrame1x.toFixed(1)} ms, budget ${latencyBudget} ms, ` +
         `median tap→slide-start ${medianSlideStart.toFixed(1)} ms (budget ${slideStartBudget} ms), ` +
         `covered page identity push ${outgoingPush.identity} / pop ${outgoingPop.identity}, home re-renders under push ${outgoingPush.homeRendersDuring})`,

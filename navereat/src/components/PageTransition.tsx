@@ -5,6 +5,7 @@ import { applyLayout, captureLayout, refreshSnapshotScroll, type LayoutSnapshot 
 import { RouteShell } from './RouteShell';
 import { waitForRouteReady } from '../lib/routeReady';
 import { routeKeyFor } from '../lib/routeLoaders';
+import { fontsReady } from '../lib/fonts';
 import { syncRouteStyleSheets } from '../lib/routeStyles';
 import { useNavDirection, useNavStore, type NavDirection } from '../store/navStore';
 
@@ -354,6 +355,9 @@ export function PageTransition({ location, swipeBack = false, render }: PageTran
     setSwipeBackLocation(null);
     setSwiping(false);
     setPreparing(true);
+    // Pages mounted for the slide must render their full state from the first
+    // render (no skeleton -> content swap inside the moving layer).
+    useNavStore.getState().setPreparing(true);
     setLayers(oldLayer ? [oldLayer, newLayer] : [newLayer]);
     setStage({ direction, animating: true });
 
@@ -404,6 +408,18 @@ export function PageTransition({ location, swipeBack = false, render }: PageTran
       await waitForRouteReady(newLayer.key);
       await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
       void node.offsetHeight;
+      // Late faces would reflow text inside the moving page.
+      await fontsReady(300);
+      // The layout itself has to be final too: two identical measurements of
+      // the page height (or the budget) before the layer is ever shown.
+      const settleStarted = performance.now();
+      let measured = -1;
+      while (performance.now() - settleStarted < 200) {
+        await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+        const height = node.scrollHeight;
+        if (height > 0 && height === measured) break;
+        measured = height;
+      }
       const images = Array.from(node.querySelectorAll('img'));
       await Promise.race([
         Promise.all(images.map((image) => image.decode().catch(() => undefined))),

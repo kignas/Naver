@@ -21,7 +21,8 @@
     "transitions:frames": "node scripts/transition-frames.mjs after",
     "motion:evidence": "node scripts/motion-evidence.mjs",
     "sticky-check": "node scripts/sticky-check.mjs",
-    "route-motion-check": "node scripts/route-motion-check.mjs"
+    "route-motion-check": "node scripts/route-motion-check.mjs",
+    "stress-walk": "node scripts/stress-walk.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.0",
