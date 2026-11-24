@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { categories, restaurants, type Category, type MenuItem, type Restaurant } from '../data/demo';
 import { useAppNav } from '../lib/navigation';
@@ -149,7 +149,69 @@ function resultMeta(result: SearchResult): string {
   return `${result.count} restaurant${result.count === 1 ? '' : 's'} · Explore cuisine`;
 }
 
+function resultKey(result: SearchResult): string {
+  if (result.kind === 'cuisine') return `cuisine-${result.category.id}`;
+  if (result.kind === 'restaurant') return `restaurant-${result.restaurant.id}`;
+  return `dish-${result.restaurant.id}-${result.item.id}`;
+}
+
+const SearchResultRow = memo(function SearchResultRow({
+  result,
+  onOpen,
+}: {
+  result: SearchResult;
+  onOpen: (result: SearchResult) => void;
+}) {
+  const perfWindow = window as Window & { __searchResultRenders?: number };
+  perfWindow.__searchResultRenders = (perfWindow.__searchResultRenders ?? 0) + 1;
+  return (
+    <button className="ew-search-result" type="button" onClick={() => onOpen(result)}>
+      <img className="ew-search-thumb" src={resultImage(result)} alt="" loading="lazy" decoding="async" />
+      <span className="ew-search-copy">
+        <span className="ew-search-name">{resultName(result)}</span>
+        <span className="ew-search-meta">{resultMeta(result)}</span>
+      </span>
+    </button>
+  );
+});
+
+const RecentSearches = memo(function RecentSearches({
+  recent,
+  onPick,
+  onClear,
+}: {
+  recent: string[];
+  onPick: (value: string) => void;
+  onClear: () => void;
+}) {
+  return (
+    <>
+      <div className="ew-search-recent-head">
+        <span>Recent searches</span>
+        <button className="ew-search-recent-clear" type="button" onClick={onClear}>
+          Clear
+        </button>
+      </div>
+      <div className="ew-search-list">
+        {recent.map((value) => (
+          <button className="ew-search-result" type="button" key={value} onClick={() => onPick(value)}>
+            <span className="ew-search-thumb ew-search-thumb-icon" aria-hidden="true">
+              <SearchIcon name="search" size={20} />
+            </span>
+            <span className="ew-search-copy">
+              <span className="ew-search-name">{value}</span>
+              <span className="ew-search-meta">Recent search</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </>
+  );
+});
+
 export function SearchOverlay() {
+  const perfWindow = window as Window & { __searchRenders?: number };
+  perfWindow.__searchRenders = (perfWindow.__searchRenders ?? 0) + 1;
   const isOpen = useSearchStore((state) => state.isOpen);
   const context = useSearchStore((state) => state.context);
   const prefill = useSearchStore((state) => state.prefill);
@@ -165,9 +227,12 @@ export function SearchOverlay() {
   const [recent, setRecent] = useState<string[]>(readRecent);
   const [closing, setClosing] = useState(false);
 
+  // Typing only touches `query`; the walk over every menu runs on the deferred
+  // committed query so a new keystroke can interrupt it.
+  const deferredResultQuery = useDeferredValue(resultQuery);
   const results = useMemo(
-    () => (resultQuery.trim().length >= MIN_QUERY ? searchDemo(resultQuery, context) : []),
-    [context, resultQuery],
+    () => (deferredResultQuery.trim().length >= MIN_QUERY ? searchDemo(deferredResultQuery, context) : []),
+    [context, deferredResultQuery],
   );
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -333,27 +398,33 @@ export function SearchOverlay() {
     inputRef.current?.focus({ preventScroll: true });
   };
 
-  const applyRecent = (value: string) => {
-    if (inputRef.current) inputRef.current.value = value;
-    setQuery(value);
-    scheduleSearch(true);
-  };
+  const applyRecent = useCallback(
+    (value: string) => {
+      if (inputRef.current) inputRef.current.value = value;
+      setQuery(value);
+      scheduleSearch(true);
+    },
+    [scheduleSearch],
+  );
 
-  const clearRecent = () => {
+  const clearRecent = useCallback(() => {
     writeRecent([]);
     setRecent([]);
-  };
+  }, []);
 
-  const openResult = (result: SearchResult) => {
-    if (result.kind === 'cuisine') {
-      applyRecent(result.category.query);
-      return;
-    }
-    selectRestaurant(result.restaurant.id);
-    closeSearch(true);
-    const focus = result.kind === 'dish' ? `?focusItem=${encodeURIComponent(result.item.id)}` : '';
-    nav.push(`/restaurant/${result.restaurant.id}${focus}`);
-  };
+  const openResult = useCallback(
+    (result: SearchResult) => {
+      if (result.kind === 'cuisine') {
+        applyRecent(result.category.query);
+        return;
+      }
+      selectRestaurant(result.restaurant.id);
+      closeSearch(true);
+      const focus = result.kind === 'dish' ? `?focusItem=${encodeURIComponent(result.item.id)}` : '';
+      nav.push(`/restaurant/${result.restaurant.id}${focus}`);
+    },
+    [applyRecent, closeSearch, nav, selectRestaurant],
+  );
 
   const rootClass = `ew-search-root${isOpen ? ' is-open' : ''}${closing ? ' is-closing' : ''}`;
 
@@ -415,27 +486,7 @@ export function SearchOverlay() {
         <div className="ew-search-context" id="ew-search-context" />
         <div className="ew-search-body" id="ew-search-body" aria-live="polite">
           {phase === 'idle' && recent.length > 0 && (
-            <>
-              <div className="ew-search-recent-head">
-                <span>Recent searches</span>
-                <button className="ew-search-recent-clear" type="button" onClick={clearRecent}>
-                  Clear
-                </button>
-              </div>
-              <div className="ew-search-list">
-                {recent.map((value) => (
-                  <button className="ew-search-result" type="button" key={value} onClick={() => applyRecent(value)}>
-                    <span className="ew-search-thumb ew-search-thumb-icon" aria-hidden="true">
-                      <SearchIcon name="search" size={20} />
-                    </span>
-                    <span className="ew-search-copy">
-                      <span className="ew-search-name">{value}</span>
-                      <span className="ew-search-meta">Recent search</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </>
+            <RecentSearches recent={recent} onPick={applyRecent} onClear={clearRecent} />
           )}
 
           {phase === 'searching' && (
@@ -456,18 +507,7 @@ export function SearchOverlay() {
           {phase === 'results' && (
             <div className="ew-search-list">
               {results.map((result) => (
-                <button
-                  className="ew-search-result"
-                  type="button"
-                  key={`${result.kind}-${result.kind === 'cuisine' ? result.category.id : result.kind === 'restaurant' ? result.restaurant.id : `${result.restaurant.id}-${result.item.id}`}`}
-                  onClick={() => openResult(result)}
-                >
-                  <img className="ew-search-thumb" src={resultImage(result)} alt="" loading="lazy" decoding="async" />
-                  <span className="ew-search-copy">
-                    <span className="ew-search-name">{resultName(result)}</span>
-                    <span className="ew-search-meta">{resultMeta(result)}</span>
-                  </span>
-                </button>
+                <SearchResultRow key={resultKey(result)} result={result} onOpen={openResult} />
               ))}
             </div>
           )}
