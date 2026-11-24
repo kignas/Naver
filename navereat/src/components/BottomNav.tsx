@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProp
 import { useLocation } from 'react-router-dom';
 import { isTabPath, useAppNav } from '../lib/navigation';
 import { useSearchStore } from '../store/searchStore';
+import { tapHaptic } from '../lib/haptics';
 import { Icon } from './Icon';
 import type { IconName } from './icons';
 import '../styles/bottom-nav.css';
@@ -22,14 +23,6 @@ const DRAG_THRESHOLD = 6;
 function activeIndexFor(pathname: string): number {
   if (pathname === '/orders') return 1;
   return 0;
-}
-
-function hapticTick(): void {
-  try {
-    navigator.vibrate?.(8);
-  } catch {
-    /* vibration is optional */
-  }
 }
 
 export function BottomNav() {
@@ -112,7 +105,7 @@ export function BottomNav() {
     if (!item) return;
     if (searchOpen) closeSearch(true);
     if (pathname !== item.to) {
-      hapticTick();
+      tapHaptic();
       nav.tab(item.to);
     }
   };

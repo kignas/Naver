@@ -9,7 +9,7 @@ const atRoot = (): boolean => {
   return hash === '/' || hash === '/login';
 };
 
-/** Android hardware back: POP animation, exit the app on Home. */
+/** Android hardware back: POP animation, background the app on Home. */
 export function useBackButton(): void {
   useEffect(() => {
     const setDirection = useNavStore.getState().setDirection;
@@ -23,11 +23,15 @@ export function useBackButton(): void {
     let remove: (() => void) | undefined;
     if (Capacitor.isNativePlatform()) {
       void CapApp.addListener('backButton', () => {
+        // 1. A sheet or full-screen overlay owns the back press first.
         if (closeTopSheet()) return;
+        // 2. Root: hand the press to the system the way a native app does —
+        //    the task goes to Recents instead of the activity being destroyed.
         if (atRoot()) {
-          void CapApp.exitApp();
+          void CapApp.minimizeApp().catch(() => CapApp.exitApp());
           return;
         }
+        // 3. Otherwise pop the in-app route with the reverse slide.
         window.dispatchEvent(new CustomEvent('navereat:before-navigate'));
         setDirection('pop');
         window.history.back();

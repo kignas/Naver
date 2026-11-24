@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import { useUiStore } from '../../store/uiStore';
+import { tapHaptic } from '../../lib/haptics';
 
 /**
  * Subscribes to `vegOnly` alone: the tap re-renders this button, the filter
@@ -8,6 +9,10 @@ import { useUiStore } from '../../store/uiStore';
 export const VegToggle = memo(function VegToggle() {
   const vegOnly = useUiStore((state) => state.home.vegOnly);
   const toggleHomeFlag = useUiStore((state) => state.toggleHomeFlag);
+  const toggle = () => {
+    tapHaptic();
+    toggleHomeFlag('vegOnly');
+  };
   return (
     <button
       type="button"
@@ -15,7 +20,7 @@ export const VegToggle = memo(function VegToggle() {
       id="veg-toggle-btn"
       aria-pressed={vegOnly}
       aria-label="Show pure veg restaurants only"
-      onClick={() => toggleHomeFlag('vegOnly')}
+      onClick={toggle}
     >
       <span className="veg-label-txt">VEG</span>
       <span className={`veg-track${vegOnly ? ' on' : ''}`} id="veg-track">

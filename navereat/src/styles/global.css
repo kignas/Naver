@@ -8,6 +8,8 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  /* Android's grey/blue tap box is the loudest "this is a web page" tell. */
+  -webkit-tap-highlight-color: transparent;
 }
 
 html,
@@ -51,12 +53,17 @@ body {
   -webkit-touch-callout: none;
 }
 
+/* Text fields keep native selection, the copy/paste bar and the caret: the
+   app is a surface of labels and buttons, not of prose, so nothing else in it
+   may be selected or long-pressed into an Android context menu. */
 input,
 textarea,
-select {
+select,
+[contenteditable='true'] {
   font-family: inherit;
   user-select: text;
   -webkit-user-select: text;
+  -webkit-touch-callout: default;
   font-size: 16px; /* prevents Android zoom-on-focus */
 }
 
@@ -145,16 +152,72 @@ ol {
 }
 
 /* ---------- Tap micro-interaction ---------- */
+/* Press feedback is a transform on the pressed element alone: compositor work,
+   never layout, so a tap can not shift a neighbour or trigger a style recalc. */
 .tap {
-  transition: transform 0.12s ease;
+  transition: transform 90ms ease-out;
 }
 
 .tap:active {
-  transform: scale(0.95);
+  transform: scale(0.975);
 }
 
 .tap-soft:active {
-  transform: scale(0.98);
+  transform: scale(0.985);
+}
+
+/* Primary controls come from the legacy sheets: they keep whatever those
+   sheets transition and get a 90 ms transform entry of their own. */
+.nb-custom-remove,
+.add-btn-wrap button,
+.ct-btn,
+.u99-restaurant-card {
+  transition: transform 90ms ease-out;
+}
+
+.filter-pill {
+  transition: all 0.18s ease, transform 90ms ease-out;
+}
+
+.nb-qty-btn {
+  transition: background 0.14s ease, transform 90ms ease-out;
+}
+
+.filter-pill:active,
+.nb-qty-btn:active,
+.nb-custom-remove:active,
+.add-btn-wrap button:active,
+.ct-btn:active,
+.u99-restaurant-card:active {
+  transform: scale(0.975);
+}
+
+.nb-qty-btn.is-disabled:active,
+.u99-restaurant-card:has(.u99-add:active) {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tap,
+  .filter-pill,
+  .nb-qty-btn,
+  .nb-custom-remove,
+  .add-btn-wrap button,
+  .ct-btn,
+  .u99-restaurant-card {
+    transition: none;
+  }
+
+  .tap:active,
+  .tap-soft:active,
+  .filter-pill:active,
+  .nb-qty-btn:active,
+  .nb-custom-remove:active,
+  .add-btn-wrap button:active,
+  .ct-btn:active,
+  .u99-restaurant-card:active {
+    transform: none;
+  }
 }
 
 /* ---------- Skeleton ---------- */

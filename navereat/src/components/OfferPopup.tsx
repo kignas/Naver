@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom';
 import type { DemoOffer } from '../data/demo';
 import { lockPageScroll } from '../lib/scrollLock';
+import { registerSheet } from '../lib/sheetStack';
 import '../styles/original/ew-offer-popup.css';
 
 const AUTO_CLOSE_MS = 5200;
@@ -148,6 +149,15 @@ export function OfferPopup({ offers, onClose }: OfferPopupProps) {
       bar.style.transform = 'scaleX(0)';
     }
   };
+
+  // The back gesture closes the offer sheet before it can pop the route or
+  // background the app behind it.
+  const closeRef = useRef(close);
+  closeRef.current = close;
+  useEffect(() => {
+    if (!open) return undefined;
+    return registerSheet(() => closeRef.current());
+  }, [open]);
 
   useEffect(() => {
     if (!offers?.length) return;

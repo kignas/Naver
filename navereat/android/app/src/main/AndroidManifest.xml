@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Tactile press feedback (navigator.vibrate) on quantity/step controls. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
@@ -33,5 +35,6 @@
         </provider>
     </application>
 
-    <!-- No permissions: the demo is fully offline and makes no network calls. -->
+    <!-- No network permissions: the demo is fully offline and makes no network
+         calls. VIBRATE is the only runtime-bridge permission, for tap haptics. -->
 </manifest>

@@ -16,6 +16,7 @@ import { NOTE_MAX, TIP_PRESETS } from '../components/cart/cartConstants';
 import { Icon } from '../components/Icon';
 import { coupons, findRestaurant, type Coupon, type DemoOffer } from '../data/demo';
 import { cartRestaurantId } from '../lib/cart';
+import { tapHaptic } from '../lib/haptics';
 import { createRouteStyleSheet } from '../lib/routeStyles';
 import { useAppNav } from '../lib/navigation';
 import { useAppStore } from '../store/appStore';
@@ -230,6 +231,7 @@ export function Cart() {
       toast('Your cart is empty', 'error');
       return;
     }
+    tapHaptic(12);
     pendingOrderRef.current = order;
     setPlacing(true);
     setSheet(null);

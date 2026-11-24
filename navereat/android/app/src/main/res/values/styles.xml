@@ -20,9 +20,16 @@
         <item name="android:windowLightNavigationBar">true</item>
     </style>
 
-
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <!-- Hand the window over to the app theme as soon as the splash is
+             installed, so the frame behind the WebView is the maroon app
+             background and never the platform's white. -->
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
         <item name="android:background">@drawable/splash</item>
+        <!-- Android 12+ system splash (core-splashscreen bridges the older
+             ones): the same maroon the WebView paints behind Home. -->
+        <item name="windowSplashScreenBackground">@color/colorPrimary</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
         <item name="android:statusBarColor">@color/colorPrimary</item>
         <item name="android:navigationBarColor">@color/white</item>
         <item name="android:windowLightStatusBar">false</item>

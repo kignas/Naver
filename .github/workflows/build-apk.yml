@@ -20,7 +20,7 @@ defaults:
 
 jobs:
   build:
-    name: Assemble debug APK
+    name: Assemble release APK
     runs-on: ubuntu-latest
 
     steps:
@@ -69,24 +69,45 @@ jobs:
       - name: Sync Capacitor Android
         run: npx cap sync android
 
-      - name: Assemble debug APK
+      # Release is the shipped build: minified (R8) and resource-shrunk, signed
+      # with the committed sideload key so it installs over the previous APK.
+      # If R8 ever rejects the graph, the debug build keeps the tester loop
+      # alive instead of failing the run.
+      - name: Assemble APK
+        id: apk
         working-directory: navereat/android
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleDebug -PversionCode=${{ github.run_number }} --no-daemon
+          if ./gradlew assembleRelease -PversionCode=${{ github.run_number }} --no-daemon; then
+            echo "path=android/app/build/outputs/apk/release/app-release.apk" >> "$GITHUB_OUTPUT"
+            echo "variant=release" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning title=Release build failed::Falling back to the debug APK so device testing is not blocked."
+            ./gradlew assembleDebug -PversionCode=${{ github.run_number }} --no-daemon
+            echo "path=android/app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_OUTPUT"
+            echo "variant=debug" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Verify APK signature
+        env:
+          APK_PATH: ${{ steps.apk.outputs.path }}
         run: |
           APKSIGNER="$ANDROID_HOME/build-tools/34.0.0/apksigner"
-          "$APKSIGNER" verify --print-certs android/app/build/outputs/apk/debug/app-debug.apk | grep 'SHA-256 digest'
+          "$APKSIGNER" verify --print-certs "$APK_PATH" | grep 'SHA-256 digest'
 
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk Navereat.apk
+        env:
+          APK_PATH: ${{ steps.apk.outputs.path }}
+          VARIANT: ${{ steps.apk.outputs.variant }}
+        run: |
+          echo "shipping the $VARIANT build"
+          cp "$APK_PATH" Navereat.apk
+          ls -lh Navereat.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Navereat-debug-apk
+          name: Navereat-apk
           path: navereat/Navereat.apk
           if-no-files-found: error
 

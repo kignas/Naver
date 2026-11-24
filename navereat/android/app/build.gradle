@@ -32,6 +32,10 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
+            // Sideload target: signed with the same committed key as debug, so
+            // an update installs over the previous build on the tester's phone.
+            // A Play Store upload needs its own keystore.
+            signingConfig signingConfigs.debug
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'

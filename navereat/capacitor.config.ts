@@ -15,6 +15,9 @@ const config: CapacitorConfig = {
       splashFullScreen: false,
       splashImmersive: false,
       androidScaleType: 'CENTER_CROP',
+      // Hide is driven by the shell's first paint; the fade keeps the handoff
+      // from looking like a cut between two different windows.
+      fadeOutDuration: 120,
     },
     StatusBar: {
       style: 'DARK',

@@ -2,6 +2,7 @@ import { memo } from 'react';
 import type { MenuItem } from '../data/demo';
 import { customizedQtyFor, isCustomisable } from '../lib/customization';
 import { useAppStore } from '../store/appStore';
+import { tapHaptic } from '../lib/haptics';
 
 export interface RestaurantMenuItemProps {
   menuItem: MenuItem;
@@ -35,6 +36,18 @@ function RestaurantMenuItemView({
   // untouched, so only the tapped row re-renders.
   const qty = useAppStore((state) => state.cart[menuItem.name]?.quantity ?? 0);
   const customQty = useAppStore((state) => (customisable ? customizedQtyFor(state.cart, menuItem) : 0));
+  const addToCart = () => {
+    tapHaptic();
+    onAdd(menuItem, resId);
+  };
+  const decrement = () => {
+    tapHaptic();
+    onDecrement(menuItem.name);
+  };
+  const removeCustom = () => {
+    tapHaptic();
+    onRemoveCustom(menuItem);
+  };
   const originalPrice =
     menuItem.originalPrice && menuItem.originalPrice > menuItem.price ? menuItem.originalPrice : null;
   const discount =
@@ -122,7 +135,7 @@ function RestaurantMenuItemView({
                   <button
                     type="button"
                     className="nb-custom-remove"
-                    onClick={() => onRemoveCustom(menuItem)}
+                    onClick={removeCustom}
                     aria-label={`Remove one ${menuItem.name} from cart`}
                   >
                     −
@@ -154,7 +167,7 @@ function RestaurantMenuItemView({
                 <button
                   type="button"
                   className="nb-qty-btn"
-                  onClick={() => onDecrement(menuItem.name)}
+                  onClick={decrement}
                   aria-label="Decrease quantity"
                 >
                   −
@@ -163,7 +176,7 @@ function RestaurantMenuItemView({
                 <button
                   type="button"
                   className="nb-qty-btn"
-                  onClick={() => onAdd(menuItem, resId)}
+                  onClick={addToCart}
                   aria-label="Increase quantity"
                 >
                   +
@@ -173,7 +186,7 @@ function RestaurantMenuItemView({
               <button
                 type="button"
                 className="nb-add-btn"
-                onClick={() => onAdd(menuItem, resId)}
+                onClick={addToCart}
                 aria-label={`Add ${menuItem.name} to cart`}
               >
                 ADD
