@@ -9,6 +9,12 @@ const CATEGORY_STYLES: CSSProperties[] = categories.map((_, index) => ({
   opacity: 0,
 }));
 
+const PLACEHOLDER_MARK = (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M7 9.5h10M8.5 13h7M9.5 16.5h5M5.5 6.5h13a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17V8a1.5 1.5 0 0 1 1.5-1.5Z" />
+  </svg>
+);
+
 export const CategoryStrip = memo(function CategoryStrip() {
   const nav = useAppNav();
   const openCategory = useCallback(
@@ -37,11 +43,7 @@ export const CategoryStrip = memo(function CategoryStrip() {
           >
             <span className="cat-ring cat-image-shell">
               <span className="cat-image-placeholder" aria-hidden="true">
-                <span className="cat-placeholder-mark">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M7 9.5h10M8.5 13h7M9.5 16.5h5M5.5 6.5h13a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17V8a1.5 1.5 0 0 1 1.5-1.5Z" />
-                  </svg>
-                </span>
+                <span className="cat-placeholder-mark">{PLACEHOLDER_MARK}</span>
               </span>
               <img
                 src={category.image}

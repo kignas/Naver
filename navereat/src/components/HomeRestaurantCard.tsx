@@ -5,7 +5,12 @@ import { customizedQtyFor, isCustomisable } from '../lib/customization';
 
 interface HomeRestaurantCardProps {
   restaurant: Restaurant;
-  index: number;
+  /**
+   * Position of the restaurant in the unfiltered feed. Filtering and sorting
+   * must not shift it: the value drives the mount animation delay only, and a
+   * shifting value would re-render every card below a filtered-out row.
+   */
+  staggerIndex: number;
   cart: Cart;
   /** Windowed rows mount mid-scroll, so they must not replay the fade-up. */
   animate?: boolean;
@@ -16,68 +21,58 @@ interface HomeRestaurantCardProps {
   onDecrement: (name: string) => void;
 }
 
-function RatingBadge() {
-  return (
-    <svg className="u99-rating-badge" viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="12" cy="12" r="11" fill="var(--ew-success,#23956D)" />
-      <path
-        d="M12 5.4 13.94 9.33 18.28 9.96 15.14 13.02 15.88 17.34 12 15.3 8.12 17.34 8.86 13.02 5.72 9.96 10.06 9.33Z"
-        fill="#fff"
-      />
-    </svg>
-  );
-}
+const RATING_BADGE = (
+  <svg className="u99-rating-badge" viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="12" cy="12" r="11" fill="var(--ew-success,#23956D)" />
+    <path
+      d="M12 5.4 13.94 9.33 18.28 9.96 15.14 13.02 15.88 17.34 12 15.3 8.12 17.34 8.86 13.02 5.72 9.96 10.06 9.33Z"
+      fill="#fff"
+    />
+  </svg>
+);
 
-function VerifiedBadge() {
-  return (
-    <svg className="u99-verified" viewBox="0 0 24 24" role="img" aria-label="Verified restaurant">
-      <path
-        fill="currentColor"
-        d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.34 2.19c-1.39-.46-2.9-.2-3.91.81s-1.27 2.52-.81 3.91C2.63 9.33 1.75 10.57 1.75 12s.88 2.67 2.19 3.34c-.46 1.39-.2 2.9.81 3.91s2.52 1.26 3.91.81c.67 1.31 1.91 2.19 3.34 2.19s2.67-.88 3.34-2.19c1.39.45 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34z"
-      />
-      <path
-        d="M8.2 12.4l2.6 2.6 5-5.4"
-        fill="none"
-        stroke="var(--ew-verified-check,#fff)"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
+const VERIFIED_BADGE = (
+  <svg className="u99-verified" viewBox="0 0 24 24" role="img" aria-label="Verified restaurant">
+    <path
+      fill="currentColor"
+      d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.34 2.19c-1.39-.46-2.9-.2-3.91.81s-1.27 2.52-.81 3.91C2.63 9.33 1.75 10.57 1.75 12s.88 2.67 2.19 3.34c-.46 1.39-.2 2.9.81 3.91s2.52 1.26 3.91.81c.67 1.31 1.91 2.19 3.34 2.19s2.67-.88 3.34-2.19c1.39.45 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34z"
+    />
+    <path
+      d="M8.2 12.4l2.6 2.6 5-5.4"
+      fill="none"
+      stroke="var(--ew-verified-check,#fff)"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
 
-function OfferSeal() {
-  return (
-    <svg className="u99-seal" viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        d="M12 0.8Q12 0.8 13.3 1.99Q14.59 3.17 16.32 2.88Q18.06 2.58 18.5 4.28Q18.95 5.98 20.57 6.66Q22.19 7.35 21.65 9.02Q21.11 10.69 22.1 12.14Q23.09 13.59 21.73 14.71Q20.37 15.82 20.42 17.58Q20.46 19.33 18.72 19.54Q16.97 19.74 16.06 21.24Q15.16 22.75 13.58 21.97Q12 21.2 10.42 21.97Q8.84 22.75 7.94 21.24Q7.03 19.74 5.28 19.54Q3.54 19.33 3.58 17.58Q3.63 15.82 2.27 14.71Q0.91 13.59 1.9 12.14Q2.89 10.69 2.35 9.02Q1.81 7.35 3.43 6.66Q5.05 5.98 5.5 4.28Q5.94 2.58 7.68 2.88Q9.41 3.17 10.7 1.99Z"
-        fill="var(--ew-success,#23956D)"
-      />
-      <path d="M9 15.2 15 8.8" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" />
-      <circle cx="9.4" cy="9.4" r="1.55" fill="#fff" />
-      <circle cx="14.6" cy="14.6" r="1.55" fill="#fff" />
-    </svg>
-  );
-}
+const OFFER_SEAL = (
+  <svg className="u99-seal" viewBox="0 0 24 24" aria-hidden="true">
+    <path
+      d="M12 0.8Q12 0.8 13.3 1.99Q14.59 3.17 16.32 2.88Q18.06 2.58 18.5 4.28Q18.95 5.98 20.57 6.66Q22.19 7.35 21.65 9.02Q21.11 10.69 22.1 12.14Q23.09 13.59 21.73 14.71Q20.37 15.82 20.42 17.58Q20.46 19.33 18.72 19.54Q16.97 19.74 16.06 21.24Q15.16 22.75 13.58 21.97Q12 21.2 10.42 21.97Q8.84 22.75 7.94 21.24Q7.03 19.74 5.28 19.54Q3.54 19.33 3.58 17.58Q3.63 15.82 2.27 14.71Q0.91 13.59 1.9 12.14Q2.89 10.69 2.35 9.02Q1.81 7.35 3.43 6.66Q5.05 5.98 5.5 4.28Q5.94 2.58 7.68 2.88Q9.41 3.17 10.7 1.99Z"
+      fill="var(--ew-success,#23956D)"
+    />
+    <path d="M9 15.2 15 8.8" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" />
+    <circle cx="9.4" cy="9.4" r="1.55" fill="#fff" />
+    <circle cx="14.6" cy="14.6" r="1.55" fill="#fff" />
+  </svg>
+);
 
-function ClockIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" strokeWidth="1.9" />
-      <path d="M12 7.5v5l3.2 2" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
+const CLOCK_ICON = (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" strokeWidth="1.9" />
+    <path d="M12 7.5v5l3.2 2" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
 
-function InfoIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.7" />
-      <path d="M12 10.7v5.2M12 7.5h.01" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-    </svg>
-  );
-}
+const INFO_ICON = (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.7" />
+    <path d="M12 10.7v5.2M12 7.5h.01" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+  </svg>
+);
 
 function formatRatingCount(value?: number): string {
   if (!value || value <= 0) return '';
@@ -119,7 +114,7 @@ function displayOffer(restaurant: Restaurant): string {
 
 function HomeRestaurantCardView({
   restaurant,
-  index,
+  staggerIndex,
   cart,
   animate = true,
   onOpen,
@@ -144,7 +139,7 @@ function HomeRestaurantCardView({
   const minimumOrder = restaurant.minimumOrder;
   const style: CSSProperties | undefined = animate
     ? {
-        animation: `cardFadeUp .28s ease forwards ${Math.min(index, 6) * 0.045}s`,
+        animation: `cardFadeUp .28s ease forwards ${Math.min(staggerIndex, 6) * 0.045}s`,
         opacity: 0,
       }
     : undefined;
@@ -172,11 +167,11 @@ function HomeRestaurantCardView({
             <div className="u99-discount-line">{offer}</div>
             <h2 className="u99-restaurant-name">
               <span className="u99-name-text">{restaurant.name}</span>
-              {restaurant.verified !== false && <VerifiedBadge />}
+              {restaurant.verified !== false && VERIFIED_BADGE}
             </h2>
             <div className="u99-meta">
               <span className="u99-rating">
-                <RatingBadge />
+                {RATING_BADGE}
                 <b>{formatRating(restaurant.rating)}</b>
                 {ratingCount && <span className="u99-rating-count">({ratingCount})</span>}
               </span>
@@ -184,7 +179,7 @@ function HomeRestaurantCardView({
                 <>
                   <span className="u99-sep">•</span>
                   <span className="u99-delivery">
-                    <ClockIcon />
+                    {CLOCK_ICON}
                     {delivery}
                   </span>
                 </>
@@ -205,7 +200,7 @@ function HomeRestaurantCardView({
             {freeDelivery != null && (
               <div className="u99-free-row">
                 <span className="u99-free-icon" aria-hidden="true">
-                  <OfferSeal />
+                  {OFFER_SEAL}
                 </span>
                 <span className="u99-free-text">
                   {freeDelivery > 0
@@ -217,7 +212,7 @@ function HomeRestaurantCardView({
             {minimumOrder != null && (
               <div className="u99-free-row u99-minimum-row">
                 <span className="u99-free-icon" aria-hidden="true">
-                  <InfoIcon />
+                  {INFO_ICON}
                 </span>
                 <span className="u99-free-text">Minimum basket ₹{minimumOrder}</span>
               </div>
@@ -234,7 +229,15 @@ function HomeRestaurantCardView({
               return (
                 <article className="u99-item" data-item-id={menuItem.id} key={menuItem.id}>
                   <div className="u99-item-image">
-                    <img className="ew-img-fade is-loaded" src={menuItem.image} alt={`${menuItem.name} from ${restaurant.name}`} loading="lazy" decoding="async" />
+                    <img
+                      className="ew-img-fade is-loaded"
+                      src={menuItem.image}
+                      alt={`${menuItem.name} from ${restaurant.name}`}
+                      width={320}
+                      height={320}
+                      loading="lazy"
+                      decoding="async"
+                    />
                     {menuItem.bestseller && <span className="u99-popular">Popular</span>}
                     <div className="u99-item-action">
                       {customisable ? (
@@ -323,7 +326,7 @@ function sameCartForRestaurant(prev: Cart, next: Cart, resId: number): boolean {
 function sameCardProps(prev: HomeRestaurantCardProps, next: HomeRestaurantCardProps): boolean {
   return (
     prev.restaurant === next.restaurant &&
-    prev.index === next.index &&
+    prev.staggerIndex === next.staggerIndex &&
     (prev.animate ?? true) === (next.animate ?? true) &&
     prev.onOpen === next.onOpen &&
     prev.onAdd === next.onAdd &&

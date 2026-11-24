@@ -1,5 +1,4 @@
-import { memo, useCallback, useLayoutEffect, useMemo, type RefObject } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { lazy, memo, Suspense, useCallback, useMemo, type RefObject } from 'react';
 import { restaurants, type MenuItem, type Restaurant } from '../../data/demo';
 import { useAppNav } from '../../lib/navigation';
 import { useCustomize } from '../../lib/customizeContext';
@@ -15,7 +14,15 @@ import { HomeRestaurantCard } from '../HomeRestaurantCard';
  */
 export const VIRTUALIZE_THRESHOLD = 30;
 
-const ESTIMATED_CARD_HEIGHT = 420;
+/** Keeps @tanstack/react-virtual out of the entry chunk; see the module. */
+const VirtualizedRestaurantList = lazy(() => import('./VirtualizedRestaurantList'));
+
+/**
+ * Mount animation delay is a property of the restaurant, not of its position in
+ * the filtered list: shifting it would re-render every card below a filtered-out
+ * row and would re-stagger the feed whenever a filter changes.
+ */
+const STAGGER_INDEX_BY_ID = new Map(restaurants.map((restaurant, index) => [restaurant.id, index]));
 
 function RestaurantSkeleton() {
   return (
@@ -125,36 +132,23 @@ export const RestaurantFeed = memo(function RestaurantFeed({ ready, scrollerRef 
   );
 
   const shouldVirtualize = filteredRestaurants.length > VIRTUALIZE_THRESHOLD;
-  const getItemKey = useCallback((index: number) => filteredRestaurants[index].id, [filteredRestaurants]);
 
-  const rowVirtualizer = useVirtualizer({
-    count: filteredRestaurants.length,
-    getScrollElement: () => scrollerRef.current,
-    estimateSize: () => ESTIMATED_CARD_HEIGHT,
-    overscan: 4,
-    getItemKey,
-    enabled: shouldVirtualize,
-  });
-
-  useLayoutEffect(() => {
-    if (!shouldVirtualize || !ready) return;
-    const saved = useUiStore.getState().home.scrollTop;
-    if (saved > 0) rowVirtualizer.scrollToOffset(saved);
-  }, [ready, rowVirtualizer, shouldVirtualize]);
-
-  const renderCard = (restaurant: Restaurant, index: number, animate: boolean) => (
-    <HomeRestaurantCard
-      key={restaurant.id}
-      restaurant={restaurant}
-      index={index}
-      cart={cart}
-      animate={animate}
-      onOpen={openRestaurant}
-      onAdd={addFromHome}
-      onCustomize={handleCustomize}
-      onIncrement={addItem}
-      onDecrement={decrementItem}
-    />
+  const renderCard = useCallback(
+    (restaurant: Restaurant, animate: boolean) => (
+      <HomeRestaurantCard
+        key={restaurant.id}
+        restaurant={restaurant}
+        staggerIndex={STAGGER_INDEX_BY_ID.get(restaurant.id) ?? 0}
+        cart={cart}
+        animate={animate}
+        onOpen={openRestaurant}
+        onAdd={addFromHome}
+        onCustomize={handleCustomize}
+        onIncrement={addItem}
+        onDecrement={decrementItem}
+      />
+    ),
+    [addFromHome, addItem, cart, decrementItem, handleCustomize, openRestaurant],
   );
 
   return (
@@ -171,27 +165,16 @@ export const RestaurantFeed = memo(function RestaurantFeed({ ready, scrollerRef 
         </div>
       ) : filteredRestaurants.length ? (
         shouldVirtualize ? (
-          <div id="restaurant-list" style={{ position: 'relative', height: rowVirtualizer.getTotalSize() }}>
-            {rowVirtualizer.getVirtualItems().map((virtualRow) => (
-              <div
-                key={virtualRow.key}
-                data-index={virtualRow.index}
-                ref={rowVirtualizer.measureElement}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
-              >
-                {renderCard(filteredRestaurants[virtualRow.index], virtualRow.index, false)}
-              </div>
-            ))}
-          </div>
+          <Suspense fallback={null}>
+            <VirtualizedRestaurantList
+              restaurants={filteredRestaurants}
+              scrollerRef={scrollerRef}
+              renderCard={renderCard}
+            />
+          </Suspense>
         ) : (
           <div id="restaurant-list">
-            {filteredRestaurants.map((restaurant, index) => renderCard(restaurant, index, true))}
+            {filteredRestaurants.map((restaurant) => renderCard(restaurant, true))}
           </div>
         )
       ) : (

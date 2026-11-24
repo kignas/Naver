@@ -17,8 +17,7 @@ import { useAppStore } from './store/appStore';
 import { useSearchStore } from './store/searchStore';
 import { useNavStore } from './store/navStore';
 import { statusBarStyle, statusBarTheme } from './lib/statusBarTheme';
-import { createRoot } from 'react-dom/client';
-import { StressDebugPanel } from './dev/StressDebugPanel';
+import { createRoot, type Root } from 'react-dom/client';
 import { debugWanted } from './lib/debugFlag';
 import { primeFonts } from './lib/fonts';
 import { installPreloadOnIntent, preloadAllRoutes, preloadLikelyRoutes, routeLoaders } from './lib/routeLoaders';
@@ -149,14 +148,23 @@ function AppRoutes() {
 function DebugPanelRoot(): null {
   useEffect(() => {
     if (!debugWanted()) return undefined;
-    const host = document.createElement('div');
-    host.id = 'nbp-debug-root';
-    document.body.appendChild(host);
-    const root = createRoot(host);
-    root.render(<StressDebugPanel />);
+    let disposed = false;
+    let host: HTMLDivElement | undefined;
+    let root: Root | undefined;
+    // Testers only: keeping the overlay out of the entry chunk means its stats
+    // table and rAF loop are not parsed on the path to first paint.
+    void import('./dev/StressDebugPanel').then(({ StressDebugPanel }) => {
+      if (disposed) return;
+      host = document.createElement('div');
+      host.id = 'nbp-debug-root';
+      document.body.appendChild(host);
+      root = createRoot(host);
+      root.render(<StressDebugPanel />);
+    });
     return () => {
-      root.unmount();
-      host.remove();
+      disposed = true;
+      root?.unmount();
+      host?.remove();
     };
   }, []);
   return null;

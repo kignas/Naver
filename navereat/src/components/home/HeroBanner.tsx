@@ -35,7 +35,17 @@ export const HeroBanner = memo(function HeroBanner() {
                   </span>
                 </button>
               </div>
-              <img className="header-slide__art" src={heroDish} alt="" aria-hidden="true" decoding="async" />
+              {/* Inlined as a data URI today, so the priority hint stays inert until the art is a file. */}
+              <img
+                className="header-slide__art"
+                src={heroDish}
+                alt=""
+                aria-hidden="true"
+                width={600}
+                height={460}
+                decoding="async"
+                fetchPriority="high"
+              />
             </div>
           </article>
         </div>
