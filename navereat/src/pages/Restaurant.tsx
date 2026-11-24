@@ -624,7 +624,16 @@ export function Restaurant() {
             </div>
           </div>
 
-          <footer className="rmf" id="menu-footer" aria-label="Menu information">
+          {/* The disclaimer belongs to the menu that is on screen. Rendering it
+              while the menu is still being prepared lays it out under a short
+              pane and then drops it when the groups arrive — a visible jump of
+              the footer during the push into this route. */}
+          <footer
+            className="rmf"
+            id="menu-footer"
+            aria-label="Menu information"
+            hidden={!ready}
+          >
             <section className="rmf-dis" aria-labelledby="rmf-dis-title">
               <h2 className="rmf-dis-title" id="rmf-dis-title">
                 Disclaimer :

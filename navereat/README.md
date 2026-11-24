@@ -182,6 +182,29 @@ page underneath exactly where it was. Tab switches stay instant.
   leaving a detail page for a tab route is always a pop, so the reverse slide
   runs instead of an instant swap.
 
+### Route stylesheets stay inside their own page (Item 13, follow-up)
+
+* Route bundles are legacy global stylesheets: they carry a reset (`*`, `body`,
+  `button`, `h1…h6`) and rules for other pages' class names. Two layers are
+  mounted together for the whole slide, so enabling a bundle used to restyle the
+  page underneath it. The cart bundle's `.res-name{font-size:20px!important}`
+  won over the restaurant bundle's `28px` the moment the cart sheet turned on:
+  the restaurant header shrank 9 px and its disclaimer footer moved with it,
+  while the slide was still running (CLS 0.1505 with the footer on screen).
+* The cross-page rules are gone from the cart bundle (they matched nothing in
+  the cart page — verified by DOM query) and the back-button restyle now names
+  only the cart's own `.ct-dh-back`.
+* The restaurant page no longer renders its disclaimer footer while the menu is
+  still being prepared: it was laid out under a short pane and then dropped when
+  the groups arrived, a visible jump of the footer on the push into the route.
+* Proof: every route is pixel-identical before and after (7 routes, 0 differing
+  pixels), and no route sheet changes a single layout property of another
+  page's elements (7 pages × 7 sheets, 0 leaks).
+
+`npm run stress-walk` gates the exact path a user takes from a menu to the cart
+in one scenario — `restaurant -> customise -> add -> cart` — at every font scale
+and in the debug-panel context, and exits 0 at both 1× and 4× CPU.
+
 `npm run route-motion-check` records real frames of Home → Restaurant and back,
 writes 8-frame strips plus `route-motion.json` to `../verify/item12c/`, and
 asserts all of the above. Measured at 1× in this workspace: push 420 ms / 59.4

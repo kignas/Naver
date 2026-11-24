@@ -515,6 +515,43 @@ try {
         1300,
       );
 
+      // The exact path a user takes from a menu to the cart, in one
+      // continuous sequence: restaurant -> customisation sheet open+close ->
+      // add -> cart. Gated on its own so a stylesheet or layout change that
+      // only shows up when the two pages are mounted together cannot hide in
+      // two separate scenarios.
+      // Getting back to a menu is setup, not the measured path: the Home tab
+      // re-entry has its own reflow characteristics that belong to the Home
+      // scenarios, and folding them in would attribute them to the cart push.
+      await page.evaluate(() => {
+        window.location.hash = '#/';
+      });
+      await page.waitForSelector('.u99-restaurant-head', { timeout: 60000 });
+      await sleep(900);
+      await page.locator('.u99-restaurant-head').first().click();
+      await page.waitForSelector('.menu-item', { timeout: 60000 });
+      await sleep(900);
+
+      await record(
+        page,
+        `restaurant -> customise -> add -> cart (${tag})`,
+        async () => {
+          const customise = page.locator('.nb-add-btn--cust').first();
+          if (await customise.count()) {
+            await customise.click({ timeout: 8000 });
+            await page.waitForSelector('.ewcs-sheet.show', { timeout: 30000 });
+            await sleep(500);
+            await page.locator('#ewcs-sheet .ewcs-close').first().click({ timeout: 5000 });
+            await page
+              .waitForSelector('.ewcs-backdrop.show', { state: 'detached', timeout: 8000 });
+          }
+          await ensureCartBar(page);
+          await page.locator('#es-pink-inner').click({ timeout: 15000 });
+          await page.waitForSelector('.ct-cta', { timeout: 60000 });
+        },
+        1500,
+      );
+
       await record(
         page,
         `lifecycle: background -> foreground (${tag})`,
@@ -562,7 +599,7 @@ try {
       await sleep(1500);
       await record(
         debugPage,
-        `push: Restaurant -> Cart (debug panel on, font-scale ${scale})`,
+        `restaurant -> customise -> add -> cart (debug panel on, font-scale ${scale})`,
         async () => {
           await debugPage.locator('.u99-restaurant-head').first().click();
           await debugPage.waitForSelector('.menu-item', { timeout: 60000 });
