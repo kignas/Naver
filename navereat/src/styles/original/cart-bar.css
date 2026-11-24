@@ -1,12 +1,16 @@
 /* Font is inherited from the global Eatswada typography system (Manrope). */
 
+    /* `--wc-lift` is the tab-slot offset (0 on a detail route). It is composed
+       into every transform the pill uses so the entrance animation lands on the
+       bar's real position, and it never becomes a `bottom` change: a transform
+       does not produce a layout shift, a `bottom` change does. */
     @keyframes slideUpWhiteCart {
-      0% { transform: translate(-50%, 150%); opacity: 0; }
-      100% { transform: translate(-50%, 0); opacity: 1; }
+      0% { transform: translate(-50%, calc(150% - var(--wc-lift, 0px))); opacity: 0; }
+      100% { transform: translate(-50%, calc(-1 * var(--wc-lift, 0px))); opacity: 1; }
     }
     @keyframes slideDownWhiteCart {
-      0% { transform: translate(-50%, 0); opacity: 1; }
-      100% { transform: translate(-50%, 130%); opacity: 0; }
+      0% { transform: translate(-50%, calc(-1 * var(--wc-lift, 0px))); opacity: 1; }
+      100% { transform: translate(-50%, calc(130% - var(--wc-lift, 0px))); opacity: 0; }
     }
     @keyframes wcBump {
       0% { transform: scale(1); }
@@ -14,9 +18,9 @@
       100% { transform: scale(1); }
     }
     @keyframes wcPinkEnter {
-      0% { transform: translate(-50%, 130%) scale(.96); opacity:0; }
-      70% { transform: translate(-50%, -4px) scale(1.015); opacity:1; }
-      100% { transform: translate(-50%, 0) scale(1); opacity:1; }
+      0% { transform: translate(-50%, calc(130% - var(--wc-lift, 0px))) scale(.96); opacity:0; }
+      70% { transform: translate(-50%, calc(-4px - var(--wc-lift, 0px))) scale(1.015); opacity:1; }
+      100% { transform: translate(-50%, calc(-1 * var(--wc-lift, 0px))) scale(1); opacity:1; }
     }
     @keyframes wcPinkPulse {
       0% { transform: scale(1); }
@@ -37,13 +41,21 @@
     }
 
     #white-cart-root {
-      position: fixed !important; left: 50% !important; transform: translateX(-50%) !important;
+      position: fixed !important; left: 50% !important;
+      /* One layout box for both modes. `.wc-above-nav` raises the bar above the
+         floating nav with --wc-lift (a compositor transform), not with `bottom`,
+         so switching between the tab pill and the pink detail pill cannot shift
+         layout. */
+      --wc-lift: 0px;
+      transform: translateX(-50%) translateY(calc(-1 * var(--wc-lift))) !important;
       /* IMPORTANT: inherit the bottom-nav component's shared variable.
          Do not create an inline --nb-cart-bottom on this element. */
       bottom: var(--nb-cart-bottom, calc(12px + env(safe-area-inset-bottom, 0px))) !important;
       width: min(720px, calc(100vw - 24px)); max-width: calc(100vw - 24px);
       z-index: 100000; display: none;
-      transition: bottom .32s cubic-bezier(.22,1,.36,1);
+      /* The mode lift is compositor-only; easing it keeps the shell from
+         snapping while the incoming page starts to cover it. */
+      transition: transform .2s cubic-bezier(.22,1,.36,1);
     }
     #white-cart-root.wc-enter {
       animation: slideUpWhiteCart 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;

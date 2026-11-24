@@ -116,11 +116,11 @@ body {
 /* ---------- Home two-tone cart bar (white pill + green CTA) ---------- */
 @keyframes slideUpWhiteCart {
   0% {
-    transform: translate(-50%, 150%);
+    transform: translate(-50%, calc(150% - var(--wc-lift, 0px)));
     opacity: 0;
   }
   100% {
-    transform: translate(-50%, 0);
+    transform: translate(-50%, calc(-1 * var(--wc-lift, 0px)));
     opacity: 1;
   }
 }

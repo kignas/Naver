@@ -1,3 +1,6 @@
+/* The tab slot sits `--nav-reserve` above the viewport bottom while the pill's
+   layout box stays on `--nb-cart-bottom`. Expressed as a lift so the mode change
+   is compositor-only. */
 #white-cart-root.wc-above-nav {
-  bottom: var(--nav-reserve) !important;
+  --wc-lift: calc(var(--nav-reserve) - var(--nb-cart-bottom, calc(12px + env(safe-area-inset-bottom, 0px))));
 }

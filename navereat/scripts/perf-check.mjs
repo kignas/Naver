@@ -687,11 +687,21 @@ const navAndCoveredHome = async (browser) => {
     };
   };
 
+  // Route assets must be fetched once and reused: a revisit that re-requests or
+  // re-injects a route stylesheet pays for a parse on the way back to Home.
+  const assetSnapshot = () =>
+    page.evaluate(() => ({
+      sheets: document.styleSheets.length,
+      cssRequests: performance.getEntriesByType('resource').filter((entry) => /\.css(\?|$)/.test(entry.name)).length,
+    }));
+
+  const assetsBefore = await assetSnapshot();
   await sample();
   await page.locator('.route-tab-cache.is-active [data-home99-restaurant] [data-preload-route]').first().click();
   await page.waitForSelector('.rest-page', { timeout: 30000 });
   await page.waitForTimeout(1300);
   const push = summarise(await page.evaluate(() => window.__navSamples));
+  const assetsOnDetail = await assetSnapshot();
 
   // Covered Home: six seconds of complete silence.
   const rendersBefore = await page.evaluate(() => window.__homeRenders ?? 0);
@@ -730,9 +740,21 @@ const navAndCoveredHome = async (browser) => {
   await page.locator('.rest-page .ew-hd-back').first().click();
   await page.waitForTimeout(1000);
   const pop = summarise(await page.evaluate(() => window.__navSamples));
+  const assetsAfter = await assetSnapshot();
+  const routeAssets = {
+    cssRequestsBefore: assetsBefore.cssRequests,
+    cssRequestsOnDetail: assetsOnDetail.cssRequests,
+    cssRequestsAfter: assetsAfter.cssRequests,
+    sheetsBefore: assetsBefore.sheets,
+    sheetsOnDetail: assetsOnDetail.sheets,
+    sheetsAfter: assetsAfter.sheets,
+    fetchedOnPush: assetsOnDetail.cssRequests - assetsBefore.cssRequests,
+    // Returning to Home must not fetch or inject another stylesheet.
+    pass: assetsAfter.cssRequests <= assetsBefore.cssRequests && assetsAfter.sheets === assetsBefore.sheets,
+  };
 
   await context.close();
-  return { push, pop, covered };
+  return { push, pop, covered, routeAssets };
 };
 
 const bundle = async () => {
@@ -819,6 +841,14 @@ try {
     navCovered.covered.renders === 0 &&
     navCovered.covered.mutations === 0 &&
     navCovered.covered.placeholderChanged === false;
+  // Boot cost: the entry chunk is what a cold start pays for before any route
+  // exists, so it gets a hard gzip ceiling (a route splitting change that moves
+  // code into the entry must not slip through unnoticed).
+  const entryBudgetBytes = Number(process.env.PERF_ENTRY_BUDGET_BYTES || 150 * 1024);
+  const entryGzipBytes = result.bundle.entry?.gzipBytes ?? 0;
+  const bundlePass = entryGzipBytes > 0 && entryGzipBytes <= entryBudgetBytes;
+  const routeAssets = navCovered.routeAssets ?? { pass: false };
+  const routeAssetsPass = routeAssets.pass === true;
   const motion = result.motion;
   const motionFpsPass =
     motion.homeScroll.fps >= minFps && motion.sheetDrag.fps >= minFps && motion.sharedElement.fps >= minFps;
@@ -845,6 +875,9 @@ try {
     outgoingPass,
     navCovered,
     navPass,
+    routeAssets,
+    routeAssetsPass,
+    bundle: { entryGzipBytes, entryBudgetBytes, pass: bundlePass },
     motion,
     motionFpsPass,
     motionClsPass,
@@ -854,7 +887,9 @@ try {
       motionClsPass &&
       latencyPass &&
       outgoingPass &&
-      navPass,
+      navPass &&
+      routeAssetsPass &&
+      bundlePass,
   };
   await writeFile(path.join(outDir, `perf-${label}.json`), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result, null, 2));
@@ -868,7 +903,9 @@ try {
         `median tap→slide-start ${medianSlideStart.toFixed(1)} ms (budget ${slideStartBudget} ms), ` +
         `covered page identity push ${outgoingPush.identity} / pop ${outgoingPop.identity}, home re-renders under push ${outgoingPush.homeRendersDuring}, ` +
         `nav moved push ${navCovered.push.navMovedDuringSlide} / pop ${navCovered.pop.navMovedDuringSlide}, ` +
-        `covered home renders ${navCovered.covered.renders} / mutations ${navCovered.covered.mutations})`,
+        `covered home renders ${navCovered.covered.renders} / mutations ${navCovered.covered.mutations}, ` +
+        `route assets css ${routeAssets.cssRequestsAfter}/${routeAssets.cssRequestsBefore} sheets ${routeAssets.sheetsAfter}/${routeAssets.sheetsBefore}, ` +
+        `entry gzip ${entryGzipBytes} B (budget ${entryBudgetBytes} B))`,
     );
     process.exitCode = 1;
   }
