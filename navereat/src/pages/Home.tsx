@@ -18,7 +18,6 @@ import { useCachedReady } from '../hooks/useCachedReady';
 import { useScrollHeaderMotion } from '../lib/scrollHeaderMotion';
 import { useSearchPlaceholder } from '../hooks/useSearchPlaceholder';
 import { useOverlayOpen } from '../hooks/useOverlayOpen';
-import { useNavStore } from '../store/navStore';
 import { useAppNav } from '../lib/navigation';
 import { createRouteStyleSheet } from '../lib/routeStyles';
 import { useCustomize } from '../lib/customizeContext';
@@ -101,8 +100,7 @@ function RestaurantSkeleton() {
 function SearchPlaceholderText({ scrollerRef }: { scrollerRef: RefObject<HTMLDivElement | null> }) {
   const { pathname } = useLocation();
   const overlayOpen = useOverlayOpen();
-  const detailOpen = useNavStore((state) => state.detailDepth > 0);
-  const { dish, duration } = useSearchPlaceholder(scrollerRef, pathname !== '/' || overlayOpen || detailOpen);
+  const { dish, duration } = useSearchPlaceholder(scrollerRef, pathname !== '/' || overlayOpen);
   return (
     <span className="search-text" id="search-placeholder" aria-label={`Search "${dish}"`}>
       <span className="search-static">Search&nbsp;</span>

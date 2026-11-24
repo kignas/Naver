@@ -529,19 +529,15 @@ export function PageTransition({ location, swipeBack = false, render }: PageTran
     }, PUSH_DURATION);
   };
 
-  const setDetailDepth = useNavStore((state) => state.setDetailDepth);
-
-  // A tab page needs a cheap, non-rendering way to know it is covered: the
-  // store carries the number of detail layers on screen, and the body class
-  // lets CSS lift sheets above the detail page.
+  // Nothing here may publish state during a transition: an extra store update
+  // mid-slide costs a render pass at 4x CPU and can let a pending layout land a
+  // frame late. The covered-page pause reads the router location instead.
   useEffect(() => {
-    const depth = layers.length;
-    setDetailDepth(depth);
-    document.body.classList.toggle('has-detail', depth > 0);
+    document.body.classList.toggle('has-detail', layers.length > 0);
     return () => {
       document.body.classList.remove('has-detail');
     };
-  }, [layers.length, setDetailDepth]);
+  }, [layers.length]);
 
 
   return (
