@@ -543,6 +543,7 @@ export function PageTransition({ location, swipeBack = false, render }: PageTran
     };
   }, [layers.length, setDetailDepth]);
 
+
   return (
     <div
       className={`route-stage direction-${stage.direction}${stage.animating ? ' is-animating' : ''}${preparing ? ' is-preparing' : ''}${swiping ? ' is-swiping' : ''}${layers.length ? ' has-detail' : ''}`}

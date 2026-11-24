@@ -632,6 +632,109 @@ const motionChecks = async (browser) => {
   };
 };
 
+// Item 13: the floating nav must never move while a page slides, and a covered
+// page must be completely idle. Both are measured on the real build.
+const navAndCoveredHome = async (browser) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+  await page.addInitScript(seed);
+  await page.addInitScript(() => {
+    try {
+      sessionStorage.setItem('ew_offers_seen_v1', '["demo"]');
+    } catch {
+      /* storage */
+    }
+  });
+  await page.goto(`${base}/#/`, { waitUntil: 'load' });
+  await page.waitForSelector('.route-tab-cache.is-active [data-home99-restaurant]', { timeout: 30000 });
+  await page.waitForTimeout(1200);
+
+  const sample = () =>
+    page.evaluate(() => {
+      window.__navSamples = [];
+      const t0 = performance.now();
+      const tick = () => {
+        const nav = document.querySelector('.bottom-nav');
+        const stage = document.querySelector('.route-stage');
+        const rect = nav ? nav.getBoundingClientRect() : null;
+        window.__navSamples.push({
+          t: Math.round(performance.now() - t0),
+          hidden: nav ? nav.classList.contains('is-hidden') : null,
+          y: rect ? Math.round(rect.top * 100) / 100 : null,
+          animating: stage ? stage.classList.contains('is-animating') : false,
+        });
+        if (performance.now() - t0 < 900) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+
+  const summarise = (samples) => {
+    const sliding = samples.filter((s) => s.animating);
+    const ys = sliding.map((s) => s.y);
+    return {
+      slideStartMs: sliding.length ? sliding[0].t : null,
+      slideEndMs: sliding.length ? sliding[sliding.length - 1].t : null,
+      navMovedDuringSlide: ys.length ? ys[0] !== ys[ys.length - 1] : null,
+      navTopDuringSlide: ys.length ? [ys[0], ys[ys.length - 1]] : null,
+      hiddenDuringSlide: sliding.some((s) => s.hidden === true),
+      visibleAtSlideStart: sliding.length ? sliding[0].hidden === false : null,
+      hiddenAfterSlide: (() => {
+        const last = sliding.length ? sliding[sliding.length - 1] : null;
+        if (!last) return null;
+        const after = samples.filter((s) => s.t > last.t + 40);
+        return after.length ? after[after.length - 1].hidden === true : null;
+      })(),
+    };
+  };
+
+  await sample();
+  await page.locator('.route-tab-cache.is-active [data-home99-restaurant] [data-preload-route]').first().click();
+  await page.waitForSelector('.rest-page', { timeout: 30000 });
+  await page.waitForTimeout(1300);
+  const push = summarise(await page.evaluate(() => window.__navSamples));
+
+  // Covered Home: six seconds of complete silence.
+  const rendersBefore = await page.evaluate(() => window.__homeRenders ?? 0);
+  await page.evaluate(() => {
+    window.__coveredMutations = 0;
+    window.__coveredText = [];
+    const layer = [...document.querySelectorAll('.route-layer')].find((l) => l.querySelector('.home-screen'));
+    if (layer) {
+      new MutationObserver((records) => {
+        window.__coveredMutations += records.length;
+      }).observe(layer, { childList: true, subtree: true, characterData: true, attributes: true });
+    }
+    const read = () => {
+      const el = document.querySelector('.route-tab-cache .home-screen #search-placeholder');
+      if (el) window.__coveredText.push(el.textContent);
+    };
+    read();
+    window.__coveredTimer = setInterval(read, 250);
+  });
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('Performance.enable');
+  const metrics = async () => Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map((x) => [x.name, x.value]));
+  const before = await metrics();
+  await page.waitForTimeout(6000);
+  const after = await metrics();
+  const covered = await page.evaluate(() => {
+    clearInterval(window.__coveredTimer);
+    const unique = [...new Set(window.__coveredText)];
+    return { mutations: window.__coveredMutations, placeholderChanged: unique.length > 1, renders: window.__homeRenders ?? 0 };
+  });
+  covered.renders = covered.renders - rendersBefore;
+  covered.layoutCount = after.LayoutCount - before.LayoutCount;
+  covered.recalcStyleCount = after.RecalcStyleCount - before.RecalcStyleCount;
+
+  await sample();
+  await page.locator('.rest-page .ew-hd-back').first().click();
+  await page.waitForTimeout(1000);
+  const pop = summarise(await page.evaluate(() => window.__navSamples));
+
+  await context.close();
+  return { push, pop, covered };
+};
+
 const bundle = async () => {
   const dir = path.join(root, 'dist', 'assets');
   const files = await readdir(dir);
@@ -670,6 +773,7 @@ try {
     clsTransitions: await clsTransitions(browser),
     clsTransitions4x: await routeClsAt4x(browser),
     motion: await motionChecks(browser),
+    navCovered: await navAndCoveredHome(browser),
     bundle: await bundle(),
   };
   const pushFps = result.interactions.push.fps;
@@ -705,6 +809,16 @@ try {
   // must never happen is the covered page moving or re-rendering on every frame.
   const outgoingPass =
     outgoingPush.identity === true && outgoingPop.identity === true && (outgoingPush.homeRendersDuring ?? 0) <= 1;
+  const navCovered = result.navCovered;
+  const navPass =
+    navCovered.push.navMovedDuringSlide === false &&
+    navCovered.pop.navMovedDuringSlide === false &&
+    navCovered.push.hiddenDuringSlide === false &&
+    navCovered.pop.visibleAtSlideStart === true &&
+    navCovered.push.hiddenAfterSlide === true &&
+    navCovered.covered.renders === 0 &&
+    navCovered.covered.mutations === 0 &&
+    navCovered.covered.placeholderChanged === false;
   const motion = result.motion;
   const motionFpsPass =
     motion.homeScroll.fps >= minFps && motion.sheetDrag.fps >= minFps && motion.sharedElement.fps >= minFps;
@@ -729,6 +843,8 @@ try {
       pop: { identity: outgoingPop.identity === true, samples: outgoingPop.samples ?? 0, offenders: outgoingPop.offenders ?? [] },
     },
     outgoingPass,
+    navCovered,
+    navPass,
     motion,
     motionFpsPass,
     motionClsPass,
@@ -737,7 +853,8 @@ try {
       clsPass &&
       motionClsPass &&
       latencyPass &&
-      outgoingPass,
+      outgoingPass &&
+      navPass,
   };
   await writeFile(path.join(outDir, `perf-${label}.json`), JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result, null, 2));
@@ -749,7 +866,9 @@ try {
         `4x transition CLS ${maxTransitionCls4x.toFixed(6)}, scroll CLS ${motion.homeScroll.cls.toFixed(6)}, budget ${clsBudget}, max tap→frame ${maxTapToFrame1x.toFixed(1)} ms, ` +
         `median tap→frame ${medianTapToFrame1x.toFixed(1)} ms / max ${maxTapToFrame1x.toFixed(1)} ms, budget ${latencyBudget} ms, ` +
         `median tap→slide-start ${medianSlideStart.toFixed(1)} ms (budget ${slideStartBudget} ms), ` +
-        `covered page identity push ${outgoingPush.identity} / pop ${outgoingPop.identity}, home re-renders under push ${outgoingPush.homeRendersDuring})`,
+        `covered page identity push ${outgoingPush.identity} / pop ${outgoingPop.identity}, home re-renders under push ${outgoingPush.homeRendersDuring}, ` +
+        `nav moved push ${navCovered.push.navMovedDuringSlide} / pop ${navCovered.pop.navMovedDuringSlide}, ` +
+        `covered home renders ${navCovered.covered.renders} / mutations ${navCovered.covered.mutations})`,
     );
     process.exitCode = 1;
   }

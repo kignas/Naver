@@ -163,6 +163,25 @@ page underneath exactly where it was. Tab switches stay instant.
 * Budgets: tap → first painted frame ≤ 60 ms, tap → slide start ≤ 200 ms at 1×
   (content-first cost: mount + layout + decode), push/pop FPS ≥ 55.
 
+### The floating nav and covered pages (Item 13)
+
+* The nav never animates. A pushed page is opaque and, while it slides, paints
+  over the nav (`.route-stage.has-detail.is-animating` is lifted above it), so
+  the nav is simply covered; it is hidden without any transform only after
+  `navereat:transition-end`, and it is shown again on the render that starts a
+  pop, so the departing page reveals it. The lift is scoped to the animation, so
+  sheets, the cart bar and the search overlay keep their stacking at rest.
+* A covered tab page does no work: Home's rotating search placeholder lives in
+  its own component (`SearchPlaceholderText`) and its timer is paused whenever
+  Home is not the visible top route or a sheet/search overlay is open.
+* `perf-check` asserts both: `navMovedDuringSlide === false` on push and pop,
+  the nav visible during the slide and hidden after it on a push, and a covered
+  Home with 0 renders, 0 DOM mutations and 0 style recalculations over 6 s.
+* A hash-only history pop (Android hardware back, browser back) is recognised
+  even when the router commits the new hash before the popstate handler runs:
+  leaving a detail page for a tab route is always a pop, so the reverse slide
+  runs instead of an instant swap.
+
 `npm run route-motion-check` records real frames of Home → Restaurant and back,
 writes 8-frame strips plus `route-motion.json` to `../verify/item12c/`, and
 asserts all of the above. Measured at 1× in this workspace: push 420 ms / 59.4
