@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Location } from 'react-router-dom';
 import { isTabPath, TAB_PATHS, useAppNav } from '../lib/navigation';
-import { applyLayout, captureLayout, type LayoutSnapshot } from '../lib/layoutSnapshot';
+import { applyLayout, captureLayout, refreshSnapshotScroll, type LayoutSnapshot } from '../lib/layoutSnapshot';
 import { RouteShell } from './RouteShell';
 import { waitForRouteReady } from '../lib/routeReady';
 import { routeKeyFor } from '../lib/routeLoaders';
@@ -190,7 +190,12 @@ export function PageTransition({ location, swipeBack = false, render }: PageTran
   }, [location, restoreFrozenLayout]);
 
   useEffect(() => {
-    const onBeforeNavigate = () => captureCurrentLayout();
+    const onBeforeNavigate = () => {
+      captureCurrentLayout();
+      // The snapshot was taken when the route settled; the scroll offsets have
+      // moved since, and freezing a stale offset would rewind the page.
+      snapshotsRef.current.forEach(refreshSnapshotScroll);
+    };
     window.addEventListener('navereat:before-navigate', onBeforeNavigate);
     return () => window.removeEventListener('navereat:before-navigate', onBeforeNavigate);
   }, [captureCurrentLayout]);

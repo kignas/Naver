@@ -115,6 +115,7 @@ export function Home() {
   const [sortBy, setSortBy] = useState<SortKey>(cachedHome.sortBy);
   const scrollRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
+  const screenRef = useRef<HTMLDivElement>(null);
   const openSearch = useSearchStore((state) => state.openSearch);
   const { dish: searchDish, duration: searchDishDuration } = useSearchPlaceholder(scrollRef);
 
@@ -127,7 +128,7 @@ export function Home() {
   useLayoutEffect(() => homeStyle.attach(), []);
 
   const storeScrollTop = useCallback((top: number) => patchHome({ scrollTop: top }), [patchHome]);
-  const syncHeaderMotion = useScrollHeaderMotion({ scroller: scrollRef, host: headerRef, onScrollTop: storeScrollTop });
+  const syncHeaderMotion = useScrollHeaderMotion({ scroller: scrollRef, host: screenRef, header: headerRef, onScrollTop: storeScrollTop });
 
   useLayoutEffect(() => {
     const scroller = scrollRef.current;
@@ -198,7 +199,7 @@ export function Home() {
   };
 
   return (
-    <div className="home-screen">
+    <div className="home-screen" ref={screenRef}>
       <div className="home-scroll" ref={scrollRef}>
         <header className="hero-header" id="home-header" ref={headerRef}>
           <div className="loc-row es-header-item">
@@ -300,40 +301,42 @@ export function Home() {
               </span>
             </button>
           </div>
+        </header>
 
-          <div className="banner-wrap es-header-item" id="hero-banner-region" aria-live="polite">
-            <div className="header-carousel" id="banner-carousel" aria-roledescription="carousel" aria-label="Promotions">
-              <div className="header-carousel-track" id="header-carousel-track">
-                <article className="header-slide is-active" role="group" aria-roledescription="slide" aria-label="Banner 1">
-                  <div className="header-slide__panel">
-                    <div className="header-slide__copy">
-                      <h2 className="banner-title">
-                        Good Food
-                        <br />
-                        <span className="banner-title-accent">Closer to Home.</span>
-                      </h2>
-                      <p className="banner-subtitle banner-subtitle--default">
-                        Tasty food
-                        <br />
-                        Happier you. <span className="banner-heart" aria-hidden="true">♥</span>
-                      </p>
-                      <button type="button" className="banner-cta" onClick={() => nav.push('/under99')}>
-                        Order Now
-                        <span className="banner-cta__chev" aria-hidden="true">
-                          <Icon name="solid:chevron-right" size={11} />
-                        </span>
-                      </button>
+        <div className="hero-sheet">
+            <div className="banner-wrap es-header-item" id="hero-banner-region" aria-live="polite">
+              <div className="header-carousel" id="banner-carousel" aria-roledescription="carousel" aria-label="Promotions">
+                <div className="header-carousel-track" id="header-carousel-track">
+                  <article className="header-slide is-active" role="group" aria-roledescription="slide" aria-label="Banner 1">
+                    <div className="header-slide__panel">
+                      <div className="header-slide__copy">
+                        <h2 className="banner-title">
+                          Good Food
+                          <br />
+                          <span className="banner-title-accent">Closer to Home.</span>
+                        </h2>
+                        <p className="banner-subtitle banner-subtitle--default">
+                          Tasty food
+                          <br />
+                          Happier you. <span className="banner-heart" aria-hidden="true">♥</span>
+                        </p>
+                        <button type="button" className="banner-cta" onClick={() => nav.push('/under99')}>
+                          Order Now
+                          <span className="banner-cta__chev" aria-hidden="true">
+                            <Icon name="solid:chevron-right" size={11} />
+                          </span>
+                        </button>
+                      </div>
+                      <img className="header-slide__art" src={heroDish} alt="" aria-hidden="true" decoding="async" />
                     </div>
-                    <img className="header-slide__art" src={heroDish} alt="" aria-hidden="true" decoding="async" />
-                  </div>
-                </article>
+                  </article>
+                </div>
               </div>
             </div>
-          </div>
-          <div className="ew-strip" aria-hidden="true">
-            Nearby restaurants &middot; Demo City
-          </div>
-        </header>
+            <div className="ew-strip" aria-hidden="true">
+              Nearby restaurants &middot; Demo City
+            </div>
+        </div>
 
         <main className="home-main">
           <section className="section" id="mind-section">

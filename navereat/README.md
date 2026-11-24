@@ -99,6 +99,34 @@ strings in `src/` are SVG `xmlns` declarations and the Font Awesome license
 comment; no request is made at runtime. The Android manifest requests no
 permissions and blocks cleartext traffic.
 
+## Pinned Home search bar
+
+The Home header is split into two blocks: `.hero-header` (location row + search
+row) and `.hero-sheet` (hero banner + offer strip). `.hero-header` is
+`position: sticky` with `top: -1 * --pin-top`, so the location row scrolls out of
+view and the search row stays pinned to the top of the viewport for the whole
+feed — no scroll range limit, no per-frame layout, no clone.
+
+* `--pin-top` is measured once per resize in `src/lib/scrollHeaderMotion.ts`
+  (59 px at 390 and 360 wide: 8 px padding + 44 px location row + 7 px gap).
+* `--hp` (0–1 collapse progress) and `--hsy` (parallax shift) are written once
+  per frame from the same passive scroll listener. They live on `:root`, not on
+  the screen element, because a route transition freezes and restores every
+  inline style inside the page.
+* Only `transform`/`opacity` are animated (search box and VEG card compact to
+  0.94/0.92 with `transform-origin: top`), so the header's flow height is the
+  same at every scroll position. `prefers-reduced-motion` keeps the pin and
+  drops the compaction and the parallax.
+* `npm run sticky-check` scrolls with real touch gestures (CDP
+  `Input.dispatchTouchEvent`, no `scrollTop` writes) at 390×844 and 360×640,
+  checks the row's viewport rect at ~100/400/1500/3000, a fling, the search
+  overlay open/close, Home → Restaurant → back and background/foreground, and
+  fails on any layout shift or a moved bar. Screenshots and the JSON report go
+  to `../verify/item12b/`.
+* `node scripts/scroll0-diff.mjs <tag>` captures Home at scrollTop 0 so two
+  builds can be pixel-diffed; the pinned bar build is pixel-identical to the
+  previous build at rest (0 px at 390×844 and 360×640).
+
 ## Visual reference
 
 The original reference frontend is kept outside this public repository as a

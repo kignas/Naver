@@ -408,83 +408,103 @@ body {
   color: var(--hd-on-light);
 }
 
-/* ── Item 11A: header collapse, pinned search row, hero parallax ──────────
-   --hp (0–1) and --hsy (px) are written once per frame by
-   src/lib/scrollHeaderMotion.ts. Everything below is transform/opacity only:
-   no size, offset or font property changes, so the header's flow height is
-   identical at every scroll position. */
-.home-screen {
+/* ── Header pin: location row out, search row glued to the top ────────────
+   `.hero-header` holds only the location row and the search row. It is
+   `position: sticky` with a negative top equal to --pin-top (measured in
+   src/lib/scrollHeaderMotion.ts), so the location row scrolls out of view and
+   the search row stays pinned for the whole page — no scroll range limit, no
+   per-frame layout. The banner and the offer strip live in `.hero-sheet`, which
+   scrolls away underneath the pinned bar.
+
+   --hp (0–1) and --hsy (px) are written once per frame by the same hook.
+   Everything they drive is transform/opacity only: no size, offset or font
+   property changes, so the header's flow height is identical at every scroll
+   position and the page at scrollTop 0 renders exactly like the original. */
+/* Written by the header hook on :root, not on .home-screen: a route
+   transition freezes and restores every inline style inside the page, which
+   would put a stale --hp back. */
+:root {
   --hp: 0;
   --hsy: 0;
+  --pin-top: 59px;
 }
 
-.hero-header.is-header-collapsed .loc-row {
-  transform: translate3d(0, calc(var(--hp) * -100%), 0);
+.hero-header {
+  position: sticky;
+  top: calc(-1 * var(--pin-top, 59px));
+}
+
+/* Burgundy shell for the banner + strip. Mirrors .hero-header's shell (the
+   banner bleeds through this padding) so the block reads as one surface. */
+.home-screen .hero-sheet {
+  position: relative;
+  z-index: 9;
+  padding: 0 20px;
+  background: var(--hd-primary);
+  color: var(--hd-ink);
+}
+
+/* The sheet carries the shell's rounded bottom (it used to be painted by the
+   header's ::before, which now ends above the banner). The header's own bottom
+   corners square off so the two blocks meet without a notch. */
+@media (max-width: 599px) {
+  .home-screen .hero-sheet {
+    border-bottom-left-radius: 34px;
+    border-bottom-right-radius: 34px;
+  }
+}
+
+.home-screen .hero-header::before {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.home-screen.is-header-collapsed .loc-row {
   opacity: calc(1 - var(--hp));
 }
 
-.hero-header.is-header-collapsed .header-slide__art {
+.home-screen.is-header-collapsed .header-slide__art {
   transform: translate3d(0, min(calc(var(--hsy) * 0.32px), 70px), 0);
 }
 
-@media (max-width: 599px) {
-  /* Sticky only while the header is collapsing: at rest the row keeps its
-     original box, so the page rasterises exactly like the original. */
-  .hero-header.is-header-collapsed .search-row {
-    position: sticky;
-    top: 0;
-    transform: translate3d(0, calc(var(--hp) * 8px), 0);
-  }
+/* Compact the pinned controls, never the row: the row keeps its exact box so
+   the bar has no seam against the status bar or the content below it. */
+.home-screen.is-header-collapsed .search-row .search-box {
+  transform-origin: top left;
+  transform: scale(calc(1 - 0.06 * var(--hp)));
+}
 
-  /* Compact the controls, not the row: the row keeps its exact box so the
-     sticky backdrop never shows a seam at the viewport edge. */
-  .hero-header.is-header-collapsed .search-row .search-box {
-    transform-origin: top left;
-    transform: scale(calc(1 - 0.06 * var(--hp)));
-  }
-
-  .hero-header.is-header-collapsed .search-row .veg-box {
-    transform-origin: top right;
-    transform: scale(calc(1 - 0.08 * var(--hp)));
-  }
-
-  /* The pinned row paints the status-bar burgundy itself, so the seam between
-     the webview top and the header can never show a gap. */
-  .hero-header.is-header-collapsed .search-row::before {
-    content: '';
-    position: absolute;
-    z-index: -1;
-    top: -10px;
-    right: -20px;
-    bottom: -8px;
-    left: -20px;
-    background: var(--hd-primary, #5D0D18);
-    opacity: var(--hp);
-    pointer-events: none;
-  }
+.home-screen.is-header-collapsed .search-row .veg-box {
+  transform-origin: top right;
+  transform: scale(calc(1 - 0.08 * var(--hp)));
 }
 
 /* Only while the finger is moving. */
-.hero-header.is-header-motion .loc-row {
-  will-change: transform, opacity;
-}
-.hero-header.is-header-motion .search-row,
-.hero-header.is-header-motion .header-slide__art {
+.home-screen.is-header-motion .header-slide__art {
   will-change: transform;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .hero-header.is-header-collapsed .loc-row,
-  .hero-header.is-header-collapsed .search-row,
-  .hero-header.is-header-collapsed .search-row .search-box,
-  .hero-header.is-header-collapsed .search-row .veg-box,
-  .hero-header.is-header-collapsed .header-slide__art {
-    transform: none;
+@media (max-width: 380px) {
+  .home-screen .hero-sheet {
+    padding: 0 14px;
+    border-bottom-left-radius: 30px;
+    border-bottom-right-radius: 30px;
   }
-  .hero-header.is-header-collapsed .loc-row {
+}
+
+@media (min-width: 600px) {
+  .home-screen .hero-sheet {
+    padding: 0 16px 11px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-screen.is-header-collapsed .loc-row {
     opacity: 1;
   }
-  .hero-header.is-header-collapsed .search-row::before {
-    opacity: 0;
+  .home-screen.is-header-collapsed .header-slide__art,
+  .home-screen.is-header-collapsed .search-row .search-box,
+  .home-screen.is-header-collapsed .search-row .veg-box {
+    transform: none;
   }
 }

@@ -65,6 +65,14 @@ export interface LayoutSnapshot {
   entries: SnapshotEntry[];
 }
 
+// A hidden subtree reports scrollTop 0 even though the browser kept the real
+// offset (a cached tab behind a pushed route). Freezing that 0 would destroy the
+// offset when the layer is shown again, so hidden elements are not sampled.
+const isMeasurable = (element: Element): boolean => {
+  const style = window.getComputedStyle(element);
+  return style.visibility !== 'hidden' && style.display !== 'none' && element.clientHeight + element.clientWidth > 0;
+};
+
 /** Captures the used layout of a subtree before an incoming route's global CSS can touch it. */
 export function captureLayout(root: Element, maxNodes = Infinity): LayoutSnapshot {
   const entries: SnapshotEntry[] = [];
@@ -78,18 +86,35 @@ export function captureLayout(root: Element, maxNodes = Infinity): LayoutSnapsho
         const value = computed.getPropertyValue(kebab(property));
         if (value) values.push([kebab(property), value]);
       });
+      const measurable = isMeasurable(element);
       entries.push({
         element,
         originalStyle: element.getAttribute('style'),
         values,
-        scrollTop: element.scrollTop,
-        scrollLeft: element.scrollLeft,
+        scrollTop: measurable ? element.scrollTop : -1,
+        scrollLeft: measurable ? element.scrollLeft : -1,
       });
     }
     Array.from(element.children).forEach(visit);
   };
   visit(root);
   return { entries };
+}
+
+/**
+ * Re-reads the scroll offsets of an existing snapshot. Scroll offsets change on
+ * every flick while the frozen styles do not, so this is all a navigation needs
+ * (and it avoids re-running getComputedStyle on every tap).
+ */
+export function refreshSnapshotScroll(snapshot: LayoutSnapshot): void {
+  snapshot.entries.forEach((entry) => {
+    if (!entry.element.isConnected || entry.scrollTop < 0) return;
+    const top = entry.element.scrollTop;
+    // A zero read from a hidden subtree is not a real offset; keep the old one.
+    if (top === 0 && entry.scrollTop > 0 && !isMeasurable(entry.element)) return;
+    entry.scrollTop = top;
+    entry.scrollLeft = entry.element.scrollLeft;
+  });
 }
 
 /** Applies the snapshot with !important so the outgoing page cannot reflow. */
@@ -100,8 +125,8 @@ export function applyLayout(snapshot: LayoutSnapshot): () => void {
     entry.element.setAttribute('style', `${base}${declarations}`);
   });
   snapshot.entries.forEach((entry) => {
-    entry.element.scrollTop = entry.scrollTop;
-    entry.element.scrollLeft = entry.scrollLeft;
+    if (entry.scrollTop >= 0) entry.element.scrollTop = entry.scrollTop;
+    if (entry.scrollLeft >= 0) entry.element.scrollLeft = entry.scrollLeft;
   });
 
   return () => {

@@ -18,7 +18,7 @@
   .hero-header .loc-pin-wrap i,.hero-header .loc-pin-icon{color:var(--hd-primary,#E9546B) !important;}
 
   /* ===== Premium oxblood + gold theme ===== */
-  html .hero-header,.hero-header{
+  html .hero-header,.hero-header,.hero-sheet{
     --hd-primary:#5D0D18 !important;--hd-ink:#fff !important;--hd-muted:rgba(255,255,255,.72) !important;
     --hd-accent:#EBCB8B !important;--hd-accent-ink:#5D0D18 !important;--hd-on-light:#5D0D18 !important;
     --hd-cta-bg:#EBCB8B !important;--hd-cta-ink:#3E0710 !important;
@@ -27,10 +27,10 @@
   .hero-header .btn-store,.hero-header .btn-profile{background:#fff !important;border-color:transparent !important;box-shadow:none !important;}
   .hero-header .store-top{color:#7A5A60 !important;}
   .hero-header .search-box,.hero-header .veg-box{box-shadow:none !important;border:0 !important;}
-  .hero-header .banner-cta{box-shadow:none !important;font-weight:900 !important;}
-  .hero-header .banner-cta__chev{background:rgba(62,7,16,.14) !important;}
-  .hero-header .banner-dot{background:rgba(255,255,255,.35) !important;}
-  .hero-header .banner-dot.is-active{background:#EBCB8B !important;}
+  .hero-header .banner-cta,.hero-sheet .banner-cta{box-shadow:none !important;font-weight:900 !important;}
+  .hero-header .banner-cta__chev,.hero-sheet .banner-cta__chev{background:rgba(62,7,16,.14) !important;}
+  .hero-header .banner-dot,.hero-sheet .banner-dot{background:rgba(255,255,255,.35) !important;}
+  .hero-header .banner-dot.is-active,.hero-sheet .banner-dot.is-active{background:#EBCB8B !important;}
   .sec-title::before{content:"";display:inline-block;width:4px;height:15px;border-radius:3px;background:#5D0D18;margin-right:8px;vertical-align:-2px;}
 
   /* Shorter, tighter header (mobile) */
