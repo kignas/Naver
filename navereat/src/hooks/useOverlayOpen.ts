@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { subscribeSheetCount, sheetCount } from '../lib/sheetStack';
 
 const OVERLAY_CLASSES = [
@@ -32,4 +32,25 @@ export function useOverlayOpen(): boolean {
   }, []);
 
   return sheetOpen || bodyOpen;
+}
+
+/**
+ * The router location a *tab cache* sees is the one it was cached with, so a
+ * covered page cannot learn from `useLocation` that it is covered. The hash is
+ * the one signal every layer shares.
+ */
+const subscribeHash = (listener: () => void): (() => void) => {
+  window.addEventListener('hashchange', listener);
+  window.addEventListener('popstate', listener);
+  return () => {
+    window.removeEventListener('hashchange', listener);
+    window.removeEventListener('popstate', listener);
+  };
+};
+
+const readHash = (): string => window.location.hash;
+
+export function useHashPath(): string {
+  const hash = useSyncExternalStore(subscribeHash, readHash, readHash);
+  return hash.replace(/^#/, '') || '/';
 }
