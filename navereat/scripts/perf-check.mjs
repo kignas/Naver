@@ -840,6 +840,93 @@ const cartBarCovered = async (browser) => {
   return { push, pop };
 };
 
+// Restaurant -> Cart push: frame gaps, long tasks and the browser's own
+// style/layout counters, at 1x and 6x CPU.
+const pushSmoothInit = () => {
+  const state = { longTasks: [], frames: [], startAt: null, endAt: null, tapAt: null };
+  window.__pushSmooth = state;
+  try {
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) state.longTasks.push({ start: entry.startTime, dur: entry.duration });
+    }).observe({ type: 'longtask', buffered: true });
+  } catch {
+    /* longtask unsupported */
+  }
+  window.__pushSmoothReset = () => {
+    state.longTasks = [];
+    state.frames = [];
+    state.startAt = null;
+    state.endAt = null;
+    state.tapAt = performance.now();
+  };
+  window.addEventListener('navereat:transition-start', () => {
+    state.startAt = performance.now();
+    const stage = document.querySelector('.route-stage');
+    const loop = (time) => {
+      state.frames.push(time);
+      if (stage && stage.classList.contains('is-animating')) requestAnimationFrame(loop);
+      else state.endAt = performance.now();
+    };
+    requestAnimationFrame(loop);
+  });
+  window.__pushSmoothReport = () => {
+    const gaps = state.frames.slice(1).map((time, index) => time - state.frames[index]);
+    const round = (value) => Math.round(value * 10) / 10;
+    const duringSlide = state.longTasks.filter((task) => state.startAt != null && task.start >= state.startAt - 16);
+    return {
+      tapToSlideStartMs: state.startAt == null ? null : Math.round(state.startAt - state.tapAt),
+      slideMs: state.startAt == null || state.endAt == null ? null : Math.round(state.endAt - state.startAt),
+      frames: state.frames.length,
+      maxGapMs: gaps.length ? round(Math.max(...gaps)) : null,
+      droppedFrames: gaps.filter((gap) => gap > 25).length,
+      longTasks: state.longTasks.map((task) => Math.round(task.dur)),
+      longTasksDuringSlide: duringSlide.map((task) => Math.round(task.dur)),
+      cartRenders: window.__cartRenders ?? null,
+    };
+  };
+};
+
+const pushSmoothness = async (browser, rate) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  await page.addInitScript(seed);
+  await page.addInitScript(pushSmoothInit);
+  await page.addInitScript(() => {
+    try {
+      sessionStorage.setItem('ew_offers_seen_v1', '["demo"]');
+    } catch {
+      /* storage */
+    }
+  });
+  await page.goto(`${base}/#/restaurant/1`, { waitUntil: 'load' });
+  await page.waitForSelector('#es-pink-inner', { timeout: 30000 });
+  await page.waitForTimeout(1300);
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('Performance.enable');
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate });
+  await page.waitForTimeout(300);
+  const metrics = async () =>
+    Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map((metric) => [metric.name, metric.value]));
+  const before = await metrics();
+  await page.evaluate(() => window.__pushSmoothReset());
+  await page.locator('#es-pink-inner').click();
+  await page.waitForSelector('.ct-dh-back', { timeout: 20000 });
+  await page.waitForTimeout(600);
+  const after = await metrics();
+  const report = await page.evaluate(() => window.__pushSmoothReport());
+  const delta = (name) => Math.round(((after[name] ?? 0) - (before[name] ?? 0)) * 10) / 10;
+  await context.close();
+  return {
+    rate,
+    ...report,
+    recalcStyleCount: delta('RecalcStyleCount'),
+    layoutCount: delta('LayoutCount'),
+    recalcStyleMs: Math.round(delta('RecalcStyleDuration') * 1000),
+    layoutMs: Math.round(delta('LayoutDuration') * 1000),
+    taskMs: Math.round(delta('TaskDuration') * 1000),
+  };
+};
+
 const bundle = async () => {
   const dir = path.join(root, 'dist', 'assets');
   const files = await readdir(dir);
@@ -880,6 +967,10 @@ try {
     motion: await motionChecks(browser),
     navCovered: await navAndCoveredHome(browser),
     cartBar: await cartBarCovered(browser),
+    pushSmooth: {
+      '1x': await pushSmoothness(browser, 1),
+      '6x': await pushSmoothness(browser, 6),
+    },
     bundle: await bundle(),
   };
   const pushFps = result.interactions.push.fps;
@@ -943,6 +1034,24 @@ try {
     cartBarSteady(cartBar.pop) &&
     cartBar.push.pointerEventsDuringSlide?.every((value) => value === 'none') === true &&
     cartBar.push.absentAfterSlide === true;
+  // The restaurant -> cart push must land every frame at 1x and stay free of
+  // long tasks while the page travels. 6x is a stress run: it is recorded and
+  // only gated against regressions, because the cart's own first paint (a
+  // 384 ms render on a 6x-throttled CPU) happens before the slide starts.
+  const pushSmooth = result.pushSmooth ?? { '1x': {}, '6x': {} };
+  const one = pushSmooth['1x'];
+  const six = pushSmooth['6x'];
+  // One frame is allowed at 1x: it is the destination page's first paint, which
+  // can only happen when the layer becomes visible as the slide starts.
+  const pushSmoothPass =
+    one.droppedFrames <= 1 &&
+    one.maxGapMs != null &&
+    one.maxGapMs <= 40 &&
+    (one.longTasksDuringSlide ?? []).every((dur) => dur <= 60) &&
+    one.recalcStyleCount <= 60 &&
+    one.cartRenders === 1 &&
+    six.droppedFrames <= 6 &&
+    (six.longTasks ?? []).every((dur) => dur <= 450);
   const routeAssets = navCovered.routeAssets ?? { pass: false };
   const routeAssetsPass = routeAssets.pass === true;
   const motion = result.motion;
@@ -973,6 +1082,8 @@ try {
     navPass,
     cartBar,
     cartBarPass,
+    pushSmooth,
+    pushSmoothPass,
     routeAssets,
     routeAssetsPass,
     bundle: { entryGzipBytes, entryBudgetBytes, pass: bundlePass },
@@ -987,6 +1098,7 @@ try {
       outgoingPass &&
       navPass &&
       cartBarPass &&
+      pushSmoothPass &&
       routeAssetsPass &&
       bundlePass,
   };
@@ -1005,6 +1117,8 @@ try {
         `covered home renders ${navCovered.covered.renders} / mutations ${navCovered.covered.mutations}, ` +
         `cart bar moved push ${cartBar.push.movedDuringSlide} / pop ${cartBar.pop.movedDuringSlide}, ` +
         `bar present at pop start ${cartBar.pop.presentAtSlideStart}, ` +
+        `push frames dropped 1x ${one.droppedFrames} / 6x ${six.droppedFrames}, ` +
+        `cart recalc 1x ${one.recalcStyleCount} / 6x ${six.recalcStyleCount}, ` +
         `route assets css ${routeAssets.cssRequestsAfter}/${routeAssets.cssRequestsBefore} sheets ${routeAssets.sheetsAfter}/${routeAssets.sheetsBefore}, ` +
         `entry gzip ${entryGzipBytes} B (budget ${entryBudgetBytes} B))`,
     );

@@ -212,3 +212,68 @@ Options for this app:
 
 Recommendation: ship **A** now, add **B** as a follow-up if Google sign-in is a
 hard requirement, skip **C** until the backend has phone OTP.
+
+## 6. Details that need the live API (STEP 1 blockers)
+
+These cannot be settled by reading the frontend; each one changes code, so they
+are listed before `apiDataSource` is written.
+
+| # | unknown | why it matters | how to settle it |
+| --- | --- | --- | --- |
+| 1 | Exact menu payload shape: `[{category, items}]`, flat items, or `{category: items}` | the original normalises all three, so the app must too — but which one is real decides the fast path and the cache shape | `GET /restaurants/:id/menu` once |
+| 2 | `customizations` group shape: `{title, options[{label, extraPrice, pricingMode}]}`, required/min-max rules, `isVeg` per option | the customise sheet, price maths and the order payload depend on it | one restaurant with variants |
+| 3 | Item availability flags: `available` vs `isAvailable` vs `stock`, and whether unavailable items are omitted or flagged | determines whether a dish renders greyed or disappears | menu of a partially closed restaurant |
+| 4 | Restaurant card fields actually present: `priceForTwo`, `discount`, `offers[]`, `badges`, `isOpen`, `opensAt`, `deliveryFee` | the card has slots for each; absent fields must keep the demo placeholder | `GET /restaurants` |
+| 5 | `/platform/public-status` real keys and `state` values (`open`, `closed_hours`, `closed_manual`, `maintenance`, `shortage`) | drives the closed banner, the overlay and payment options | one call |
+| 6 | Quote `bill` key set and units: rupees vs paise, and whether `grandTotal` already includes tip/taxes | the app must render the backend's numbers, not recompute | one `POST /pricing/quote` |
+| 7 | Whether `/pricing/quote` needs auth, and whether an anonymous quote is allowed | decides whether the cart shows a price before login | quote without a token |
+| 8 | `POST /orders` required vs optional fields (is `quoteId` enforced? is `deliveryAddress` enough without `addressId`?) | a missing required field is a failed test order | one COD test order |
+| 9 | Order list payload: `timeline[]` shape, `rider{}` fields, `status` vocabulary | tracking renders steps from these | `GET /orders` for the test account |
+| 10 | Coupon error `code` vocabulary (`COUPON_INVALID`, `COUPON_MIN_ORDER`, …) | the sheet shows a different line per code | validate a bad code |
+| 11 | Address payload: whether `city`/`pincode` are server-derived from lat/lng, and whether `receiverPhone` is required | the add-address form validates against it | one address create (test account) |
+| 12 | Review payload field names for rider/food/item ratings | the rate sheet posts them | `GET /orders/:id/review` on a delivered order |
+| 13 | Whether `/support/tickets` accepts `evidencePhotos` and `issueCategory` today | older backends ignore them | one ticket create |
+| 14 | Whether responses carry `success:false` inside HTTP 200 anywhere | the app unwraps both, but error routing differs | observed during the read-only pass |
+| 15 | Image URL shape from Cloudinary (transformation segments already present?) | decides whether the app may append `f_auto,q_auto,w_…` | one restaurant payload |
+| 16 | JWT lifetime and the exact `401`/`403` split | the app clears the session on either, but the message differs | one expired token |
+
+## 7. CORS the backend must send for `https://localhost`
+
+Capacitor 6 serves the app from `https://localhost` on Android (and
+`capacitor://localhost` on iOS), so every API call is a cross-origin request
+and each write is preflighted.
+
+For **every** response to `GET`, `POST`, `PUT`, `PATCH`, `DELETE`:
+
+```
+Access-Control-Allow-Origin: https://localhost
+Vary: Origin
+```
+
+For the `OPTIONS` preflight of the calls that send `Authorization`,
+`Content-Type: application/json` or `Idempotency-Key`:
+
+```
+Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS
+Access-Control-Allow-Headers: Authorization, Content-Type, Idempotency-Key
+Access-Control-Max-Age: 600
+Access-Control-Allow-Origin: https://localhost
+Vary: Origin
+```
+
+and the preflight must answer **204** (or 200) **before** authentication runs —
+a preflight never carries the `Authorization` header, so a 401 on `OPTIONS`
+breaks every authenticated call.
+
+Notes:
+
+* `Access-Control-Allow-Origin` must echo the exact origin. `*` is not enough
+  for requests that carry `Authorization` once credentials are involved, and a
+  wildcard is not acceptable for this app anyway.
+* If an iOS build is added, `capacitor://localhost` needs the same treatment
+  (a two-origin allowlist, echoed through `Vary: Origin`).
+* No wildcard host, no `Access-Control-Allow-Credentials` — the app sends a
+  bearer token, not a cookie.
+* Images come from `https://res.cloudinary.com` and are plain `<img>` loads, so
+  they need no CORS headers; the WebView network config must still allow that
+  host and nothing else.

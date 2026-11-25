@@ -1,19 +1,22 @@
 import { useEffect } from 'react';
 import type { DemoOffer } from '../../data/demo';
+import { useNavStore } from '../../store/navStore';
 import { useCartTotals } from './cartTotals';
 
 interface CartOfferWatcherProps {
   offerMode: string | null;
   blocked: boolean;
-  preparing: boolean;
   onShow: (offers: DemoOffer[]) => void;
 }
 
 const SEEN_KEY = 'ew_offers_seen_v1';
 
 /** Owns the cart's offer-popup timer so the shell never subscribes to totals. */
-export function CartOfferWatcher({ offerMode, blocked, preparing, onShow }: CartOfferWatcherProps) {
+export function CartOfferWatcher({ offerMode, blocked, onShow }: CartOfferWatcherProps) {
   const { offers, subtotal } = useCartTotals();
+  // Subscribed here, not in the page: the popup must wait for the slide to end,
+  // and the page must not re-render when that flag flips.
+  const preparing = useNavStore((state) => state.preparing);
 
   useEffect(() => {
     if (preparing || !offers.length || blocked || offerMode === 'none') return;

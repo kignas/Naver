@@ -20,7 +20,6 @@ import { tapHaptic } from '../lib/haptics';
 import { createRouteStyleSheet } from '../lib/routeStyles';
 import { useAppNav } from '../lib/navigation';
 import { useAppStore } from '../store/appStore';
-import { useNavStore } from '../store/navStore';
 import { toast } from '../store/toastStore';
 import cartBundleCss from '../styles/original/cart.bundle.css?raw';
 import '../styles/original/cart-popups.css';
@@ -33,6 +32,33 @@ type SheetName = 'coupon' | 'bill' | 'pay' | 'note' | 'tip' | null;
 
 const cleanNote = (value: string): string =>
   value.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, NOTE_MAX);
+
+interface CartExtras {
+  note: string;
+  instructions: string[];
+  tip: number;
+}
+
+/** The note, instructions and tip the customer already set for this cart. */
+function readCartExtras(): CartExtras {
+  try {
+    const raw = JSON.parse(localStorage.getItem('nearbite_cart_extras') || '{}') as {
+      restaurantNote?: string;
+      deliveryInstructions?: string;
+      tipAmount?: number;
+    };
+    return {
+      note: cleanNote(String(raw.restaurantNote ?? '')),
+      instructions: String(raw.deliveryInstructions ?? '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean),
+      tip: Math.max(0, Math.min(1000, Math.round(Number(raw.tipAmount) || 0))),
+    };
+  } catch {
+    return { note: '', instructions: [], tip: 0 };
+  }
+}
 
 /** Cart headline name; a primitive selector so a quantity tap cannot re-render the page. */
 const cartHeadline = (cart: ReturnType<typeof useAppStore.getState>['cart']): string => {
@@ -66,20 +92,26 @@ export function Cart() {
   const closeSheet = () => sheetRef.current?.close();
   const orderSuccessRef = useRef<OrderSuccessHandle>(null);
   const pendingOrderRef = useRef<ReturnType<typeof placeOrder>>(null);
+  // The saved note, instructions and tip are read during the first render, so
+  // the page the slide reveals is already complete and nothing has to re-render
+  // (and re-layout the whole cart) while it travels.
+  const savedExtrasRef = useRef<CartExtras | null>(null);
+  savedExtrasRef.current ??= readCartExtras();
+  const savedExtras = savedExtrasRef.current;
+
   const [code, setCode] = useState('');
   const [couponError, setCouponError] = useState('');
-  const [note, setNote] = useState('');
-  const [noteWasSet, setNoteWasSet] = useState(false);
-  const [tip, setTip] = useState(0);
+  const [note, setNote] = useState(() => savedExtras.note);
+  const [noteWasSet, setNoteWasSet] = useState(() => Boolean(savedExtras.note));
+  const [tip, setTip] = useState(() => savedExtras.tip);
   const [tipInput, setTipInput] = useState('');
   const [tipError, setTipError] = useState('');
   const [payment, setPayment] = useState<Payment>('upi');
   const [cutlery, setCutlery] = useState(false);
   const [placing, setPlacing] = useState(false);
   const [offerPopup, setOfferPopup] = useState<DemoOffer[] | null>(null);
-  const [instructions, setInstructions] = useState<string[]>([]);
+  const [instructions, setInstructions] = useState<string[]>(() => savedExtras.instructions);
   const [diOpen, setDiOpen] = useState(false);
-  const preparing = useNavStore((s) => s.preparing);
 
   useLayoutEffect(() => {
     const detach = cartStyle.attach();
@@ -104,32 +136,6 @@ export function Cart() {
   const offerBlocked = sheet !== null || placing || offerPopup !== null;
 
   useEffect(() => {
-    if (preparing) return;
-    try {
-      const raw = JSON.parse(localStorage.getItem('nearbite_cart_extras') || '{}') as {
-        restaurantNote?: string;
-        deliveryInstructions?: string;
-        tipAmount?: number;
-      };
-      const savedNote = cleanNote(String(raw.restaurantNote ?? ''));
-      if (savedNote) {
-        setNote(savedNote);
-        setNoteWasSet(true);
-      }
-      const savedInstructions = String(raw.deliveryInstructions ?? '')
-        .split(',')
-        .map((value) => value.trim())
-        .filter(Boolean);
-      if (savedInstructions.length) setInstructions(savedInstructions);
-      const savedTip = Math.max(0, Math.min(1000, Math.round(Number(raw.tipAmount) || 0)));
-      if (savedTip > 0) setTip(savedTip);
-    } catch {
-      /* no saved extras */
-    }
-  }, [preparing]);
-
-  useEffect(() => {
-    if (preparing) return;
     try {
       localStorage.setItem(
         'nearbite_cart_extras',
@@ -138,7 +144,7 @@ export function Cart() {
     } catch {
       /* storage may be unavailable */
     }
-  }, [instructions, note, preparing, tip]);
+  }, [instructions, note, tip]);
 
   const handleApply = (value: string) => {
     const result = applyCoupon(value);
@@ -361,7 +367,7 @@ export function Cart() {
           />
         </div>
 
-        <CartOfferWatcher offerMode={offerMode} blocked={offerBlocked} preparing={preparing} onShow={setOfferPopup} />
+        <CartOfferWatcher offerMode={offerMode} blocked={offerBlocked} onShow={setOfferPopup} />
 
         {sheet === 'coupon' && (
           <Sheet
