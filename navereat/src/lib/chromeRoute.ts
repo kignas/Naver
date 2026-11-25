@@ -21,14 +21,15 @@ import { useNavStore } from '../store/navStore';
  */
 export function useChromePathname(pathname: string): string {
   const [chromePathname, setChromePathname] = useState(pathname);
+  const pushing = useNavStore.getState().direction === 'push';
+  // A pop or a tab switch is applied during render: the tab's chrome has to be
+  // in the same commit as the slide's first frame, otherwise the bar mounts a
+  // frame into the pop and plays its entrance animation while being revealed.
+  const applyNow = chromePathname !== pathname && (!pushing || isTabPath(pathname));
+  if (applyNow) setChromePathname(pathname);
 
   useEffect(() => {
-    if (chromePathname === pathname) return;
-    const pushing = useNavStore.getState().direction === 'push';
-    if (!pushing || isTabPath(pathname)) {
-      setChromePathname(pathname);
-      return;
-    }
+    if (applyNow || chromePathname === pathname) return;
     const apply = () => setChromePathname(pathname);
     window.addEventListener('navereat:transition-end', apply, { once: true });
     // A push that never reports its end (a deep link straight to a detail
@@ -38,7 +39,7 @@ export function useChromePathname(pathname: string): string {
       window.removeEventListener('navereat:transition-end', apply);
       window.clearTimeout(fallback);
     };
-  }, [chromePathname, pathname]);
+  }, [applyNow, chromePathname, pathname]);
 
-  return chromePathname;
+  return applyNow ? pathname : chromePathname;
 }

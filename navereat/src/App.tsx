@@ -102,6 +102,9 @@ function AppRoutes() {
       chromePathname.startsWith('/category/') ||
       chromePathname.startsWith('/restaurant/'));
   const cartBarMode = chromePathname.startsWith('/restaurant/') ? 'pink' : 'home';
+  // The shell still paints the outgoing tab's bar while a pushed page covers
+  // it, exactly like the floating nav.
+  const cartBarCovered = cartBarVisible && chromePathname !== location.pathname;
   // Only the two tab routes draw the floating nav.
   const cartBarAboveNav = cartBarVisible && isTabPath(chromePathname);
 
@@ -136,7 +139,12 @@ function AppRoutes() {
           )}
         />
       </div>
-      <CartBar visible={cartBarVisible} mode={cartBarMode} aboveNav={cartBarAboveNav} />
+      <CartBar
+        visible={cartBarVisible}
+        mode={cartBarMode}
+        aboveNav={cartBarAboveNav}
+        covered={cartBarCovered}
+      />
       <BottomNav />
       <ToastHost />
     </div>

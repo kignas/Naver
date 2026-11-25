@@ -757,6 +757,89 @@ const navAndCoveredHome = async (browser) => {
   return { push, pop, covered, routeAssets };
 };
 
+// The floating cart bar is chrome, like the nav: a pushed page slides over it
+// and must find it painted, still and un-faded underneath; it may only leave
+// once that page covers it (transition-end). A pop must reveal it in place on
+// the first frame, with no entrance animation.
+const cartBarCovered = async (browser) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  await page.addInitScript(seed);
+  await page.addInitScript(() => {
+    try {
+      sessionStorage.setItem('ew_offers_seen_v1', '["demo"]');
+    } catch {
+      /* storage */
+    }
+  });
+  await page.goto(`${base}/#/restaurant/1`, { waitUntil: 'load' });
+  await page.waitForSelector('#es-pink-inner', { timeout: 30000 });
+  await page.waitForTimeout(1300);
+
+  const sample = () =>
+    page.evaluate(() => {
+      window.__barSamples = [];
+      const t0 = performance.now();
+      const tick = () => {
+        const bar = document.querySelector('#white-cart-root');
+        const stage = document.querySelector('.route-stage');
+        const rect = bar ? bar.getBoundingClientRect() : null;
+        const style = bar ? getComputedStyle(bar) : null;
+        window.__barSamples.push({
+          t: Math.round(performance.now() - t0),
+          exists: Boolean(bar),
+          cls: bar ? bar.className : null,
+          y: rect ? Math.round(rect.top * 100) / 100 : null,
+          h: rect ? Math.round(rect.height * 100) / 100 : null,
+          opacity: style ? style.opacity : null,
+          pe: style ? style.pointerEvents : null,
+          animating: stage ? stage.classList.contains('is-animating') : false,
+        });
+        if (performance.now() - t0 < 1100) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+
+  const summarise = (samples) => {
+    const sliding = samples.filter((s) => s.animating);
+    const ys = sliding.map((s) => s.y);
+    const hs = sliding.map((s) => s.h);
+    const ops = sliding.map((s) => s.opacity);
+    const last = sliding.length ? sliding[sliding.length - 1] : null;
+    const after = last ? samples.filter((s) => s.t > last.t + 60) : [];
+    return {
+      slideStartMs: sliding.length ? sliding[0].t : null,
+      slideEndMs: last ? last.t : null,
+      frames: sliding.length,
+      yDuringSlide: ys.length ? [ys[0], ys[ys.length - 1]] : null,
+      hDuringSlide: hs.length ? [hs[0], hs[hs.length - 1]] : null,
+      movedDuringSlide: ys.length ? ys[0] !== ys[ys.length - 1] : null,
+      resizedDuringSlide: hs.length ? hs[0] !== hs[hs.length - 1] : null,
+      fadedDuringSlide: ops.length ? ops.some((opacity) => opacity !== ops[0]) : null,
+      presentAtSlideStart: sliding.length ? sliding[0].exists : null,
+      presentThroughoutSlide: sliding.length ? sliding.every((s) => s.exists) : null,
+      pointerEventsDuringSlide: sliding.length ? [...new Set(sliding.map((s) => s.pe))] : [],
+      classesDuringSlide: [...new Set(sliding.map((s) => s.cls))],
+      absentAfterSlide: after.length ? after[after.length - 1].exists === false : null,
+    };
+  };
+
+  await sample();
+  await page.locator('#es-pink-inner').click();
+  await page.waitForTimeout(1200);
+  const push = summarise(await page.evaluate(() => window.__barSamples));
+
+  await page.waitForSelector('.ct-dh-back', { timeout: 15000 });
+  await page.waitForTimeout(400);
+  await sample();
+  await page.locator('.ct-dh-back').click();
+  await page.waitForTimeout(1200);
+  const pop = summarise(await page.evaluate(() => window.__barSamples));
+
+  await context.close();
+  return { push, pop };
+};
+
 const bundle = async () => {
   const dir = path.join(root, 'dist', 'assets');
   const files = await readdir(dir);
@@ -796,6 +879,7 @@ try {
     clsTransitions4x: await routeClsAt4x(browser),
     motion: await motionChecks(browser),
     navCovered: await navAndCoveredHome(browser),
+    cartBar: await cartBarCovered(browser),
     bundle: await bundle(),
   };
   const pushFps = result.interactions.push.fps;
@@ -847,6 +931,18 @@ try {
   const entryBudgetBytes = Number(process.env.PERF_ENTRY_BUDGET_BYTES || 150 * 1024);
   const entryGzipBytes = result.bundle.entry?.gzipBytes ?? 0;
   const bundlePass = entryGzipBytes > 0 && entryGzipBytes <= entryBudgetBytes;
+  const cartBar = result.cartBar ?? { push: {}, pop: {} };
+  const cartBarSteady = (row) =>
+    row.movedDuringSlide === false &&
+    row.resizedDuringSlide === false &&
+    row.fadedDuringSlide === false &&
+    row.presentAtSlideStart === true &&
+    row.presentThroughoutSlide === true;
+  const cartBarPass =
+    cartBarSteady(cartBar.push) &&
+    cartBarSteady(cartBar.pop) &&
+    cartBar.push.pointerEventsDuringSlide?.every((value) => value === 'none') === true &&
+    cartBar.push.absentAfterSlide === true;
   const routeAssets = navCovered.routeAssets ?? { pass: false };
   const routeAssetsPass = routeAssets.pass === true;
   const motion = result.motion;
@@ -875,6 +971,8 @@ try {
     outgoingPass,
     navCovered,
     navPass,
+    cartBar,
+    cartBarPass,
     routeAssets,
     routeAssetsPass,
     bundle: { entryGzipBytes, entryBudgetBytes, pass: bundlePass },
@@ -888,6 +986,7 @@ try {
       latencyPass &&
       outgoingPass &&
       navPass &&
+      cartBarPass &&
       routeAssetsPass &&
       bundlePass,
   };
@@ -904,6 +1003,8 @@ try {
         `covered page identity push ${outgoingPush.identity} / pop ${outgoingPop.identity}, home re-renders under push ${outgoingPush.homeRendersDuring}, ` +
         `nav moved push ${navCovered.push.navMovedDuringSlide} / pop ${navCovered.pop.navMovedDuringSlide}, ` +
         `covered home renders ${navCovered.covered.renders} / mutations ${navCovered.covered.mutations}, ` +
+        `cart bar moved push ${cartBar.push.movedDuringSlide} / pop ${cartBar.pop.movedDuringSlide}, ` +
+        `bar present at pop start ${cartBar.pop.presentAtSlideStart}, ` +
         `route assets css ${routeAssets.cssRequestsAfter}/${routeAssets.cssRequestsBefore} sheets ${routeAssets.sheetsAfter}/${routeAssets.sheetsBefore}, ` +
         `entry gzip ${entryGzipBytes} B (budget ${entryBudgetBytes} B))`,
     );

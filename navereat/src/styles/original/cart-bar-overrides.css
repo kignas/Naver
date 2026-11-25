@@ -4,3 +4,9 @@
 #white-cart-root.wc-above-nav {
   --wc-lift: calc(var(--nav-reserve) - var(--nb-cart-bottom, calc(12px + env(safe-area-inset-bottom, 0px))));
 }
+
+/* Painted under the incoming page during a push: it must stay still and keep
+   its colours, but taps belong to the page that is covering it. */
+#white-cart-root.wc-covered {
+  pointer-events: none;
+}

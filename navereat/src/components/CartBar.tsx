@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { findRestaurant } from '../data/demo';
 import { cartCount, cartSubtotal, type Cart } from '../lib/cart';
 import { useAppNav } from '../lib/navigation';
@@ -15,6 +15,8 @@ interface CartBarProps {
   visible?: boolean;
   mode?: CartBarMode;
   aboveNav?: boolean;
+  /** A pushed page is sliding over the bar: keep it painted, stop its taps. */
+  covered?: boolean;
 }
 
 interface CartGroup {
@@ -165,7 +167,7 @@ function CartDrawer({
   );
 }
 
-export function CartBar({ visible = true, mode = 'home', aboveNav = false }: CartBarProps) {
+export function CartBar({ visible = true, mode = 'home', aboveNav = false, covered = false }: CartBarProps) {
   const cart = useAppStore((state) => state.cart);
   const clearCart = useAppStore((state) => state.clearCart);
   const nav = useAppNav();
@@ -184,7 +186,9 @@ export function CartBar({ visible = true, mode = 'home', aboveNav = false }: Car
   const pinkTimer = useRef<number | null>(null);
   const settledRef = useRef(false);
 
-  useEffect(() => {
+  // The bar is back in the pop's first commit, so the page it reveals must
+  // already have the bar's reserve: apply the body class before that paint.
+  useLayoutEffect(() => {
     document.body.classList.toggle('has-cart-bar', visible && count > 0);
     return () => document.body.classList.remove('has-cart-bar');
   }, [visible, count]);
@@ -287,6 +291,18 @@ export function CartBar({ visible = true, mode = 'home', aboveNav = false }: Car
       return line.image ?? menuItem?.image ?? restaurant?.image;
     })
     .filter((image): image is string => Boolean(image));
+  // A bar that reappears because the page covering it slid away was already
+  // there: it must be revealed in place, never play its entrance animation.
+  const showNow = visible && count > 0;
+  const wasVisible = useRef(visible);
+  const revealedRef = useRef(false);
+  const revealed = showNow && !mounted && !wasVisible.current;
+  if (revealed) revealedRef.current = true;
+  useLayoutEffect(() => {
+    wasVisible.current = visible;
+    if (!showNow) revealedRef.current = false;
+  }, [visible, showNow]);
+
   const stackWidth = images.length <= 1 ? '36px' : images.length === 2 ? '48px' : '60px';
   const groups = useMemo(() => groupsFor(displayCart), [displayCart]);
   const showAllUp = mode === 'home' && groups.length >= 2;
@@ -294,7 +310,7 @@ export function CartBar({ visible = true, mode = 'home', aboveNav = false }: Car
   const deliveryMessage =
     displayCount > 0 ? 'Your order is ready to review' : 'Your cart is ready';
 
-  if (!mounted) {
+  if (!mounted && !showNow) {
     return (
       <CartDrawer
         groups={groups}
@@ -333,7 +349,8 @@ export function CartBar({ visible = true, mode = 'home', aboveNav = false }: Car
         className={[
           mode === 'pink' ? 'wc-pink' : '',
           aboveNav ? 'wc-above-nav' : '',
-          exiting ? 'wc-exiting' : settledRef.current ? 'wc-settled' : 'wc-enter',
+          exiting ? 'wc-exiting' : revealedRef.current || settledRef.current ? 'wc-settled' : 'wc-enter',
+          covered ? 'wc-covered' : '',
           pinkPulse,
         ]
           .filter(Boolean)
