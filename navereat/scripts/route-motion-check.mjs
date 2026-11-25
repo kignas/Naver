@@ -227,10 +227,23 @@ try {
   const p = pushResult.probe;
   check('push: slide starts only after the incoming page is painted', Boolean(p.incomingAtStart?.real && p.incomingAtStart?.decoded), JSON.stringify(p.incomingAtStart));
   check('push: tap → first frame within budget', p.firstFrameMs != null && p.firstFrameMs <= maxLatency, `${p.firstFrameMs?.toFixed(1)} ms`);
-  check('push: slide duration ≈ 420 ms', p.end - p.start > 300 && p.end - p.start < 620, `${Math.round(p.end - p.start)} ms (start ${Math.round(p.start)} ms)`);
+  // PUSH_DURATION is 260 ms since e7cd885 retuned the slide to read as native;
+  // the 420 ms bound predated that.
+  check('push: slide duration ≈ 260 ms', p.end - p.start > 220 && p.end - p.start < 400, `${Math.round(p.end - p.start)} ms (start ${Math.round(p.start)} ms)`);
   check('push: covered page keeps identity transform + full opacity', p.identity?.identity === true, `${p.identity?.samples} samples, ${p.identity?.offenders?.length ?? '?'} offenders`);
   check('push: incoming page stays fully opaque', (p.incomingFaded ?? 0) === 0, `${p.frames.length} frames, ${p.incomingFaded ?? 0} faded`);
-  check('push: incoming page travels the full width', p.frames[0] !== p.frames[p.frames.length - 1] && /matrix\(1, 0, 0, 1, 3[0-9]{2}/.test(p.frames[0]), `${p.frames[0]} → ${p.frames[p.frames.length - 1]}`);
+  const translateOf = (transform) => {
+    const match = /matrix\(1, 0, 0, 1, (-?[\d.]+), 0\)/.exec(transform ?? '');
+    return match ? Number(match[1]) : null;
+  };
+  const translates = (p.frames ?? []).map(translateOf).filter((value) => value != null);
+  const maxTranslate = translates.length ? Math.max(...translates) : 0;
+  const lastTranslate = translates.length ? translates[translates.length - 1] : null;
+  check(
+    'push: incoming page travels the full width',
+    maxTranslate >= 380 && lastTranslate != null && lastTranslate <= 1 && new Set(translates.map((value) => Math.round(value))).size >= 3,
+    `max ${Math.round(maxTranslate)} px, last ${lastTranslate} px, ${translates.length} samples`,
+  );
 
   await page.waitForSelector('.menu-item', { timeout: 15000 });
   await sleep(500);
@@ -241,7 +254,8 @@ try {
   results.push(popResult);
   const q = popResult.probe;
   check('pop: page underneath stays still', q.identity?.identity === true, `${q.identity?.samples} samples`);
-  check('pop: slide duration ≈ 360 ms', q.end - q.start > 260 && q.end - q.start < 560, `${Math.round(q.end - q.start)} ms`);
+  // POP_DURATION is 220 ms since e7cd885 (was 360 ms).
+  check('pop: slide duration ≈ 220 ms', q.end - q.start > 180 && q.end - q.start < 360, `${Math.round(q.end - q.start)} ms`);
   check('pop: tap → first frame within budget', q.firstFrameMs != null && q.firstFrameMs <= maxLatency, `${q.firstFrameMs?.toFixed(1)} ms`);
 
   await page.waitForSelector('#home-header', { timeout: 15000 });

@@ -235,6 +235,18 @@ const ensureCartBar = async (page) => {
   await page.waitForSelector('#es-pink-inner', { timeout: 15000 });
 };
 
+// The cart shows its offer popup once per cart, timed from when the cart stops
+// being covered by a sheet. A walk that opens and closes a sheet can therefore
+// find it on top of the checkout button: dismiss it through the DOM, which does
+// not wait for actionability the way a locator click would.
+const dismissOffers = async (page) => {
+  await page
+    .evaluate(() => {
+      document.querySelectorAll('#ew-offer-ok, .ew-offer-x').forEach((node) => node.click());
+    })
+    .catch(() => undefined);
+};
+
 const scenarios = [];
 
 const record = async (page, name, action, settle = 1200) => {
@@ -473,6 +485,7 @@ try {
         page,
         `sheet: Cart coupon open+close (${tag})`,
         async () => {
+          await dismissOffers(page);
           const coupon = page.locator('#coupon-card').first();
           await coupon.scrollIntoViewIfNeeded().catch(() => undefined);
           await coupon.click({ timeout: 15000 });
@@ -487,9 +500,12 @@ try {
         page,
         `push: Cart -> Tracking (checkout + success sheet) (${tag})`,
         async () => {
+          await dismissOffers(page);
+          // #btn-checkout is the cart footer CTA (the original's startPayment
+          // button), so the payment sheet's own confirm button is the next tap.
           await page.locator('.ct-cta').first().click();
-          await page.waitForSelector('#btn-checkout', { timeout: 60000 });
-          await page.locator('#btn-checkout').click();
+          await page.waitForSelector('#ct-pay-confirm-btn', { timeout: 60000 });
+          await page.locator('#ct-pay-confirm-btn').click();
           await page.waitForSelector('.ew-os__btn', { timeout: 60000 });
         },
         1800,

@@ -37,7 +37,9 @@ export function BottomNav() {
   // taken away only after that page has finished covering it, and it is put
   // back the moment the pop slide starts so the departing page reveals it.
   const detailRoute = !isTabPath(pathname);
-  const [hidden, setHidden] = useState(false);
+  // A deep link (login, a shared restaurant link) never gets a transition, so
+  // the bar must start hidden instead of waiting for one.
+  const [hidden, setHidden] = useState(() => !isTabPath(pathname));
 
   useEffect(() => {
     if (searchOpen) {
@@ -61,12 +63,12 @@ export function BottomNav() {
   // Show synchronously on the render that leaves a detail route: that render
   // happens before the pop slide's first frame, so the bar is simply revealed
   // by the departing page instead of appearing after the slide has started.
-  const hiddenNow = detailRoute ? hidden : false;
+  const hiddenNow = searchOpen || (detailRoute ? hidden : false);
   const visible = onTabRoute;
   // A pushed page is still sliding over the docked bar: it must stay painted
   // (the nav belongs to the tab it covers) but must not take taps that belong
   // to the incoming page.
-  const covered = detailRoute && !hidden;
+  const covered = detailRoute && !hidden && !searchOpen;
 
   const navRef = useRef<HTMLElement | null>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
