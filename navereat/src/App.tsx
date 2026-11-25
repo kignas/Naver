@@ -1,4 +1,4 @@
-import { Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
 import { SplashScreen } from '@capacitor/splash-screen';
@@ -25,6 +25,8 @@ import { primeFonts } from './lib/fonts';
 import { installPreloadOnIntent, preloadAllRoutes, preloadLikelyRoutes } from './lib/routeLoaders';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
+import { useDataSourceMode } from './data';
+
 
 
 function AppRoutes() {
@@ -182,7 +184,10 @@ function DebugPanelRoot(): null {
   return null;
 }
 
+const ServiceClosedGate = lazy(() => import('./components/ServiceClosedGate').then((module) => ({ default: module.ServiceClosedGate })));
+
 export default function App() {
+  const dataMode = useDataSourceMode();
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     const hide = () => void SplashScreen.hide();
@@ -199,6 +204,11 @@ export default function App() {
       <NavBridge />
       <CustomizeProvider>
         <AppRoutes />
+        {dataMode === 'api' && (
+          <Suspense fallback={null}>
+            <ServiceClosedGate />
+          </Suspense>
+        )}
         <SearchOverlay />
         <DebugPanelRoot />
       </CustomizeProvider>

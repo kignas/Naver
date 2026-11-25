@@ -1,5 +1,6 @@
 import { memo, useCallback, useState, type CSSProperties } from 'react';
 import { categories } from '../../data/demo';
+import { useHomeFeed } from '../../data';
 import { useAppNav } from '../../lib/navigation';
 import { useUiStore } from '../../store/uiStore';
 import { Icon } from '../Icon';
@@ -24,6 +25,8 @@ export const CategoryStrip = memo(function CategoryStrip() {
   // entrance. On every later mount the strip renders settled, exactly like the
   // first one looks once the animation has finished.
   const [playEntrance] = useState(() => !useUiStore.getState().homeHasEntered);
+  const feedState = useHomeFeed();
+  const tiles = feedState.mode === 'api' ? (feedState.data?.categories ?? []) : categories;
   const openCategory = useCallback(
     (name: string, query: string) => {
       nav.push(`/category/${encodeURIComponent(name)}?q=${encodeURIComponent(query)}`);
@@ -36,13 +39,13 @@ export const CategoryStrip = memo(function CategoryStrip() {
         <h2 className="sec-title">What&apos;s on your mind?</h2>
       </div>
       <div className="cat-scroll no-scrollbar" id="cat-scroll">
-        {categories.map((category, index) => (
+        {tiles.map((category, index) => (
           <a
             className="cat-item"
             href={`#${encodeURIComponent(category.name)}`}
             data-category-name={category.name}
             key={category.id}
-            style={playEntrance ? CATEGORY_STYLES[index] : undefined}
+            style={playEntrance ? (CATEGORY_STYLES[index] ?? CATEGORY_STYLES[CATEGORY_STYLES.length - 1]) : undefined}
             onClick={(event) => {
               event.preventDefault();
               openCategory(category.name, category.query);

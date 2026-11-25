@@ -65,6 +65,8 @@ export interface MenuItem {
   customizationGroups?: CustomizationGroup[];
   isCustomisable?: boolean;
   customisable?: boolean;
+  /** false when the backend says the dish is out of stock (api mode only). */
+  available?: boolean;
 }
 
 export interface Restaurant {

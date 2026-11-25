@@ -9,6 +9,7 @@ import { MenuSearchRow } from '../components/menu/MenuSearchRow';
 import { MenuSection } from '../components/menu/MenuSection';
 import type { MenuGroup } from '../components/menu/menuTypes';
 import { findRestaurant } from '../data/demo';
+import { useRestaurantData } from '../data';
 import type { MenuItem } from '../data/demo';
 import { useCachedReady } from '../hooks/useCachedReady';
 import { createRouteStyleSheet } from '../lib/routeStyles';
@@ -53,7 +54,15 @@ export function Restaurant() {
   perfWindow.__menuRenders = (perfWindow.__menuRenders ?? 0) + 1;
   const { id } = useParams<{ id: string }>();
   const routeId = Number(id);
-  const resolvedRestaurant = findRestaurant(id);
+  const apiRestaurant = useRestaurantData(id ?? '');
+  // Demo mode resolves synchronously from the bundled data; api mode swaps in
+  // the fetched restaurant (with its menu) once it lands.
+  const resolvedRestaurant =
+    apiRestaurant.mode === 'api'
+      ? apiRestaurant.restaurant
+        ? { ...apiRestaurant.restaurant, menu: apiRestaurant.menu }
+        : undefined
+      : findRestaurant(id);
   // A route that is leaving is still on screen while the next one slides in, but
   // useParams() already reports the new route, so findRestaurant() returns
   // undefined and the page would swap itself for "Restaurant not found" mid
@@ -405,7 +414,11 @@ export function Restaurant() {
                   </div>
                   <p className="inf-sub">
                     {restaurant.cuisine}
-                    <span className="inf-sep" aria-hidden="true" />₹{restaurant.priceForTwo} for two
+                    {restaurant.priceForTwo > 0 && (
+                      <>
+                        <span className="inf-sep" aria-hidden="true" />₹{restaurant.priceForTwo} for two
+                      </>
+                    )}
                   </p>
                   <div className="inf-acts">
                     <button type="button" className="inf-act" onClick={() => toast('Link copied (demo)')}>

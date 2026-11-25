@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { APP_VERSION } from '../lib/appVersion';
 import { DEBUG_EVENT, debugWanted, setDebugEnabled } from '../lib/debugFlag';
+import { useDataSourceMode, setSourceMode } from '../data';
 
 /**
  * Field overlay for the layout-shift hunt: the same numbers the harness sees,
@@ -124,6 +125,7 @@ export function StressDebugPanel() {
   const eventsRef = useRef<DebugEvent[]>([]);
   const lastActionRef = useRef('none');
   const version = APP_VERSION;
+  const dataMode = useDataSourceMode();
 
   useEffect(() => {
     const onChange = () => setEnabled(debugWanted());
@@ -360,6 +362,16 @@ export function StressDebugPanel() {
         >
           Disable debug
         </button>
+        <span style={{ opacity: 0.8, alignSelf: 'center' }}>
+          data {dataMode}
+          <button
+            type="button"
+            style={{ ...buttonStyle, marginLeft: 6, padding: '2px 6px' }}
+            onClick={() => setSourceMode(dataMode === 'api' ? 'demo' : 'api')}
+          >
+            {dataMode === 'api' ? 'use demo' : 'use api'}
+          </button>
+        </span>
         {status ? <span style={{ opacity: 0.8, alignSelf: 'center' }}>{status}</span> : null}
       </div>
       <div style={{ whiteSpace: 'pre-wrap', opacity: 0.86 }}>{header.join('\n')}</div>

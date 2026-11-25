@@ -1,5 +1,6 @@
 import { lazy, memo, Suspense, useCallback, useMemo, type RefObject } from 'react';
 import { restaurants, type MenuItem, type Restaurant } from '../../data/demo';
+import { useHomeFeed } from '../../data';
 import { useAppNav } from '../../lib/navigation';
 import { useCustomize } from '../../lib/customizeContext';
 import { useAppStore } from '../../store/appStore';
@@ -91,9 +92,18 @@ export const RestaurantFeed = memo(function RestaurantFeed({ ready, scrollerRef 
   const selectRestaurant = useAppStore((state) => state.selectRestaurant);
   const nav = useAppNav();
   const { openCustomize } = useCustomize();
+  const feedState = useHomeFeed();
+  // Demo mode keeps the synchronous module data; api mode swaps in the live
+  // feed once it lands and holds the card skeletons until then.
+  const apiFeed = feedState.data?.restaurants;
+  const feed = useMemo(
+    () => (feedState.mode === 'api' ? (apiFeed ?? []) : restaurants),
+    [apiFeed, feedState.mode],
+  );
+  const feedReady = ready && (feedState.mode !== 'api' || (!feedState.loading && !feedState.error));
 
   const filteredRestaurants = useMemo(() => {
-    const list = restaurants.filter((restaurant) => {
+    const list = feed.filter((restaurant) => {
       if (vegOnly && !(restaurant.pureVeg ?? restaurant.menu.every((item) => item.isVeg))) return false;
       if (nearFast && (restaurant.deliveryMax ?? 999) > 30) return false;
       if (rating4 && Number(restaurant.rating) < 4) return false;
@@ -105,7 +115,7 @@ export const RestaurantFeed = memo(function RestaurantFeed({ ready, scrollerRef 
     if (sortBy === 'delivery') list.sort((a, b) => (a.deliveryMax ?? 999) - (b.deliveryMax ?? 999));
     if (sortBy === 'distance') list.sort((a, b) => (a.distanceKm ?? 999) - (b.distanceKm ?? 999));
     return list;
-  }, [vegOnly, nearFast, rating4, under30, under100, sortBy]);
+  }, [feed, vegOnly, nearFast, rating4, under30, under100, sortBy]);
 
   const openRestaurant = useCallback(
     (restaurant: Restaurant) => {
@@ -158,7 +168,7 @@ export const RestaurantFeed = memo(function RestaurantFeed({ ready, scrollerRef 
           Restaurants near you
         </h2>
       </div>
-      {!ready ? (
+      {!feedReady ? (
         <div id="restaurant-list">
           <RestaurantSkeleton />
           <RestaurantSkeleton />

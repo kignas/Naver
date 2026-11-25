@@ -44,6 +44,31 @@ chunk already available.
 All app state is persisted in `localStorage` under the original keys
 `nearbite_token`, `nearbite_cart`, and `nearbite_user` (plus `nearbite_orders`).
 
+## Data source: demo or live API
+
+Every page reads through one interface (`src/data/dataSource.ts`). The default
+build is **demo**: bundled data, no network, and the pages render synchronously
+exactly as before. A second implementation talks to the live customer API.
+
+```bash
+npm run build                              # demo (default)
+VITE_DATA_SOURCE=api npm run dev           # live API
+VITE_DATA_SOURCE=api VITE_API_FIXTURES=1 npm run build   # api mode, recorded responses, offline
+```
+
+In a debug build the field panel (7 taps on the version line in Profile) has a
+**data demo / use api** switch that flips the same flag at runtime
+(`localStorage.navereat_data_source`).
+
+Wired to the API today: the home feed and category strip, the search overlay,
+the restaurant page and its menu, and the ordering-closed gate. Cart pricing,
+orders, profile, addresses and coupons still run on demo data; their methods
+exist and are covered by the read-only pass. See
+[`docs/DATA_SOURCE.md`](docs/DATA_SOURCE.md) for the interface, the error
+contract, the cache keys, and how to add an endpoint, and
+[`docs/API_VERIFICATION.md`](docs/API_VERIFICATION.md) for the live results and
+the resolved open questions.
+
 ## Android
 
 ```bash
@@ -97,10 +122,11 @@ serialized and paused during a slide, so a second route chunk cannot compile
 mid-animation. The committed evidence strip is
 [`docs/performance/transition-strip.png`](docs/performance/transition-strip.png).
 
-All fonts, icons, placeholders, and demo data are bundled. The only `http`
-strings in `src/` are SVG `xmlns` declarations and the Font Awesome license
-comment; no request is made at runtime. The Android manifest requests no
-permissions and blocks cleartext traffic.
+All fonts, icons, placeholders, and demo data are bundled. In the default
+(demo) build the only `http` strings in the entry bundle are SVG `xmlns`
+declarations and the Font Awesome license comment, and no request is made at
+runtime. Only the opt-in api build reaches `https://api.eatswada.com/api`. The
+Android manifest requests no permissions and blocks cleartext traffic.
 
 ## Pinned Home search bar
 

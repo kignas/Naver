@@ -1,6 +1,7 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { restaurants, type Category, type MenuItem, type Restaurant } from '../data/demo';
+import { loadDataSource, useDataSourceMode } from '../data';
 import { useAppNav } from '../lib/navigation';
 import { registerSheet } from '../lib/sheetStack';
 import { lockPageScroll } from '../lib/scrollLock';
@@ -109,6 +110,41 @@ function searchDemo(raw: string, context: SearchContext): SearchResult[] {
   return dishResults.slice(0, 12);
 }
 
+/**
+ * api mode searches the backend (`/restaurants/search?scope=home`), which only
+ * answers dishes — the same restriction the original overlay has.
+ */
+function fromApiResults(
+  rows: Array<{ id: string; name: string; price: number; image: string; isVeg: boolean; restaurantId: number; restaurantName: string }>,
+  context: SearchContext,
+): SearchResult[] {
+  return rows
+    .filter((row) => context !== 'under99' || row.price <= 99)
+    .map((row) => ({
+      kind: 'dish',
+      item: {
+        id: row.id,
+        name: row.name,
+        price: row.price,
+        isVeg: row.isVeg,
+        desc: '',
+        image: row.image,
+      },
+      restaurant: {
+        id: row.restaurantId,
+        name: row.restaurantName,
+        rating: '0.0',
+        time: '',
+        distance: '',
+        offer: '',
+        cuisine: '',
+        priceForTwo: 0,
+        image: '',
+        menu: [],
+      },
+    }));
+}
+
 function resultImage(result: SearchResult): string {
   if (result.kind === 'restaurant') return result.restaurant.image;
   if (result.kind === 'dish') return result.item.image;
@@ -208,14 +244,17 @@ export function SearchOverlay() {
   const [resultQuery, setResultQuery] = useState('');
   const [recent, setRecent] = useState<string[]>(readRecent);
   const [closing, setClosing] = useState(false);
+  const dataMode = useDataSourceMode();
+  const [apiRows, setApiRows] = useState<SearchResult[] | null>(null);
 
   // Typing only touches `query`; the walk over every menu runs on the deferred
   // committed query so a new keystroke can interrupt it.
   const deferredResultQuery = useDeferredValue(resultQuery);
-  const results = useMemo(
-    () => (deferredResultQuery.trim().length >= MIN_QUERY ? searchDemo(deferredResultQuery, context) : []),
-    [context, deferredResultQuery],
-  );
+  const results = useMemo(() => {
+    if (deferredResultQuery.trim().length < MIN_QUERY) return [];
+    if (dataMode === 'api') return apiRows ?? [];
+    return searchDemo(deferredResultQuery, context);
+  }, [apiRows, context, dataMode, deferredResultQuery]);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -273,16 +312,37 @@ export function SearchOverlay() {
 
       const sequence = ++sequenceRef.current;
       setPhase('searching');
+      setApiRows(null);
       if (searchRef.current !== null) window.clearTimeout(searchRef.current);
       searchRef.current = window.setTimeout(() => {
         if (sequence !== sequenceRef.current) return;
+        if (dataMode === 'api') {
+          loadDataSource('api')
+            .then((source) => source.search(value))
+            .then(
+              (rows) => {
+                if (sequence !== sequenceRef.current) return;
+                setApiRows(fromApiResults(rows, context));
+                setResultQuery(value);
+                setPhase(rows.length ? 'results' : 'empty');
+                rememberSearch(value);
+              },
+              () => {
+                if (sequence !== sequenceRef.current) return;
+                setApiRows([]);
+                setResultQuery(value);
+                setPhase('empty');
+              },
+            );
+          return;
+        }
         const found = searchDemo(value, context);
         setResultQuery(value);
         setPhase(found.length ? 'results' : 'empty');
         rememberSearch(value);
       }, FAKE_SEARCH_MS);
     },
-    [context, rememberSearch],
+    [context, dataMode, rememberSearch],
   );
 
   const scheduleSearch = useCallback(

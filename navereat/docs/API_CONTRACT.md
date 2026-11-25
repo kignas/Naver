@@ -218,6 +218,11 @@ hard requirement, skip **C** until the backend has phone OTP.
 These cannot be settled by reading the frontend; each one changes code, so they
 are listed before `apiDataSource` is written.
 
+> **Status 2026-11-25 (read-only pass):** 1, 2, 3, 4, 5, 7, 14 and 15 are
+> settled; 6, 9, 10, 11, 12, 13 and 16 are blocked on test credentials; 8 waits
+> for the order test. Raw results, the parity table and the fixture workflow:
+> [`API_VERIFICATION.md`](API_VERIFICATION.md).
+
 | # | unknown | why it matters | how to settle it |
 | --- | --- | --- | --- |
 | 1 | Exact menu payload shape: `[{category, items}]`, flat items, or `{category: items}` | the original normalises all three, so the app must too — but which one is real decides the fast path and the cache shape | `GET /restaurants/:id/menu` once |
