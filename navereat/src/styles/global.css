@@ -1018,3 +1018,45 @@ a,
 
 .route-shell__line--wide { width: 58%; }
 .route-shell__line--short { width: 34%; }
+
+/* ── Cold-start entrances live outside the tab's own stylesheet ─────────────
+   Home's bundle is disabled while another tab is on screen and re-enabled on
+   the way back, and a stylesheet that comes back restarts every animation it
+   declares - an inline `animation` included, because its `@keyframes` vanish
+   with the sheet. Declaring the three entrance animations here, in the sheet
+   that is never disabled, keeps their computed value stable: they run once on
+   the first paint and an Orders <-> Home tab switch cannot replay them.
+   Declarations mirror styles/original/home-base.css exactly. */
+@keyframes cardFadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes searchDishSlideUp {
+  0% { opacity: 0; transform: translate3d(0, 24px, 0); }
+  55% { opacity: 1; transform: translate3d(0, -2px, 0); }
+  100% { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+.search-dish.is-sliding {
+  animation: searchDishSlideUp var(--search-dish-duration, 600ms) cubic-bezier(.16, 1, .3, 1) both;
+}
+
+@keyframes bannerWobble {
+  0% { transform: translateY(4px) rotate(-.6deg); opacity: .55; }
+  45% { transform: translateY(-1px) rotate(.4deg); opacity: 1; }
+  72% { transform: translateY(1px) rotate(-.2deg); }
+  100% { transform: translateY(0) rotate(0); opacity: 1; }
+}
+
+.header-slide.is-active .banner-badge,
+.header-slide.is-active .banner-title,
+.header-slide.is-active .banner-subtitle,
+.header-slide.is-active .banner-offer,
+.header-slide.is-active .banner-cta {
+  animation: bannerWobble .72s cubic-bezier(.34, 1.25, .5, 1) both;
+}
+
+.header-slide.is-active .banner-subtitle { animation-delay: .07s; }
+.header-slide.is-active .banner-offer { animation-delay: .1s; }
+.header-slide.is-active .banner-cta { animation-delay: .14s; }

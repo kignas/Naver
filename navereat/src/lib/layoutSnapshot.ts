@@ -73,6 +73,25 @@ const isMeasurable = (element: Element): boolean => {
   return style.visibility !== 'hidden' && style.display !== 'none' && element.clientHeight + element.clientWidth > 0;
 };
 
+/**
+ * `getComputedStyle` rounds used lengths to six significant digits, so a box
+ * laid out at 190.234375px comes back as "190.234px". Pinning the rounded value
+ * re-lays the box out 1/64 px short, and a 1/64 px change is enough to re-metre
+ * the text and line boxes of the page underneath (a covered page must not move
+ * at all). Layout lengths are multiples of 1/64 px, so the exact value is
+ * recovered by snapping to that grid - but only when the reported value already
+ * sits within the rounding error of a step, which keeps large lengths (whose
+ * six-digit rounding is coarser) on their reported value.
+ */
+const preciseLength = (computed: CSSStyleDeclaration, property: 'width' | 'height'): string => {
+  const raw = computed.getPropertyValue(property);
+  if (!raw.endsWith('px')) return raw;
+  const value = Number.parseFloat(raw);
+  if (!Number.isFinite(value)) return raw;
+  const snapped = Math.round(value * 64) / 64;
+  return Math.abs(snapped - value) <= 1 / 128 ? `${snapped}px` : raw;
+};
+
 /** Captures the used layout of a subtree before an incoming route's global CSS can touch it. */
 export function captureLayout(root: Element, maxNodes = Infinity): LayoutSnapshot {
   const entries: SnapshotEntry[] = [];
@@ -83,7 +102,9 @@ export function captureLayout(root: Element, maxNodes = Infinity): LayoutSnapsho
       const computed = window.getComputedStyle(element);
       const values: Array<[string, string]> = [];
       LAYOUT_PROPERTIES.forEach((property) => {
-        const value = computed.getPropertyValue(kebab(property));
+        const value = property === 'width' || property === 'height'
+          ? preciseLength(computed, property)
+          : computed.getPropertyValue(kebab(property));
         if (value) values.push([kebab(property), value]);
       });
       const measurable = isMeasurable(element);

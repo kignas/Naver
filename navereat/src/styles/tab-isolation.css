@@ -29,23 +29,86 @@
   font-synthesis-weight: auto;
   font-synthesis-style: auto;
   font-synthesis-small-caps: auto;
+  /* `body{line-height:1.45}` is the line box the tab inherits at rest; a
+     bundle's own body/html typography re-bases it, which re-metres every
+     inherited line box (a 10 px old-price grew from 14.5 px to 23.2 px). */
+  line-height: 1.45;
   /* Bundles re-declare the legacy font tokens on `:root`, which swaps the tab's
      font stack (and therefore every line box) mid transition. Declared on the
-     layer itself, the app's tokens keep winning by inheritance. */
+     layer itself, the app's tokens keep winning by inheritance. `--hd-primary`
+     is re-pointed at a bundle's own green, which repainted every icon that
+     falls back to the app's brand colour. */
   --font: 'Manrope', 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-sans: var(--font);
   --font-micro: var(--font);
+  --hd-primary: #E9546B;
+}
+
+/* The legacy bundles repeat whole page sheets, so a few of their rules match
+   Home's own class names with enough weight to win while the bundle is merely
+   attached: the ₹99-store block restyles every `.filter-pill` with `!important`
+   (12 px type inside a 38 px box) and `.cat-ring` is re-declared as a fixed
+   70 px circle, which shrank the "What's on your mind?" rail by 16 px and moved
+   everything under it. Restore what the tab computes at rest - mirroring
+   home.bundle.css and home-base.css - for as long as it is covered. */
+.tab-stack.has-detail .home-screen .filter-bar .filter-pill {
+  font-family: inherit !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  border-color: var(--line) !important;
+  color: #3B4453 !important;
+}
+
+.tab-stack.has-detail .home-screen #mind-section .cat-ring {
+  width: 88% !important;
+  height: auto !important;
+  aspect-ratio: 1 / 1 !important;
+}
+
+/* The same ₹99-store sheet paints the filter row white with a 16 px radius, and
+   re-bases the line box of the struck-through price inside the card header,
+   which grew every card by 3.2 px and pushed the whole feed down. */
+.tab-stack.has-detail .home-screen .filter-bar {
+  background: transparent !important;
+  border-radius: 0 !important;
+}
+
+.tab-stack.has-detail .home-screen .u99-old-price {
+  line-height: 1.45 !important;
+}
+
+/* `p,small,.muted,.secondary,.description{color:var(--nb-muted)}` and the
+   bundle's body weight re-colour and re-weight the feed's closing note (its
+   border follows `currentColor`). */
+.tab-stack.has-detail .home-screen .ew-feed-end__sub,
+.tab-stack.has-detail .home-screen .ew-feed-end__heart {
+  color: inherit !important;
+  font-weight: inherit !important;
 }
 
 /* `button,input,select,textarea{font-size:inherit;font-synthesis:none;...}`
    re-sizes and re-synthesises every unruly form control in the tab (the UA size
-   is 13.33 px). */
-:where(.tab-stack.has-detail .home-screen) button {
-  font-family: inherit;
+   is 13.33 px), and `font-family:var(--ew-ui-font) !important` is a token the
+   bundles never define, so it resolves to the tab layer's stack and re-metres
+   intrinsic text widths by a fraction of a pixel. Both are `!important` in the
+   bundles, so the tab's own values are restored with the same weight. */
+:where(.tab-stack.has-detail .home-screen) button,
+:where(.tab-stack.has-detail .home-screen) input,
+:where(.tab-stack.has-detail .home-screen) select,
+:where(.tab-stack.has-detail .home-screen) textarea {
   font-size: revert;
-  font-synthesis-weight: auto;
-  font-synthesis-style: auto;
-  font-synthesis-small-caps: auto;
+}
+
+.tab-stack.has-detail .home-screen button,
+.tab-stack.has-detail .home-screen input,
+.tab-stack.has-detail .home-screen select,
+.tab-stack.has-detail .home-screen textarea {
+  font-family: inherit !important;
+  /* `font-synthesis:auto` is not a valid shorthand value (the longhands take
+     `auto`), so the bundles' `font-synthesis:none` is reset per longhand. */
+  font-synthesis-weight: auto !important;
+  font-synthesis-style: auto !important;
+  font-synthesis-small-caps: auto !important;
 }
 
 /* The shared numeric block turns every [class*="price"|"rating"|"count"|...]
