@@ -372,8 +372,8 @@ const pushLatency = async (browser, rate) => {
   await measure('Restaurant→Cart', () => page.locator('#es-pink-inner').click());
   await page.waitForSelector('.ct-cta', { timeout: 15000 });
   await page.locator('.ct-cta').first().click();
-  await page.waitForSelector('#btn-checkout', { timeout: 15000 });
-  await page.locator('#btn-checkout').click();
+  await page.waitForSelector('#ct-pay-confirm-btn', { timeout: 15000 });
+  await page.locator('#ct-pay-confirm-btn').click();
   await page.waitForSelector('.ew-os__btn', { timeout: 15000 });
   await page.waitForTimeout(250);
 
@@ -474,9 +474,9 @@ const clsTransitions = async (browser) => {
   transitions.push(await measure('push: Restaurant → Cart', () => page.locator('#es-pink-inner').click(), 900));
   await page.waitForSelector('.ct-cta', { timeout: 15000 });
   await page.locator('.ct-cta').first().click();
-  await page.waitForSelector('#btn-checkout', { timeout: 15000 });
+  await page.waitForSelector('#ct-pay-confirm-btn', { timeout: 15000 });
   transitions.push(await measure('push: Cart → Tracking', async () => {
-    await page.locator('#btn-checkout').click();
+    await page.locator('#ct-pay-confirm-btn').click();
     await page.waitForSelector('.ew-os__btn', { timeout: 15000 });
     await page.locator('.ew-os__btn').click();
   }, 1000));
@@ -531,10 +531,10 @@ const routeClsAt4x = async (browser) => {
   transitions.push(await measure('4x push: Restaurant → Cart', () => page.locator('#es-pink-inner').click()));
   await page.waitForSelector('.ct-cta', { timeout: 30000 });
   await page.locator('.ct-cta').first().click();
-  await page.waitForSelector('#btn-checkout', { timeout: 30000 });
+  await page.waitForSelector('#ct-pay-confirm-btn', { timeout: 30000 });
   transitions.push(
     await measure('4x push: Cart → Tracking', async () => {
-      await page.locator('#btn-checkout').click();
+      await page.locator('#ct-pay-confirm-btn').click();
       await page.waitForSelector('.ew-os__btn', { timeout: 30000 });
       await page.locator('.ew-os__btn').click();
     }, 2200),

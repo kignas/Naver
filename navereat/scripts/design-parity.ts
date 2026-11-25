@@ -204,8 +204,30 @@ async function mockApi(route: import('playwright-core').Route): Promise<void> {
     return json(route, [{ _id: 'demo-address', tag: 'Home', house: 'Demo Street', area: 'Demo City…', city: 'Demo City…', isDefault: true }]);
   }
   if (pathname === '/categories') return json(route, apiCategories);
-  if (pathname === '/restaurants' || pathname === '/restaurants/search' || pathname === '/restaurants/under99') {
+  if (pathname === '/restaurants' || pathname === '/restaurants/under99') {
     return json(route, apiRestaurants);
+  }
+  if (pathname === '/restaurants/search') {
+    /* search-overlay.js reads json.data.menuItems; returning the restaurant
+       array here made the original render "No dishes found" for every query. */
+    const query = (new URL(route.request().url()).searchParams.get('q') ?? '').trim().toLowerCase();
+    const menuItems = apiRestaurants.flatMap((restaurant) =>
+      restaurant.menu
+        .filter((item) =>
+          `${item.name} ${item.description ?? ''} ${item.category ?? ''}`.toLowerCase().includes(query),
+        )
+        .map((item) => ({
+          _id: item._id,
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          description: item.description,
+          image: item.image,
+          restaurantId: restaurant._id,
+          restaurant: { _id: restaurant._id, name: restaurant.name, image: restaurant.image },
+        })),
+    );
+    return json(route, { menuItems });
   }
   if (pathname === '/orders') return json(route, apiOrders);
   if (pathname === '/users/profile') return json(route, demoUser);
@@ -1047,18 +1069,48 @@ async function main(): Promise<void> {
     await original.waitForSelector('#coupon-card', { timeout: 20000 });
     await stripChrome(original);
     await original.waitForTimeout(600);
-    await original.evaluate(() => (window as unknown as { openSheet?: (id: string) => void }).openSheet?.('ct-pay-sheet'));
+    /* The sheet is populated only when more than one method is eligible. The
+       public-status mock leaves COD off, so `startPayment()` would place the
+       order instead of opening the sheet; enable COD here so the original is
+       driven through the same user path as the app (Proceed to Pay -> sheet).
+       The quote mock also leaves the CTA locked, so unlock it for this state:
+       the capture is about the sheet's design, not cart eligibility. */
+    await original.evaluate(() => {
+      const platform = (window as unknown as {
+        EWPlatform?: { current: () => Record<string, unknown> };
+      }).EWPlatform;
+      if (platform) {
+        const base = platform.current();
+        platform.current = () => ({ ...base, isCodEnabled: true, isUpiEnabled: true, maxCodOrderAmount: 2000 });
+      }
+      const ct = window as unknown as { CtX?: { refreshPayment?: () => void; startPayment?: () => void } };
+      ct.CtX?.refreshPayment?.();
+      const button = document.getElementById('btn-checkout') as HTMLButtonElement | null;
+      if (button) {
+        button.classList.remove('locked');
+        button.removeAttribute('disabled');
+        button.setAttribute('aria-disabled', 'false');
+      }
+      ct.CtX?.startPayment?.();
+    });
     await original.waitForSelector('#ct-pay-sheet.is-open', { timeout: 5000 });
+    await original.waitForSelector('#ct-pay-sheet-opts .ct-pay-opt', { timeout: 5000 });
     const app = await mainContext.newPage();
     await app.goto(`http://127.0.0.1:${appPort}/#/cart?offers=none`, { waitUntil: 'networkidle' });
     await app.waitForSelector('#coupon-card', { timeout: 20000 });
     await app.waitForTimeout(500);
-    await app.click('.ct-cta');
-    await app.waitForSelector('#btn-checkout', { timeout: 5000 });
+    await app.click('#btn-checkout');
+    await app.waitForSelector('#ct-pay-sheet.is-open', { timeout: 5000 });
+    await app.waitForSelector('#ct-pay-sheet-opts .ct-pay-opt', { timeout: 5000 });
     await original.waitForTimeout(500);
     await app.waitForTimeout(450);
+    /* Both sheets auto-focus their close button; only the programmatically
+       opened original then paints a :focus-visible ring, so clear focus on
+       both to compare the resting design. */
+    await original.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await app.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await capture('cart-payment-sheet', original, app, {
-      probes: ['#ct-pay-sheet', '#pay-sheet-title', '#ct-pay-sheet-opts', '#btn-checkout'],
+      probes: ['#ct-pay-sheet', '#pay-sheet-title', '#ct-pay-sheet-opts', '#ct-pay-confirm-btn', '.ct-sheet-x', '#btn-checkout'],
     });
     await original.close();
     await app.close();
@@ -1090,6 +1142,17 @@ async function main(): Promise<void> {
     await original.click('#d-delivery');
     await original.waitForSelector('.ew-offer.is-open', { timeout: 5000 });
     const app = await mainContext.newPage();
+    // The offer sheet closes itself after 5.2 s. `networkidle` can eat most of
+    // that window, so the sheet sometimes vanished mid-capture. Neutralise long
+    // timers on this page only; short open/close animations still run.
+    await app.addInitScript(() => {
+      const nativeSetTimeout = window.setTimeout.bind(window);
+      (window as unknown as { setTimeout: typeof window.setTimeout }).setTimeout = ((
+        handler: TimerHandler,
+        timeout?: number,
+        ...args: unknown[]
+      ) => (typeof timeout === 'number' && timeout >= 4000 ? 0 : nativeSetTimeout(handler, timeout, ...args))) as typeof window.setTimeout;
+    });
     await app.goto(`http://127.0.0.1:${appPort}/#/cart?offers=single`, { waitUntil: 'networkidle' });
     await app.waitForSelector('.ew-offer.is-open', { timeout: 7000 });
     await original.waitForTimeout(500);
@@ -1118,8 +1181,8 @@ async function main(): Promise<void> {
     await app.goto(`http://127.0.0.1:${appPort}/#/cart?offers=none&hold=1`, { waitUntil: 'networkidle' });
     await app.waitForSelector('#coupon-card', { timeout: 20000 });
     await app.getByRole('button', { name: 'Proceed to Pay' }).click();
-    await app.waitForSelector('#btn-checkout', { timeout: 5000 });
-    await app.click('#btn-checkout');
+    await app.waitForSelector('#ct-pay-confirm-btn', { timeout: 5000 });
+    await app.click('#ct-pay-confirm-btn');
     await app.waitForSelector('.ew-os.is-open', { timeout: 5000 });
     await app.waitForTimeout(150);
     await capture('order-processing', original, app, { probes: ['.ew-os', '.ew-os__title, .ew-os-title'] });

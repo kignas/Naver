@@ -11,8 +11,10 @@ interface CartCheckoutFooterProps {
 }
 
 export function CartCheckoutFooter({ tip, unavailable, onOpenBill, onProceed, onPlace }: CartCheckoutFooterProps) {
-  const { bill, totalSavings } = useCartTotals();
+  const { bill, totalSavings, groups } = useCartTotals();
   const payTotal = bill.total + tip;
+  const units = groups.reduce((count, group) => count + group.units, 0);
+  const plural = units === 1 ? 'item' : 'items';
 
   return (
     <div className="ct-footer" id="checkout-footer">
@@ -28,18 +30,38 @@ export function CartCheckoutFooter({ tip, unavailable, onOpenBill, onProceed, on
           <span className="ct-paybar-amt">{unavailable ? '—' : formatMoney(payTotal)}</span>
           <span className="ct-paybar-link">View detailed bill</span>
         </button>
-        {unavailable ? (
-          <button className="ct-cta locked" type="button" aria-disabled="true" onClick={onPlace}>
-            <span className="ct-cta-text">
-              Delivery unavailable
-              <span className="ct-cta-sub">Change your address to continue</span>
-            </span>
-          </button>
-        ) : (
-          <button className="ct-cta" type="button" onClick={onProceed}>
-            <span className="ct-cta-text">Proceed to Pay</span>
-          </button>
-        )}
+        <button
+          className={unavailable ? 'ct-cta locked' : 'ct-cta'}
+          id="btn-checkout"
+          type="button"
+          aria-disabled={unavailable ? 'true' : 'false'}
+          onClick={unavailable ? onPlace : onProceed}
+        >
+          <span className="ct-cta-text" id="checkout-label">
+            {unavailable ? (
+              <>
+                Delivery unavailable
+                <span className="ct-cta-sub">Change your address to continue</span>
+              </>
+            ) : (
+              <>
+                Proceed to Pay{' '}
+                <svg className="ct-cta-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M5 12h13m-5-5.5 5.5 5.5-5.5 5.5"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <span className="ct-cta-sub">
+                  {units} {plural}
+                </span>
+              </>
+            )}
+          </span>
+        </button>
       </div>
       <div className="ct-pay-note">
         <Icon name="solid:lock" size={12} />

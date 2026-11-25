@@ -92,3 +92,8 @@ body.ew-search-open{overflow:hidden}
 .ew-search-recent-clear{border:0;background:transparent;color:var(--ew-search-pink);font:800 12px Manrope,Inter,sans-serif;padding:4px 0;cursor:pointer}
 .ew-search-thumb-icon{display:grid;place-items:center;color:#9aa0a8;background:#f1f2f4}
 .ew-search-thumb-icon svg{width:22px;height:22px;display:block}
+
+/* index.html never sets a body font, so the original's home overlay inherits
+   Arial; under99.html and restaurant.html set Manrope. Mirror that per context
+   so the result rows keep the original's line lengths. */
+#ew-search-root[data-context='home'] .ew-search-sheet{font-family:Arial,sans-serif;color:#000}

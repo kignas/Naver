@@ -52,10 +52,15 @@
   letter-spacing: .04em;
 }
 
-.cart-page .navereat-place-order {
+/* The sheet portals to <body>, outside .cart-page, so these ids are global. */
+#ct-pay-confirm {
+  margin-top: 16px;
+  padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+}
+
+#ct-pay-confirm-btn {
   width: 100%;
-  min-height: 52px;
-  margin-top: 18px;
+  min-height: 54px;
   border-radius: 999px;
   font-weight: 800;
 }

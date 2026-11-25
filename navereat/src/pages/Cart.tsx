@@ -470,7 +470,6 @@ export function Cart() {
           <CartPaySheet
             sheetRef={sheetRef}
             onClose={() => setSheet(null)}
-            tip={tip}
             payment={payment}
             onPayment={setPayment}
             onPlace={handlePlace}

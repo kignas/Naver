@@ -1,6 +1,6 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { categories, restaurants, type Category, type MenuItem, type Restaurant } from '../data/demo';
+import { restaurants, type Category, type MenuItem, type Restaurant } from '../data/demo';
 import { useAppNav } from '../lib/navigation';
 import { registerSheet } from '../lib/sheetStack';
 import { lockPageScroll } from '../lib/scrollLock';
@@ -94,13 +94,11 @@ function searchDemo(raw: string, context: SearchContext): SearchResult[] {
   const query = raw.trim().toLowerCase();
   if (!query) return [];
 
-  const restaurantResults: SearchResult[] = [];
+  /* The original overlay searches dishes only (search-overlay.js renders
+     json.data.menuItems), so restaurant and cuisine rows are not produced. */
   const dishResults: SearchResult[] = [];
 
   restaurants.forEach((restaurant) => {
-    if (context === 'home' && `${restaurant.name} ${restaurant.cuisine}`.toLowerCase().includes(query)) {
-      restaurantResults.push({ kind: 'restaurant', restaurant });
-    }
     restaurant.menu.forEach((item) => {
       if (context === 'under99' && item.price > 99) return;
       const text = `${item.name} ${item.desc} ${item.category ?? ''}`.toLowerCase();
@@ -108,23 +106,7 @@ function searchDemo(raw: string, context: SearchContext): SearchResult[] {
     });
   });
 
-  const cuisineResults: SearchResult[] =
-    context === 'home'
-      ? categories
-          .filter((category) => `${category.name} ${category.query}`.toLowerCase().includes(query))
-          .map((category) => {
-            const needle = category.query.toLowerCase();
-            const count = restaurants.filter(
-              (restaurant) =>
-                restaurant.cuisine.toLowerCase().includes(needle) ||
-                restaurant.menu.some((item) => item.name.toLowerCase().includes(needle)),
-            ).length;
-            return { kind: 'cuisine' as const, category, count };
-          })
-          .filter((result) => result.count > 0)
-      : [];
-
-  return [...restaurantResults, ...dishResults, ...cuisineResults].slice(0, 12);
+  return dishResults.slice(0, 12);
 }
 
 function resultImage(result: SearchResult): string {
@@ -144,7 +126,7 @@ function resultMeta(result: SearchResult): string {
     return `${result.restaurant.cuisine} · ${result.restaurant.rating}★ · ${result.restaurant.time}`;
   }
   if (result.kind === 'dish') {
-    return `₹${result.item.price.toLocaleString('en-IN')} · ${result.restaurant.name} · ${result.item.desc}`;
+    return `₹${result.item.price.toLocaleString('en-IN')} · ${result.item.desc}`;
   }
   return `${result.count} restaurant${result.count === 1 ? '' : 's'} · Explore cuisine`;
 }
@@ -429,7 +411,7 @@ export function SearchOverlay() {
   const rootClass = `ew-search-root${isOpen ? ' is-open' : ''}${closing ? ' is-closing' : ''}`;
 
   return createPortal(
-    <div id="ew-search-root" ref={rootRef} className={rootClass} aria-hidden={!isOpen}>
+    <div id="ew-search-root" ref={rootRef} className={rootClass} data-context={context} aria-hidden={!isOpen}>
       <div className="ew-search-scrim" onClick={() => closeSearch()} />
       <section className="ew-search-sheet" role="dialog" aria-modal="true" aria-label="Search">
         <div className="ew-search-handle" aria-hidden="true" />

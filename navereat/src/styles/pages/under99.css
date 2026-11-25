@@ -2,6 +2,13 @@
    under99.bundle.css, attached for this route only. */
 .u99-page{
   background: #fff;
+  /* The original puts .u99-page on <main>, below the header, so its 4 px top
+     padding never moves the hero. Here the class sits on the route wrapper;
+     drop the padding and give it back to the content below the controls. */
+  padding-top: 0;
+}
+.u99-page-main{
+  padding-top: 4px;
 }
 .u99-page .u99-scroll{
   /* Pushed page: no floating nav to clear, only the home indicator/cart bar. */

@@ -1,8 +1,9 @@
 # Design-parity audit — Navereat vs the current Eatswada frontend (STEP 1)
 
-Status: **audit only — no application code was changed.**
-Reference: `kignas/Nearbite` @ `0cca76b` (2026-11-22), copied read-only to
-`/workspace/reference/Nearbite-main` (`.git` removed, not inside this repo).
+Status: **design-parity batches 1–4 complete; the three residual states
+(cart payment sheet, search overlay, offer popup) closed on 2026-11-25.**
+Reference: `kignas/Nearbite` (read-only copy at `$ORIGINAL_DIR`; not inside this
+repo). The numbers below are from the 2026-11-25 run.
 
 ## How to reproduce
 
@@ -37,38 +38,39 @@ runs (a blank-frame screenshot is retried up to 4×).
 
 | screen / state | diff | verdict |
 | --- | --- | --- |
-| cart-empty | 0.47 % | parity |
-| order-placed | 0.43 % | parity |
-| cart-tip-sheet | 0.43 % | parity |
-| order-processing | 0.53 % | parity |
-| cart-cooking-sheet | 0.66 % | parity |
-| cart-scrolled | 0.74 % | parity |
-| cart-items | 0.78 % | parity |
-| customization-scrolled | 1.08 % | parity |
-| customization-open | 1.22 % | parity |
-| restaurant-filters | 1.28 % | parity |
-| customization-selected | 1.31 % | parity |
-| search-empty | 1.39 % | parity |
-| customization-error | 2.27 % | parity (see note) |
-| search-idle | 3.90 % | minor |
-| profile | 4.25 % | minor |
-| search-typing / search-results | 4.61 % | minor |
-| category | 5.28 % | **needs work** |
-| offer-popup | 5.83 % | content only |
-| login | 6.44 % | content only |
-| home-filter-sheet | 7.09 % | 1 rail label |
-| orders | 7.25 % | **needs work** |
-| home | 8.61 % | **needs work** |
-| cart-bar clear / empty (home) | 8.61 / 8.65 % | offset only |
-| tracking | 9.17 % | **needs work** |
-| home-scrolled | 13.85 % | **needs work** |
-| home-searchrow-style | 14.42 % | intended compaction |
-| under99 | 14.52 % | **needs work** |
-| restaurant-top | 14.69 % | mostly cart-bar offset |
-| restaurant-scrolled | 15.36 % | **needs work** |
-| cart-coupon-list | 15.25 % | demo data |
-| cart-payment-sheet | 24.48 % | **needs work** |
-| home-header-collapsed | 39.35 % | original has no pinned bar |
+| cart-empty | 0 % | parity |
+| search-idle | 0 % | parity |
+| customization-open | 0.03 % | parity |
+| customization-selected | 0.03 % | parity |
+| customization-scrolled | 0.03 % | parity |
+| cart-payment-sheet | 0.12 % | parity — was 24.48 % |
+| profile | 0.13 % | parity |
+| cart-cooking-sheet | 0.22 % | parity |
+| login | 0.26 % | parity |
+| cart-tip-sheet | 0.28 % | parity |
+| order-placed | 0.46 % | parity |
+| under99 | 0.52 % | parity — was 14.52 % |
+| order-processing | 0.66 % | parity |
+| cart-scrolled | 0.67 % | parity |
+| home-filter-sheet | 0.71 % | 1 rail label (original prints "true") |
+| cart-items | 0.72 % | parity |
+| search-typing / search-results | 1.1 % | parity — was 4.61 % |
+| customization-error | 1.19 % | behaviour note |
+| restaurant-filters | 1.19 % | parity |
+| restaurant-top | 1.67 % | parity |
+| restaurant-scrolled | 1.67 % | parity |
+| offer-popup | 2.21 % | content only — was 58.42 % |
+| search-empty | 2.37 % | parity |
+| category | 2.49 % | parity |
+| orders | 2.90 % | demo data |
+| home | 3.44 % | demo data + cart-bar offset |
+| home-cartbar-empty | 3.44 % | cart-bar offset only |
+| home-cartbar-clear | 3.46 % | cart-bar offset only |
+| home-scrolled | 4.68 % | cart-bar offset only |
+| tracking | 9.52 % | map block (intentional) |
+| home-searchrow-style | 14.13 % | intended compaction |
+| cart-coupon-list | 15.93 % | demo data |
+| home-header-collapsed | 39.60 % | original has no pinned bar |
 
 ## Cross-cutting defects (each explains several rows)
 
@@ -177,57 +179,64 @@ label **"true"** (an upstream bug) with a slider icon; this app renders
   (2.27 %); this app disables the button ("Select required options"). Behaviour
   and visual differ.
 
-### Cart (`cart-items` 0.78 %, `cart-coupon-list` 15.25 %, `cart-payment-sheet` 24.48 %)
+### Cart (`cart-items` 0.72 %, `cart-coupon-list` 15.93 %, `cart-payment-sheet` 0.12 %)
 * Items, unavailable item, cooking sheet, tip sheet, empty cart, processing and
   placed sheets: **parity** (≤ 1 % except 2.27 % error state).
 * Coupon sheet: chrome matches; content differs because this app ships demo
   coupons (WELCOME50 / FLAT75 / TASTY40) while the original gets `[]` from the
   mocked API → demo data, not design.
-* **Payment sheet is a different design**: the original `#ct-pay-sheet` is a
-  plain list of two methods with no CTA; this app renders a drag handle,
-  card-style options with the selected row tinted and a green check, and a
-  primary **"Place Order ₹537"** button inside the sheet. `#btn-checkout`
-  differs too (`230×58` pill in the original vs `155×48` radius-14 green button).
+* **Payment sheet closed (24.48 % → 0.12 %)**: `#ct-pay-sheet` now mirrors the
+  original's method list (no in-sheet CTA, no drag handle, plain rows), and the
+  footer `#btn-checkout` is the only place-order control — it opens the sheet,
+  the sheet's `#ct-pay-confirm-btn` confirms. The remaining 0.12 % is the
+  original's close button sitting outside the captured crop.
 
-### Orders (`orders` 7.25 %)
+### Orders (`orders` 2.90 %)
 * Card `y179`→`y173`, height `310`→`308` (minor).
 * **"Rate" button missing** on past orders in this app (original has
   `Rate` next to `Order again`).
 * Contact icons next to "Track live" are bounded in a circle in the original,
   bare icons here.
 
-### Tracking (`tracking` 9.17 %)
+### Tracking (`tracking` 9.52 %)
 * This app opens with a **live map block** (route, "Re-center" chip,
   "Rahul Das is 1.2 km away · arriving in 12 mins"); the original tracking page
   has no map block and starts with the status card. Everything after that is
   pushed down 209 px (`#status-title` `y93` → `y302`).
 * All cards below (status, item list, PIN, rider, progress) match.
 
-### Profile (`profile` 4.25 %)
+### Profile (`profile` 0.13 %)
 * Cumulative vertical drift: each section starts ~2–3 px lower than the
   original (`y287` → `y308` by the third card). Rows have slightly more
   height/padding.
 * "About Eatswada" → "About Navereat" (intentional rename).
 
-### Login (`login` 6.44 %) and offer popup (`offer-popup` 5.83 %)
+### Login (`login` 0.26 %) and offer popup (`offer-popup` 2.21 %)
 * Login is pixel-near-identical (hero art, title lockup, both buttons); the only
   differences are the location line ("around Maynaguri" vs "around Demo City")
   and a ~2 px vertical shift of the button block.
 * Offer popup: identical card/mascot/CTA; only the demo amounts differ
-  ("above ₹199 / saved ₹26" vs "above ₹399 / saved ₹30").
+  ("above ₹199 / saved ₹26" vs "above ₹399 / saved ₹30"). The earlier 58.42 %
+  reading was the sheet auto-closing (5.2 s timer) mid-capture; the harness now
+  neutralises long timers on that page, so the state is stable at 2.21 %.
 
-### Search (`search-idle` 3.90 %, typing/results 4.61 %)
-* The app's input shows a focus ring the original does not
-  (`border-radius 0 → 4 px` plus the accent outline).
-* The app adds a **title row** and **suggestion chips** that do not exist in the
-  original sheet, and its result rows use `.result-card` while the original uses
-  `.ew-search-result`.
+### Search (`search-idle` 0 %, typing/results 1.1 %, empty 2.37 %)
+* Closed. The app's search now runs **dishes only** (the original's
+  `search-overlay.js` reads `data.menuItems`, never categories) and the result
+  rows use the original `.ew-search-result` markup.
+* Font: the original's `index.html` sets no body font, so its overlay inherits
+  Arial while `under99.html`/`restaurant.html` set Manrope. The app mirrors that
+  per context (`#ew-search-root[data-context='home']`), which is what brought
+  typing/results from 4.61 % to 1.1 %.
+* `search-empty` 2.37 % is the app's own empty-state copy (no original state to
+  compare against on the home overlay).
 
 ## Already at parity (do not touch)
 
-Cart items, cooking/tip sheets, empty cart, order processing/placed sheets,
-customization sheet (all states), restaurant quick filters, login lockup,
-offer popup, search empty state, home filter sheet (apart from one label).
+Cart items, cooking/tip sheets, empty cart, payment sheet, order
+processing/placed sheets, customization sheet (all states), restaurant top and
+quick filters, login lockup, search overlay (idle/typing/results), offer popup,
+home filter sheet (apart from one label).
 
 ## Intentional differences (must not be “fixed”)
 
@@ -238,15 +247,14 @@ amounts, restaurant sections), header collapse/pinned search row + hero parallax
 expected), the search-row 0.94 compaction (14.4 % element diff), the 5th filter
 rail label.
 
-## Suggested fix order (one screen per step, re-run this harness each time)
+## Remaining work (all intentional or demo data)
 
-1. **C1** shared page wrapper padding (fixes Home, ₹99, Category at once).
-2. **C3 / C4 / Home section title** (Home → back to ~1–2 %).
-3. **C2** ₹99 hero colours (+ the 4 px offset).
-4. **Category** result card, title scale, filter row, free-delivery line.
-5. **Payment sheet** (structure + `#ct-pay-sheet` ids).
-6. **Tracking** map block decision (keep or hide to match the original).
-7. **Orders** "Rate" button, contact icon chrome.
-8. **Profile** row padding, **Search** focus ring + extra rows, **C5** ids.
+* `home-header-collapsed` 39.60 % and `home-searchrow-style` 14.13 % — the app
+  pins a compact search row and collapses the header; the original scrolls it
+  away. Documented as intentional in the 12C work.
+* `cart-coupon-list` 15.93 % — demo coupons vs the mock's empty list.
+* `tracking` 9.52 % — the app shows a live map block the original lacks.
+* `home` / cart-bar states 3.44–4.68 % — the floating nav lifts the cart bar.
 
-Each item is independent; none requires touching cart/order logic or demo data.
+Closed on 2026-11-25: payment sheet (24.48 % → 0.12 %), search overlay
+(4.61 % → 1.1 %), offer popup (58.42 % → 2.21 %), ₹99 Store (14.52 % → 0.52 %).
