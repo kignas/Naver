@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <!-- Flavor res overrides src/main, so the demo build shows its own label
+         while keeping the package name and signing key of the real app. -->
+    <string name="app_name">Navereat Demo</string>
+    <string name="title_activity_main">Navereat Demo</string>
+</resources>

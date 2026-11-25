@@ -16,7 +16,7 @@ const CLOSE_MS = 320;
 const RECENT_KEY = 'nearbite_recent_searches';
 const RECENT_LIMIT = 6;
 
-type SearchPhase = 'idle' | 'searching' | 'results' | 'empty';
+type SearchPhase = 'idle' | 'searching' | 'results' | 'empty' | 'error';
 
 type SearchResult =
   | { kind: 'restaurant'; restaurant: Restaurant }
@@ -331,7 +331,7 @@ export function SearchOverlay() {
                 if (sequence !== sequenceRef.current) return;
                 setApiRows([]);
                 setResultQuery(value);
-                setPhase('empty');
+                setPhase('error');
               },
             );
           return;
@@ -543,6 +543,13 @@ export function SearchOverlay() {
             <div className="ew-search-state">
               <p className="ew-search-state-title">No dishes found for “{resultQuery}”</p>
               <p className="ew-search-state-sub">Try another dish or a different spelling.</p>
+            </div>
+          )}
+
+          {phase === 'error' && (
+            <div className="ew-search-state">
+              <p className="ew-search-state-title">Search is temporarily unavailable</p>
+              <p className="ew-search-state-sub">Please check your connection and try again.</p>
             </div>
           )}
 

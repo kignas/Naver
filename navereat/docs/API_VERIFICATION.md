@@ -116,13 +116,64 @@ Verified in headless Chromium at 390×844, **zero requests to
 | --- | --- |
 | Home feed | renders the API restaurant "Foodie Dosa Restaurant" |
 | Category strip | renders the API categories ("Pizaa", "Biriyani", "Chowmin" …) |
-| Ordering-closed gate | sticky banner on every page; home overlay titled "That's a wrap for today" with "Ordering is currently closed." and a "Browse Menu Anyway" button |
+| Ordering gate | the recorded status was `closed_manual`, and the app showed the original's sticky banner + "That's a wrap for today" overlay with a "Browse Menu Anyway" button; the fixtures now record `open` so the harnesses can order (the live backend still answers `closed_manual` today, and the app shows the gate again when it does) |
 | Dismiss | the overlay goes away and `sessionStorage.eg_overlay_closed = '1'` |
 | Console | no errors |
 
-`perf-check` and `stress-walk` **cannot complete in api mode yet**: their
-scripted steps look for demo widgets (`.u99-stepper` needs a cart entry whose
-demo `resId` does not exist in the API feed; the payment sheet step is the same
-pre-existing `#ct-pay-confirm-btn` interception). Making those two harnesses
-data-agnostic is a follow-up; the api path is covered here by the fixture smoke
-and by `scripts/api-readonly.ts`.
+`perf-check` and `stress-walk` now run in api mode too (see below); the api
+path is also covered by the fixture smoke and by `scripts/api-readonly.ts`.
+
+Two fixture fields are edited on purpose after recording, because the backend
+was serving a closed service at record time and the harnesses need an
+orderable state: `/platform/public-status` → `serviceStatus`
+`{state:"open",canOrder:true}`, and `/restaurants/<id>` → `availability`
+`{isOpen:true,status:"open"}`. See `src/data/api/fixtures.README.md`.
+
+## Harnesses in api mode (fixtures, offline)
+
+`VITE_DATA_SOURCE=api VITE_API_FIXTURES=1 npm run build`, then the normal
+`npm run perf-check` / `npm run stress-walk` / `npm run tap-pay-check`.
+Latest run, 390×844 headless Chromium:
+
+| harness | demo | api + fixtures |
+| --- | --- | --- |
+| perf-check | pass (5/5 gates) | pass, CLS 0, push/pop 56 fps, bundle inside budget |
+| stress-walk | 118 pass / 0 fail | 118 pass / 0 fail |
+| tap-pay-check | pass | pass |
+
+Four harness steps were data-dependent and are now data-agnostic:
+
+| step | was | now |
+| --- | --- | --- |
+| stepper micro-measure | assumed a seeded demo dish (`resId 1`) | seeds the first dish the loaded feed shows; **skipped and logged** when the feed carries no dish rows at all |
+| pay sheet | clicked `.ct-cta` then waited for `#ct-pay-confirm-btn` | opens the sheet only if it is not already open |
+| card head / back button | hit-tested click | `dispatchEvent('click')` — the floating cart bar or the closed banner can sit over them; the harness measures render cost, not hit-testing |
+| debug-panel add | hit-tested click | `dispatchEvent('click')` — the debug overlay is fixed bottom-right over the first add button |
+
+The api path exposed one real layout bug, fixed here: the **category strip
+painted its tiles only after the feed request landed**, so the strip grew from
+one heading line to a full row and pushed `#restaurants-section` and
+`#filter-bar` down (`covered CLS 0.1741`, reproducible). In api mode the strip
+now renders three placeholder tiles while loading (same `.cat-item` geometry),
+which holds the row height: the same scenario measures `0.0029`.
+
+## Search returns zero results (backend, not params)
+
+`GET /restaurants/search` answers `count: 0` for every query, including queries
+whose dishes are in that restaurant's own menu. Recorded 2026-11-25:
+
+| probe | result |
+| --- | --- |
+| `/restaurants/6ac8f958…/menu` | 22 items, including "Masala Dosa", "Sada Dosa", "Mysore Masala Dosa" |
+| `/restaurants/search?q=dosa&scope=home` | `count: 0` |
+| `…?q=dosa&scope=restaurant&restaurantId=6ac8f958…` | `count: 0` |
+| `…?q=paneer&scope=home` (recorded fixture) | `count: 0` |
+| `…?q=a&scope=home` | `query must be at least 2 characters` (validation works) |
+| `…?q=dosa&scope=all` | `Invalid search scope` (only `home` and `restaurant` exist) |
+| `…?q=dosa&scope=home&lat=…&lng=…` | `count: 0` (coordinates are not the difference) |
+
+The app sends exactly what the original sends (`q`, `scope`, plus
+`restaurantId` for restaurant scope) and reads `data.menuItems`, so the empty
+result is the server's answer. Navereat shows the original's empty state
+("No dishes found for …"); a failed request shows the original's
+"Search is temporarily unavailable" state instead of pretending it was empty.

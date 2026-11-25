@@ -115,6 +115,39 @@ The closed gate **fails open**: a status error means "ordering is open".
 Token storage is unchanged: `nearbite_token`, `token`, `nearbite_user`, plus the
 session copy of `nearbite_token`.
 
+## Release variants
+
+One workflow builds two APKs from the same commit and the same signing key, so
+they install side by side:
+
+| file | `VITE_DATA_SOURCE` | applicationId | label |
+| --- | --- | --- | --- |
+| `Navereat.apk` | `api` | `com.navereat.app` | Navereat |
+| `Navereat-demo.apk` | `demo` | `com.navereat.app.demo` | Navereat Demo |
+
+The variance lives in `android/app/build.gradle` (`prod`/`demo` flavors, the
+demo flavor adds `applicationIdSuffix ".demo"` and `versionNameSuffix "-demo"`)
+and in `android/app/src/demo/res/values/strings.xml` for the label. The web
+bundle is the only other difference: the workflow builds and `cap sync`s twice.
+
+The in-app debug panel keeps the data-source switch, so a tester can move
+between api and demo without reinstalling. In api mode it also reports
+`API reachable` / `API unreachable` (one platform-status read, no extra
+request loop).
+
+### api mode never falls back to demo data
+
+A failed or empty api request renders the original's own states, not demo
+content:
+
+| surface | state |
+| --- | --- |
+| home feed | "Couldn't load restaurants" + the error message + "Try Again" (`#home-retry-btn`) |
+| search | "Search is temporarily unavailable" / "Please check your connection and try again." |
+| home header location | the customer's default saved address (`Home`, `42 Demo Street`-style detail); the original's logged-out pair "Set delivery location / Choose your delivery location" when there is no session or no address |
+| "Nearby restaurants · X" strip | the saved address's city, else the service town (`Maynaguri`) |
+| restaurant page | its own menu/availability from the api; demo strings stay in demo mode only |
+
 ## Adding an endpoint
 
 1. Add the method to `DataSource` and implement it in `demoDataSource`.

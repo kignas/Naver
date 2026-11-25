@@ -22,7 +22,8 @@
     "motion:evidence": "node scripts/motion-evidence.mjs",
     "sticky-check": "node scripts/sticky-check.mjs",
     "route-motion-check": "node scripts/route-motion-check.mjs",
-    "stress-walk": "node scripts/stress-walk.mjs"
+    "stress-walk": "node scripts/stress-walk.mjs",
+    "tap-pay-check": "node scripts/tap-pay-check.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.0",

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { APP_VERSION } from '../lib/appVersion';
 import { DEBUG_EVENT, debugWanted, setDebugEnabled } from '../lib/debugFlag';
-import { useDataSourceMode, setSourceMode } from '../data';
+import { loadDataSource, useDataSourceMode, setSourceMode } from '../data';
 
 /**
  * Field overlay for the layout-shift hunt: the same numbers the harness sees,
@@ -126,6 +126,27 @@ export function StressDebugPanel() {
   const lastActionRef = useRef('none');
   const version = APP_VERSION;
   const dataMode = useDataSourceMode();
+  const [apiHealth, setApiHealth] = useState<'unknown' | 'ok' | 'unreachable'>('unknown');
+  useEffect(() => {
+    if (dataMode !== 'api') {
+      setApiHealth('unknown');
+      return undefined;
+    }
+    let cancelled = false;
+    loadDataSource('api')
+      .then((source) => source.getPlatformStatus())
+      .then(
+        () => {
+          if (!cancelled) setApiHealth('ok');
+        },
+        () => {
+          if (!cancelled) setApiHealth('unreachable');
+        },
+      );
+    return () => {
+      cancelled = true;
+    };
+  }, [dataMode]);
 
   useEffect(() => {
     const onChange = () => setEnabled(debugWanted());
@@ -372,6 +393,16 @@ export function StressDebugPanel() {
             {dataMode === 'api' ? 'use demo' : 'use api'}
           </button>
         </span>
+        {dataMode === 'api' ? (
+          <span
+            style={{
+              alignSelf: 'center',
+              color: apiHealth === 'unreachable' ? '#ff9b9b' : apiHealth === 'ok' ? '#9be3a8' : undefined,
+            }}
+          >
+            API {apiHealth === 'unreachable' ? 'unreachable' : apiHealth === 'ok' ? 'reachable' : 'checking…'}
+          </span>
+        ) : null}
         {status ? <span style={{ opacity: 0.8, alignSelf: 'center' }}>{status}</span> : null}
       </div>
       <div style={{ whiteSpace: 'pre-wrap', opacity: 0.86 }}>{header.join('\n')}</div>

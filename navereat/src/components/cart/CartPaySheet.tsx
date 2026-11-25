@@ -1,4 +1,4 @@
-import type { RefObject } from 'react';
+import { useRef, type RefObject } from 'react';
 import { Icon } from '../Icon';
 import { Sheet, type SheetHandle } from '../Sheet';
 
@@ -28,7 +28,22 @@ const OPTIONS = [
   },
 ];
 
+/* The sheet's confirm button lands where the cart's pay bar was, so a double
+   tap on "Proceed to Pay" would otherwise place the order before the customer
+   ever sees the payment options. Touch taps in the first moments after the
+   sheet mounts are swallowed, the way native bottom sheets do it. Mouse and
+   keyboard activation stay immediate (that is a deliberate click, not a
+   finger still travelling from the previous screen). */
+const TAP_THROUGH_GUARD_MS = 350;
+
 export function CartPaySheet({ sheetRef, onClose, payment, onPayment, onPlace }: CartPaySheetProps) {
+  const mountedAt = useRef(performance.now());
+  const pointerType = useRef('mouse');
+  const confirm = () => {
+    const touch = pointerType.current === 'touch';
+    if (touch && performance.now() - mountedAt.current < TAP_THROUGH_GUARD_MS) return;
+    onPlace();
+  };
   return (
     <Sheet
       ref={sheetRef}
@@ -60,7 +75,15 @@ export function CartPaySheet({ sheetRef, onClose, payment, onPayment, onPlace }:
         ))}
       </div>
       <div id="ct-pay-confirm">
-        <button id="ct-pay-confirm-btn" className="ct-btn ct-btn-primary" type="button" onClick={onPlace}>
+        <button
+          id="ct-pay-confirm-btn"
+          className="ct-btn ct-btn-primary"
+          type="button"
+          onPointerDown={(event) => {
+            pointerType.current = event.pointerType || 'mouse';
+          }}
+          onClick={confirm}
+        >
           {payment === 'cod' ? 'Place Order (Pay on delivery)' : 'Pay & Place Order'}
         </button>
       </div>

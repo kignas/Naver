@@ -6,6 +6,7 @@ import { useCustomize } from '../../lib/customizeContext';
 import { useAppStore } from '../../store/appStore';
 import { toast } from '../../store/toastStore';
 import { useUiStore } from '../../store/uiStore';
+import { Icon } from '../Icon';
 import { HomeRestaurantCard } from '../HomeRestaurantCard';
 
 /**
@@ -172,6 +173,17 @@ export const RestaurantFeed = memo(function RestaurantFeed({ ready, scrollerRef 
         <div id="restaurant-list">
           <RestaurantSkeleton />
           <RestaurantSkeleton />
+        </div>
+      ) : feedState.mode === 'api' && feedState.error ? (
+        <div className="state-block" id="restaurant-list">
+          <span className="state-icon" aria-hidden="true">
+            <Icon name="solid:circle-exclamation" size={40} />
+          </span>
+          <p className="state-title">Couldn&apos;t load restaurants</p>
+          <p className="state-sub">{feedState.error}</p>
+          <button type="button" className="state-btn" id="home-retry-btn" onClick={feedState.reload}>
+            Try Again
+          </button>
         </div>
       ) : filteredRestaurants.length ? (
         shouldVirtualize ? (

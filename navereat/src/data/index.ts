@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MenuItem, Restaurant } from './demo';
-import type { DataSource, DataSourceMode, PlatformStatus, SearchResult } from './dataSource';
+import type { Address, DataSource, DataSourceMode, PlatformStatus, SearchResult } from './dataSource';
+import { deriveLocationLabel, type LocationLabel } from './locationLabel';
+
+export { deriveLocationLabel, LOGGED_OUT_LABEL, PLATFORM_AREA, type LocationLabel } from './locationLabel';
 
 export type {
   Address,
@@ -140,6 +143,45 @@ export function usePlatformStatusData(enabled = true) {
     enabled && mode === 'api',
   );
   return { mode, status: query.data, loading: query.loading, error: query.error, reload: query.reload };
+}
+
+const hasSession = (): boolean => {
+  try {
+    return Boolean(window.localStorage.getItem('nearbite_token'));
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * The home header's location lines. Demo keeps its bundled labels (the hook
+ * returns null and the components render them), api mode reads the customer's
+ * default address and falls back to the original's logged-out pair.
+ */
+export function useLocationLabel(): LocationLabel | null {
+  const mode = useDataSourceMode();
+  const [loggedIn, setLoggedIn] = useState(hasSession);
+  useEffect(() => {
+    const sync = () => setLoggedIn(hasSession());
+    window.addEventListener('storage', sync);
+    window.addEventListener('navereat:session-changed', sync);
+    window.addEventListener('navereat:session-expired', sync);
+    sync();
+    return () => {
+      window.removeEventListener('storage', sync);
+      window.removeEventListener('navereat:session-changed', sync);
+      window.removeEventListener('navereat:session-expired', sync);
+    };
+  }, [mode]);
+  const query = useApiQuery<Address[]>(
+    () => loadDataSource('api').then((source) => source.getAddresses()),
+    [],
+    mode === 'api' && loggedIn,
+  );
+  if (mode !== 'api') return null;
+  const list = query.data ?? [];
+  const address = list.find((entry) => entry.isDefault) ?? list[0] ?? null;
+  return deriveLocationLabel(address);
 }
 
 export function useSearchResults(query: string, enabled = true) {

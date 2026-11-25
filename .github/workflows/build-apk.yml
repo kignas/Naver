@@ -63,52 +63,97 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build web app
-        run: npm run build
+      # Two APKs from one run, same signing key, different data source:
+      #   Navereat.apk      -> VITE_DATA_SOURCE=api  (the real product)
+      #   Navereat-demo.apk -> VITE_DATA_SOURCE=demo (offline demo, .demo id)
+      - name: Build web app (api)
+        run: VITE_DATA_SOURCE=api npm run build
 
-      - name: Sync Capacitor Android
+      - name: Sync Capacitor Android (api)
         run: npx cap sync android
 
-      # Release is the shipped build: minified (R8) and resource-shrunk, signed
-      # with the committed sideload key so it installs over the previous APK.
-      # If R8 ever rejects the graph, the debug build keeps the tester loop
-      # alive instead of failing the run.
-      - name: Assemble APK
-        id: apk
+      - name: Assemble API APK
+        id: apk-api
         working-directory: navereat/android
         run: |
           chmod +x ./gradlew
-          if ./gradlew assembleRelease -PversionCode=${{ github.run_number }} --no-daemon; then
-            echo "path=android/app/build/outputs/apk/release/app-release.apk" >> "$GITHUB_OUTPUT"
+          if ./gradlew assembleProdRelease -PversionCode=${{ github.run_number }} --no-daemon; then
+            echo "path=android/app/build/outputs/apk/prod/release/app-prod-release.apk" >> "$GITHUB_OUTPUT"
             echo "variant=release" >> "$GITHUB_OUTPUT"
           else
-            echo "::warning title=Release build failed::Falling back to the debug APK so device testing is not blocked."
-            ./gradlew assembleDebug -PversionCode=${{ github.run_number }} --no-daemon
-            echo "path=android/app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_OUTPUT"
+            echo "::warning title=API release build failed::Falling back to the debug APK so device testing is not blocked."
+            ./gradlew assembleProdDebug -PversionCode=${{ github.run_number }} --no-daemon
+            echo "path=android/app/build/outputs/apk/prod/debug/app-prod-debug.apk" >> "$GITHUB_OUTPUT"
             echo "variant=debug" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Verify APK signature
+      - name: Ship API APK
         env:
-          APK_PATH: ${{ steps.apk.outputs.path }}
+          APK_PATH: ${{ steps.apk-api.outputs.path }}
+          VARIANT: ${{ steps.apk-api.outputs.variant }}
         run: |
           APKSIGNER="$ANDROID_HOME/build-tools/34.0.0/apksigner"
           "$APKSIGNER" verify --print-certs "$APK_PATH" | grep 'SHA-256 digest'
-
-      - name: Rename APK
-        env:
-          APK_PATH: ${{ steps.apk.outputs.path }}
-          VARIANT: ${{ steps.apk.outputs.variant }}
-        run: |
-          echo "shipping the $VARIANT build"
+          echo "shipping the $VARIANT api build"
           cp "$APK_PATH" Navereat.apk
           ls -lh Navereat.apk
 
-      - name: Upload APK artifact
+      - name: Build web app (demo)
+        run: VITE_DATA_SOURCE=demo npm run build
+
+      - name: Sync Capacitor Android (demo)
+        run: npx cap sync android
+
+      - name: Assemble demo APK
+        id: apk-demo
+        working-directory: navereat/android
+        run: |
+          if ./gradlew assembleDemoRelease -PversionCode=${{ github.run_number }} --no-daemon; then
+            echo "path=android/app/build/outputs/apk/demo/release/app-demo-release.apk" >> "$GITHUB_OUTPUT"
+            echo "variant=release" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning title=Demo release build failed::Falling back to the debug APK so device testing is not blocked."
+            ./gradlew assembleDemoDebug -PversionCode=${{ github.run_number }} --no-daemon
+            echo "path=android/app/build/outputs/apk/demo/debug/app-demo-debug.apk" >> "$GITHUB_OUTPUT"
+            echo "variant=debug" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Ship demo APK
+        env:
+          APK_PATH: ${{ steps.apk-demo.outputs.path }}
+          VARIANT: ${{ steps.apk-demo.outputs.variant }}
+        run: |
+          APKSIGNER="$ANDROID_HOME/build-tools/34.0.0/apksigner"
+          "$APKSIGNER" verify --print-certs "$APK_PATH" | grep 'SHA-256 digest'
+          echo "shipping the $VARIANT demo build"
+          cp "$APK_PATH" Navereat-demo.apk
+          ls -lh Navereat-demo.apk
+
+      # Side-by-side install needs one key and two ids; the demo label needs the
+      # flavor's resource override to win over src/main.
+      - name: Verify both APKs
+        run: |
+          BT="$ANDROID_HOME/build-tools/34.0.0"
+          api_sig=$("$BT/apksigner" verify --print-certs Navereat.apk | grep -m1 'SHA-256 digest')
+          demo_sig=$("$BT/apksigner" verify --print-certs Navereat-demo.apk | grep -m1 'SHA-256 digest')
+          echo "api  $api_sig"
+          echo "demo $demo_sig"
+          if [ "$api_sig" != "$demo_sig" ]; then
+            echo "::error title=Signing keys differ::The two APKs would not install side by side."
+            exit 1
+          fi
+          for apk in Navereat.apk Navereat-demo.apk; do
+            echo "--- $apk"
+            "$BT/aapt2" dump badging "$apk" | grep -E "^package:|^application-label:" || echo "::warning title=badging unavailable::aapt2 could not read $apk"
+          done
+
+      - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Navereat-apk
-          path: navereat/Navereat.apk
+          name: Navereat-apks
+          path: |
+            navereat/Navereat.apk
+            navereat/Navereat-demo.apk
           if-no-files-found: error
 
       - name: Publish GitHub Release
@@ -116,7 +161,9 @@ jobs:
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: Navereat v1.0.${{ github.run_number }}
-          files: navereat/Navereat.apk
+          files: |
+            navereat/Navereat.apk
+            navereat/Navereat-demo.apk
           generate_release_notes: true
           draft: false
           prerelease: false

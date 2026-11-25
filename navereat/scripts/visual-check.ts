@@ -712,8 +712,8 @@ async function main(): Promise<void> {
   await appProcessing.goto(`http://127.0.0.1:${appPort}/#/cart?offers=none&hold=1`, { waitUntil: 'networkidle' });
   await appProcessing.waitForSelector('#coupon-card', { timeout: 20000 });
   await appProcessing.getByRole('button', { name: 'Proceed to Pay' }).click();
-  await appProcessing.waitForSelector('#btn-checkout', { timeout: 5000 });
-  await appProcessing.click('#btn-checkout');
+  await appProcessing.waitForSelector('#ct-pay-confirm-btn', { timeout: 5000 });
+  await appProcessing.click('#ct-pay-confirm-btn');
   await appProcessing.waitForSelector('.ew-os.is-open', { timeout: 5000 });
   await appProcessing.waitForTimeout(100);
   await writePairDiff('cart-processing', originalProcessing, appProcessing, 844);

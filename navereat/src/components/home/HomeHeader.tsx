@@ -1,5 +1,6 @@
 import { forwardRef, memo, type RefObject } from 'react';
 import { DEMO_ADDRESS_LINE } from '../../data/demo';
+import type { LocationLabel } from '../../data/locationLabel';
 import { Icon } from '../Icon';
 import { ProfileButton } from './ProfileButton';
 import { SearchPlaceholderText } from './SearchPlaceholderText';
@@ -12,6 +13,8 @@ interface HomeHeaderProps {
   onOpenProfile: () => void;
   onOpenSearch: () => void;
   onVoiceSearch: () => void;
+  /** api mode: the customer's default address, or the logged-out pair. */
+  location?: LocationLabel | null;
 }
 
 /**
@@ -23,7 +26,7 @@ interface HomeHeaderProps {
  */
 export const HomeHeader = memo(
   forwardRef<HTMLElement, HomeHeaderProps>(function HomeHeader(
-    { scrollerRef, onPickLocation, onOpenUnder99, onOpenProfile, onOpenSearch, onVoiceSearch },
+    { scrollerRef, onPickLocation, onOpenUnder99, onOpenProfile, onOpenSearch, onVoiceSearch, location = null },
     ref,
   ) {
     return (
@@ -36,12 +39,12 @@ export const HomeHeader = memo(
             <span className="loc-copy">
               <span className="loc-name-row">
                 <span className="loc-name" id="loc-name">
-                  Home
+                  {location?.name ?? 'Home'}
                 </span>
                 <Icon name="solid:chevron-down" size={9} className="loc-chevron" />
               </span>
               <span className="loc-sub" id="loc-sub">
-                {DEMO_ADDRESS_LINE}
+                {location?.sub ?? DEMO_ADDRESS_LINE}
               </span>
             </span>
           </button>

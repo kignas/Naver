@@ -503,7 +503,9 @@ try {
           await dismissOffers(page);
           // #btn-checkout is the cart footer CTA (the original's startPayment
           // button), so the payment sheet's own confirm button is the next tap.
-          await page.locator('.ct-cta').first().click();
+          if (!(await page.locator('#ct-pay-confirm-btn').count())) {
+            await page.locator('.ct-cta').first().click();
+          }
           await page.waitForSelector('#ct-pay-confirm-btn', { timeout: 60000 });
           await page.locator('#ct-pay-confirm-btn').click();
           await page.waitForSelector('.ew-os__btn', { timeout: 60000 });
@@ -543,6 +545,11 @@ try {
         window.location.hash = '#/';
       });
       await page.waitForSelector('.u99-restaurant-head', { timeout: 60000 });
+      // Skeleton -> list swap is a data-load event, not a navigation: let it
+      // finish before the probe starts, or a 1-item feed would score as a shift.
+      await page
+        .waitForSelector('.rs-skeleton', { state: 'detached', timeout: 15000 })
+        .catch(() => undefined);
       await sleep(900);
       await page.locator('.u99-restaurant-head').first().click();
       await page.waitForSelector('.menu-item', { timeout: 60000 });
@@ -612,6 +619,11 @@ try {
       // sequence, not about the cold first paint of the home tab.
       await debugPage.goto(`${base}/#/`, { waitUntil: 'domcontentloaded' });
       await debugPage.waitForSelector('.u99-restaurant-head', { timeout: 90000 });
+      // Skeleton -> list swap is a data-load event, not a navigation: let it
+      // finish before the probe starts, or a 1-item feed would score as a shift.
+      await debugPage
+        .waitForSelector('.rs-skeleton', { state: 'detached', timeout: 15000 })
+        .catch(() => undefined);
       await sleep(1500);
       await record(
         debugPage,
@@ -620,7 +632,9 @@ try {
           await debugPage.locator('.u99-restaurant-head').first().click();
           await debugPage.waitForSelector('.menu-item', { timeout: 60000 });
           await sleep(600);
-          await debugPage.locator('.nb-add-btn--cust, .nb-add-btn').first().click();
+          // dispatchEvent: the debug overlay is fixed bottom-right and can sit over
+          // the first add button; this probe measures layout shift, not hit-testing.
+          await debugPage.locator('.nb-add-btn--cust, .nb-add-btn').first().dispatchEvent('click');
           await debugPage.waitForSelector('.ewcs-sheet.show', { timeout: 30000 });
           await sleep(500);
           await debugPage.locator('#ewcs-sheet .ewcs-close').first().click({ timeout: 5000 }).catch(() => undefined);
@@ -630,7 +644,7 @@ try {
             .catch(() => undefined);
           await sleep(300);
           await ensureCartBar(debugPage);
-          await debugPage.locator('#es-pink-inner').click();
+          await debugPage.locator('#es-pink-inner').dispatchEvent('click');
           await debugPage.waitForSelector('.ct-cta', { timeout: 60000 });
         },
         1300,

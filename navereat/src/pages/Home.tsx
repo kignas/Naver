@@ -6,6 +6,7 @@ import { HomeFilterSheet } from '../components/home/HomeFilterSheet';
 import { HomeHeader } from '../components/home/HomeHeader';
 import { RestaurantFeed } from '../components/home/RestaurantFeed';
 import { DEMO_LOCATION } from '../data/demo';
+import { useLocationLabel } from '../data';
 import { useCachedReady } from '../hooks/useCachedReady';
 import { useAppNav } from '../lib/navigation';
 import { createRouteStyleSheet } from '../lib/routeStyles';
@@ -73,7 +74,11 @@ export function Home() {
     return () => window.clearTimeout(timer);
   }, [markHomeEntered]);
 
-  const pickLocation = useCallback(() => toast(DEMO_LOCATION), []);
+  const location = useLocationLabel();
+  const pickLocation = useCallback(
+    () => toast(location ? location.sub : DEMO_LOCATION),
+    [location],
+  );
   const openUnder99 = useCallback(() => nav.push('/under99'), [nav]);
   const openProfile = useCallback(() => nav.push('/profile'), [nav]);
   const openHomeSearch = useCallback(() => openSearch('home'), [openSearch]);
@@ -92,12 +97,13 @@ export function Home() {
           onOpenProfile={openProfile}
           onOpenSearch={openHomeSearch}
           onVoiceSearch={voiceSearch}
+          location={location}
         />
 
         <div className="hero-sheet">
           <HeroBanner />
           <div className="ew-strip" aria-hidden="true">
-            Nearby restaurants &middot; Demo City
+            Nearby restaurants &middot; {location?.area ?? 'Demo City'}
           </div>
         </div>
 

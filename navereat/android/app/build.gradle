@@ -41,6 +41,19 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+    /* Two sideload targets, one signing key, so both install side by side:
+       prod is the live-API build, demo is the offline demo build. */
+    flavorDimensions "dist"
+    productFlavors {
+        prod {
+            dimension "dist"
+        }
+        demo {
+            dimension "dist"
+            applicationIdSuffix ".demo"
+            versionNameSuffix "-demo"
+        }
+    }
 }
 
 repositories {

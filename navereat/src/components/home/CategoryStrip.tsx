@@ -26,6 +26,7 @@ export const CategoryStrip = memo(function CategoryStrip() {
   // first one looks once the animation has finished.
   const [playEntrance] = useState(() => !useUiStore.getState().homeHasEntered);
   const feedState = useHomeFeed();
+  const apiLoading = feedState.mode === 'api' && !feedState.data?.categories;
   const tiles = feedState.mode === 'api' ? (feedState.data?.categories ?? []) : categories;
   const openCategory = useCallback(
     (name: string, query: string) => {
@@ -39,6 +40,20 @@ export const CategoryStrip = memo(function CategoryStrip() {
         <h2 className="sec-title">What&apos;s on your mind?</h2>
       </div>
       <div className="cat-scroll no-scrollbar" id="cat-scroll">
+        {/* api mode paints this strip after the feed request lands; keeping three
+            placeholder tiles in place holds the row's height so the restaurant
+            feed below never jumps when they arrive. */}
+        {apiLoading &&
+          Array.from({ length: 3 }, (_, index) => (
+            <span className="cat-item cat-item--skeleton" aria-hidden="true" key={index} style={{ pointerEvents: 'none' }}>
+              <span className="cat-ring cat-image-shell">
+                <span className="cat-image-placeholder">
+                  <span className="cat-placeholder-mark">{PLACEHOLDER_MARK}</span>
+                </span>
+              </span>
+              <span className="cat-name">&nbsp;</span>
+            </span>
+          ))}
         {tiles.map((category, index) => (
           <a
             className="cat-item"
