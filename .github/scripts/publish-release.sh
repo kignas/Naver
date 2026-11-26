@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Publish (or repair) a Navereat release. Idempotent by design:
-#   * release exists  -> assets are re-uploaded with --clobber
+#   * release exists   -> assets are re-uploaded with --clobber
 #   * release is draft -> it is published, then the assets are uploaded
-#   * release missing  -> created on TARGET_SHA with both APKs attached
+#   * release missing  -> created on TARGET_SHA with the APKs attached
 # GitHub API failures are retried with exponential backoff (5 s -> 120 s,
 # 10 attempts by default) because releases occasionally answer HTTP 500 for
 # minutes while the rest of the API is healthy.
@@ -34,16 +34,21 @@ delay="${INITIAL_DELAY:-5}"
 max_delay="${MAX_DELAY:-120}"
 simulate="${SIMULATE_FAILURES:-0}"
 
+# "200", "404", or empty when the call itself failed (transport/5xx).
 release_status() {
   local out
   out=$(gh api --include "repos/$GH_REPO/releases/tags/$TAG" 2>/dev/null) || true
   printf '%s\n' "$out" | head -1 | awk '{print $2}'
 }
 
-is_draft() {
-  local draft
-  draft=$(gh api "repos/$GH_REPO/releases/tags/$TAG" --jq '.isDraft' 2>/dev/null) || return 1
-  [ "$draft" = "true" ]
+# Drafts are invisible to GET /releases/tags/<tag> (it answers 404), so a 404
+# is followed by a scan of the release list before deciding to create one.
+# Returns the draft id, or non-zero when the scan itself failed.
+draft_id() {
+  local out
+  out=$(gh api --paginate "repos/$GH_REPO/releases?per_page=100" \
+    --jq ".[] | select(.tag_name == \"$TAG\" and .draft == true) | .id" 2>/dev/null) || return 2
+  printf '%s' "${out%%$'\n'*}"
 }
 
 backoff() {
@@ -51,6 +56,16 @@ backoff() {
   echo "sleeping ${delay}s before the next attempt"
   sleep "$delay"
   delay=$(( delay * 2 > max_delay ? max_delay : delay * 2 ))
+}
+
+# shellcheck disable=SC2086 # FILES is a deliberate word list
+upload_assets() { gh release upload "$TAG" $FILES --clobber >/dev/null 2>&1; }
+
+update_notes() {
+  if [ -n "${NOTES_FILE:-}" ] && [ -f "$NOTES_FILE" ]; then
+    gh release edit "$TAG" --title "$TITLE" --notes-file "$NOTES_FILE" >/dev/null 2>&1 \
+      || echo "notes update failed; assets are published"
+  fi
 }
 
 attempt=0
@@ -69,27 +84,38 @@ while [ "$attempt" -lt "$MAX_ATTEMPTS" ]; do
 
   case "$status" in
     200)
-      if is_draft; then
-        echo "release exists as a draft; publishing it"
-        if ! gh release edit "$TAG" --draft=false --title "$TITLE" >/dev/null 2>&1; then
-          echo "draft publish failed"
-          backoff
-          continue
-        fi
-      fi
-      # shellcheck disable=SC2086 # FILES is a deliberate word list
-      if gh release upload "$TAG" $FILES --clobber >/dev/null 2>&1; then
+      if upload_assets; then
         echo "assets uploaded (overwritten) on the existing release $TAG"
-        if [ -n "${NOTES_FILE:-}" ] && [ -f "$NOTES_FILE" ]; then
-          gh release edit "$TAG" --title "$TITLE" --notes-file "$NOTES_FILE" >/dev/null 2>&1 \
-            || echo "notes update failed; assets are published"
-        fi
+        update_notes
         exit 0
       fi
       echo "asset upload failed"
       backoff
       ;;
     404)
+      id=$(draft_id)
+      scan=$?
+      if [ "$scan" -ne 0 ]; then
+        echo "draft scan failed"
+        backoff
+        continue
+      fi
+      if [ -n "$id" ]; then
+        echo "release exists as a draft (id $id); publishing it"
+        if ! gh api -X PATCH "repos/$GH_REPO/releases/$id" -F draft=false -f name="$TITLE" >/dev/null 2>&1; then
+          echo "draft publish failed"
+          backoff
+          continue
+        fi
+        if upload_assets; then
+          echo "published the draft $TAG with the APKs attached"
+          update_notes
+          exit 0
+        fi
+        echo "asset upload to the published draft failed"
+        backoff
+        continue
+      fi
       create_args=(release create "$TAG" --title "$TITLE")
       if [ -n "${TARGET_SHA:-}" ]; then
         create_args+=(--target "$TARGET_SHA")
