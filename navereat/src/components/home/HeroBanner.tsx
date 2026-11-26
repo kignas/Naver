@@ -1,8 +1,17 @@
-import { memo, useRef, type ReactNode, type RefObject } from 'react';
-import { motion, useReducedMotion, useScroll, useTransform, type Variants } from 'framer-motion';
+import { memo, useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
+import {
+  AnimatePresence,
+  motion,
+  useReducedMotion,
+  useScroll,
+  useTransform,
+  type MotionStyle,
+  type Variants,
+} from 'framer-motion';
 import { useAmbientPause } from '../../hooks/useAmbientPause';
 import { useAppNav } from '../../lib/navigation';
 import { HERO_ART } from './heroArt';
+import { HERO_SLIDES, type HeroItemKey, type HeroSlide } from './heroSlides';
 import { HeroSteam } from './HeroSteam';
 import './HeroBanner.css';
 
@@ -13,71 +22,87 @@ export interface HeroBannerProps {
   ctaLabel?: string;
   onCtaClick?: () => void;
   className?: string;
+  /** Slides to rotate through; defaults to the built-in set. */
+  slides?: HeroSlide[];
 }
 
-const SPRING_ARCH = { type: 'spring', stiffness: 260, damping: 22 } as const;
-const SPRING_POP = { type: 'spring', stiffness: 320, damping: 18 } as const;
-const SPRING_COPY = { type: 'spring', stiffness: 300, damping: 26 } as const;
+/* ── Choreography ───────────────────────────────────────────────────────
+   One shared diagonal carries everything: the old scene leaves up-right, the
+   new one arrives from the lower right. Tune these two vectors first. */
+const ENTER_FROM = { x: 70, y: 90 };
+const EXIT_TO = { x: 110, y: -80 };
+const HOLD_MS = 5000;
 
-const rootVariants: Variants = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.08 } },
-};
+type Bezier = [number, number, number, number];
+const EASE_OUT: Bezier = [0.22, 1, 0.36, 1];
+const EASE_IN: Bezier = [0.5, 0, 0.9, 0.4];
 
-const stageVariants: Variants = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.08, delayChildren: 0.04 } },
-};
-
-const copyVariants: Variants = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.08, delayChildren: 0.44 } },
-};
-
+/** Arches: smooth and weighty, no bounce. They set the stage. */
 const archVariants: Variants = {
-  hidden: { y: 30, opacity: 0 },
-  show: { y: 0, opacity: 1, transition: SPRING_ARCH },
+  enter: (i: number) => ({
+    x: ENTER_FROM.x * (1.5 + i * 0.35),
+    y: ENTER_FROM.y * (1.5 + i * 0.35),
+    opacity: 0,
+  }),
+  show: (i: number) => ({
+    x: 0,
+    y: 0,
+    opacity: 1,
+    transition: { duration: 0.8, ease: EASE_OUT, delay: i * 0.07 },
+  }),
+  exit: (i: number) => ({
+    x: EXIT_TO.x * 1.5,
+    y: EXIT_TO.y * 1.5,
+    opacity: 0,
+    transition: { duration: 0.45, ease: EASE_IN, delay: i * 0.03 },
+  }),
 };
 
-const popVariants: Variants = {
-  hidden: { y: 20, scale: 0.85, opacity: 0 },
-  show: { y: 0, scale: 1, opacity: 1, transition: SPRING_POP },
+/** Food: snappy spring with a little overshoot. This is the "toing". */
+const foodVariants: Variants = {
+  enter: { x: ENTER_FROM.x, y: ENTER_FROM.y, scale: 0.9, opacity: 0 },
+  show: (i: number) => ({
+    x: 0,
+    y: 0,
+    scale: 1,
+    opacity: 1,
+    transition: {
+      type: 'spring',
+      stiffness: 210,
+      damping: 16,
+      mass: 0.9,
+      delay: 0.14 + i * 0.07,
+      opacity: { duration: 0.2, delay: 0.14 + i * 0.07 },
+    },
+  }),
+  exit: (i: number) => ({
+    x: EXIT_TO.x,
+    y: EXIT_TO.y,
+    scale: 0.94,
+    opacity: 0,
+    transition: { duration: 0.4, ease: EASE_IN, delay: i * 0.03 },
+  }),
 };
 
-const copyItemVariants: Variants = {
-  hidden: { x: -16, opacity: 0 },
-  show: { x: 0, opacity: 1, transition: SPRING_COPY },
+/** Headline: blur-fades in after the art has started moving. */
+const headlineVariants: Variants = {
+  enter: { opacity: 0, y: 10, filter: 'blur(8px)' },
+  show: {
+    opacity: 1,
+    y: 0,
+    filter: 'blur(0px)',
+    transition: { duration: 0.5, ease: EASE_OUT, delay: 0.4 },
+  },
+  exit: { opacity: 0, y: -4, filter: 'blur(6px)', transition: { duration: 0.25 } },
 };
 
-interface StageItem {
-  key: string;
-  src: string;
-  className: string;
-  /** Idle-bob offset so the layers never breathe in lockstep. */
-  delay: number;
-}
-
-const STAGE_ITEMS: StageItem[] = [
-  { key: 'paper-cup', src: HERO_ART.paperCup, className: 'nv-hero-item nv-hero-item--paper', delay: 0 },
-  { key: 'chai-mug', src: HERO_ART.chaiMug, className: 'nv-hero-item nv-hero-item--mug', delay: 0.4 },
-  { key: 'idli-plate', src: HERO_ART.idliPlate, className: 'nv-hero-item nv-hero-item--idli', delay: 0.85 },
-  { key: 'lemon-rice', src: HERO_ART.lemonRice, className: 'nv-hero-item nv-hero-item--rice', delay: 1.25 },
-  { key: 'filter-coffee', src: HERO_ART.filterCoffee, className: 'nv-hero-item nv-hero-item--filter', delay: 1.65 },
-];
-
-/** Idle bob on a dedicated layer so it never fights the entrance variants. */
-function Floating({ paused, delay, children }: { paused: boolean; delay: number; children: ReactNode }) {
-  return (
-    <motion.div
-      className="nv-hero-float"
-      initial={false}
-      animate={paused ? { y: 0 } : { y: [0, -4, 0] }}
-      transition={paused ? { duration: 0 } : { duration: 3.2, repeat: Infinity, ease: 'easeInOut', delay }}
-    >
-      {children}
-    </motion.div>
-  );
-}
+const ITEMS: Record<HeroItemKey, { src: string; className: string }> = {
+  paperCup: { src: HERO_ART.paperCup, className: 'nv-hero-item nv-hero-item--paper' },
+  chaiMug: { src: HERO_ART.chaiMug, className: 'nv-hero-item nv-hero-item--mug' },
+  idliPlate: { src: HERO_ART.idliPlate, className: 'nv-hero-item nv-hero-item--idli' },
+  lemonRice: { src: HERO_ART.lemonRice, className: 'nv-hero-item nv-hero-item--rice' },
+  filterCoffee: { src: HERO_ART.filterCoffee, className: 'nv-hero-item nv-hero-item--filter' },
+};
 
 function Sparkle({ className }: { className: string }) {
   return (
@@ -87,11 +112,18 @@ function Sparkle({ className }: { className: string }) {
   );
 }
 
+function backgroundOf(slide: HeroSlide): string {
+  const { bgA, bgB, bgC, glow } = slide.theme;
+  return `radial-gradient(92% 72% at 82% 10%, ${glow} 0%, rgba(0,0,0,0) 62%), linear-gradient(165deg, ${bgA} 0%, ${bgB} 48%, ${bgC} 100%)`;
+}
+
 /**
- * The Home hero: two gold arches framing the transparent cups, a foreground
- * food spread, spring-staggered entrance, idle float, vector steam, and a
- * scroll-linked shrink. Every loop is held while the page is covered, hidden
- * or off-screen, so a cached Home writes no styles at all.
+ * The Home hero as a slide carousel. Each slide is data (copy, theme, which
+ * cut-outs); the choreography is shared: arches and food sweep along one
+ * diagonal, food lands with a spring overshoot, the headline blur-fades in
+ * last, and the CTA and search chrome never move. Nothing loops while a slide
+ * is resting, and the carousel holds whenever the page is covered, hidden or
+ * off-screen.
  */
 export const HeroBanner = memo(function HeroBanner({
   scrollerRef,
@@ -99,12 +131,23 @@ export const HeroBanner = memo(function HeroBanner({
   ctaLabel = 'Order now',
   onCtaClick,
   className,
+  slides = HERO_SLIDES,
 }: HeroBannerProps) {
   const nav = useAppNav();
   const rootRef = useRef<HTMLElement>(null);
   const paused = useAmbientPause(rootRef);
   const reduced = useReducedMotion() ?? false;
   const idle = paused || reduced;
+
+  const [index, setIndex] = useState(0);
+  const slide = slides[index % slides.length];
+
+  // Re-armed after every slide change, so a pause always restarts a full hold.
+  useEffect(() => {
+    if (idle || slides.length < 2) return undefined;
+    const timer = window.setTimeout(() => setIndex((i) => (i + 1) % slides.length), HOLD_MS);
+    return () => window.clearTimeout(timer);
+  }, [idle, index, slides.length]);
 
   // `layoutEffect: false`: the parent `.home-scroll` ref is attached after its
   // children's layout effects, so a layout-time read would see null.
@@ -120,63 +163,94 @@ export const HeroBanner = memo(function HeroBanner({
     nav.push('/under99');
   };
 
+  const { headline } = slide;
+  const rootStyle = { '--nv-strip-bg': slide.theme.strip, '--nv-strip-fg': slide.theme.stripText } as CSSProperties;
+  // Custom properties are CSS-only; `MotionStyle` is what `motion.h2` takes.
+  const headlineStyle = {
+    '--nv-hl-scale': headline.scale ?? 1,
+    '--nv-hl-accent': slide.theme.accent,
+  } as unknown as MotionStyle;
+
   return (
     <section
       ref={rootRef}
       id="hero-banner-region"
       aria-label="Promotions"
       className={['nv-hero-root', 'es-header-item', paused ? 'is-paused' : '', className ?? ''].filter(Boolean).join(' ')}
+      style={rootStyle}
     >
       <div className="nv-hero-banner">
-        <motion.div
-          className="nv-hero-inner"
-          style={{ scale, opacity }}
-          variants={rootVariants}
-          initial={reduced ? false : 'hidden'}
-          animate="show"
-        >
-          <motion.div className="nv-hero-stage" aria-hidden="true" variants={stageVariants}>
-            <motion.span className="nv-hero-arch nv-hero-arch--a" variants={archVariants} />
-            <motion.span className="nv-hero-arch nv-hero-arch--b" variants={archVariants} />
-            {STAGE_ITEMS.map((item) => (
-              <motion.div key={item.key} className={item.className} variants={popVariants}>
-                <Floating paused={idle} delay={item.delay}>
-                  <img className="nv-hero-art" src={item.src} alt="" draggable={false} decoding="async" />
-                </Floating>
-              </motion.div>
-            ))}
-            <HeroSteam />
-          </motion.div>
+        {/* New background fades in on top while the old one holds, so the
+            colour change never dips through a blank frame. */}
+        <AnimatePresence initial={false}>
+          <motion.div
+            key={slide.id}
+            className="nv-hero-bg"
+            style={{ background: backgroundOf(slide) }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, transition: { duration: 0.6, ease: 'easeOut' } }}
+            exit={{ opacity: 1, transition: { duration: 0.6 } }}
+            aria-hidden="true"
+          />
+        </AnimatePresence>
 
-          <motion.div className="nv-hero-copy" variants={copyVariants}>
-            <motion.p className="nv-hero-eyebrow" variants={copyItemVariants}>
+        <motion.div className="nv-hero-inner" style={{ scale, opacity }}>
+          <AnimatePresence mode="wait" initial={!reduced}>
+            <motion.div
+              key={slide.id}
+              className="nv-hero-stage"
+              aria-hidden="true"
+              initial="enter"
+              animate="show"
+              exit="exit"
+            >
+              <motion.span className="nv-hero-arch nv-hero-arch--a" custom={0} variants={archVariants} />
+              <motion.span className="nv-hero-arch nv-hero-arch--b" custom={1} variants={archVariants} />
+              {slide.items.map((key, i) => (
+                <motion.div key={key} className={ITEMS[key].className} custom={i} variants={foodVariants}>
+                  <img className="nv-hero-art" src={ITEMS[key].src} alt="" draggable={false} decoding="async" />
+                </motion.div>
+              ))}
+              {slide.items.includes('chaiMug') && <HeroSteam />}
+            </motion.div>
+          </AnimatePresence>
+
+          <div className="nv-hero-copy">
+            <p className="nv-hero-eyebrow">
               <span>Powered by</span>
               <span className="nv-hero-brand-pill">{brandBadge}</span>
-            </motion.p>
+            </p>
 
-            <motion.h2 className="nv-hero-headline" variants={copyItemVariants}>
-              <span className="nv-hero-with">with</span>
-              <span className="nv-hero-free">FREE</span>
-              <span className="nv-hero-delivery">Delivery</span>
-            </motion.h2>
+            <div className="nv-hero-headwrap">
+              <AnimatePresence mode="wait" initial={!reduced}>
+                <motion.h2
+                  key={slide.id}
+                  className="nv-hero-headline"
+                  style={headlineStyle}
+                  variants={headlineVariants}
+                  initial="enter"
+                  animate="show"
+                  exit="exit"
+                >
+                  {headline.pre && <span className="nv-hero-with">{headline.pre}</span>}
+                  <span className="nv-hero-free">{headline.line1}</span>
+                  <span className="nv-hero-delivery">{headline.line2}</span>
+                  {headline.sub && <span className="nv-hero-sub">{headline.sub}</span>}
+                </motion.h2>
+              </AnimatePresence>
+            </div>
 
-            <motion.button
-              type="button"
-              className="nv-hero-cta"
-              variants={copyItemVariants}
-              whileTap={{ scale: 0.94 }}
-              onClick={handleCtaClick}
-            >
+            <motion.button type="button" className="nv-hero-cta" whileTap={{ scale: 0.94 }} onClick={handleCtaClick}>
               <span className="nv-hero-cta-label">{ctaLabel}</span>
               <span className="nv-hero-sheen" aria-hidden="true" />
             </motion.button>
-          </motion.div>
+          </div>
         </motion.div>
       </div>
 
       <div className="nv-hero-strip">
         <Sparkle className="nv-hero-sparkle nv-hero-sparkle--left" />
-        <span className="nv-hero-strip-text">Get additional ₹40 free cash</span>
+        <span className="nv-hero-strip-text">{slide.stripLabel}</span>
         <Sparkle className="nv-hero-sparkle nv-hero-sparkle--right" />
       </div>
     </section>
