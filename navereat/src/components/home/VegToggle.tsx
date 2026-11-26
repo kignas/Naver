@@ -1,10 +1,13 @@
 import { memo } from 'react';
+import { motion } from 'framer-motion';
 import { useUiStore } from '../../store/uiStore';
 import { tapHaptic } from '../../lib/haptics';
 
 /**
  * Subscribes to `vegOnly` alone: the tap re-renders this button, the filter
- * pills and the feed, not the header, hero or category strip.
+ * pills and the feed, not the header, hero or category strip. The knob is a
+ * `layout` element, so the spring travels between the two track ends instead
+ * of reading a CSS transition.
  */
 export const VegToggle = memo(function VegToggle() {
   const vegOnly = useUiStore((state) => state.home.vegOnly);
@@ -14,22 +17,28 @@ export const VegToggle = memo(function VegToggle() {
     toggleHomeFlag('vegOnly');
   };
   return (
-    <button
+    <motion.button
       type="button"
-      className="veg-box tap"
+      className={`veg-box${vegOnly ? ' is-veg' : ''}`}
       id="veg-toggle-btn"
       aria-pressed={vegOnly}
       aria-label="Show pure veg restaurants only"
       onClick={toggle}
+      whileTap={{ scale: 0.94 }}
     >
       <span className="veg-label-txt">VEG</span>
       <span className={`veg-track${vegOnly ? ' on' : ''}`} id="veg-track">
-        <span className="veg-thumb">
+        <motion.span
+          layout
+          className="veg-thumb"
+          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+          style={{ willChange: 'transform' }}
+        >
           <span className="veg-inner">
             <span className="veg-inner-dot" />
           </span>
-        </span>
+        </motion.span>
       </span>
-    </button>
+    </motion.button>
   );
 });

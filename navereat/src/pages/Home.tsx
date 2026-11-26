@@ -101,10 +101,7 @@ export function Home() {
         />
 
         <div className="hero-sheet">
-          <HeroBanner onCtaClick={openUnder99} />
-          <div className="ew-strip" aria-hidden="true">
-            Nearby restaurants &middot; {location?.area ?? 'Demo City'}
-          </div>
+          <HeroBanner scrollerRef={scrollRef} onCtaClick={openUnder99} />
         </div>
 
         <main className="home-main">

@@ -11,5 +11,15 @@ export default defineConfig({
     target: 'es2020',
     cssCodeSplit: true,
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        // The entry chunk is what a cold start downloads first, so keep the two
+        // large vendor families in their own cacheable chunks.
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'framer-motion': ['framer-motion'],
+        },
+      },
+    },
   },
 });

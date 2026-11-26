@@ -1,62 +1,75 @@
-/* Scoped promo animation layer inside the Home hero sheet.
-   Five-second loop, transform + opacity only, fixed 160 px height so the
-   header's flow height never changes (CLS = 0). Every selector is scoped to
-   .nv-hero-*; the colours come from the header tokens set on .hero-sheet. */
+/* Home hero: royal-blue shell, two gold arches, transparent food cut-outs.
+   Every running animation is transform/opacity only and is held while the
+   page is covered (`is-paused`), so a cached Home paints nothing per frame.
+   Heights are fixed so the header's flow height never changes (CLS = 0). */
+
+.nv-hero-root {
+  position: relative;
+  width: calc(100% + 40px);
+  margin: 0 -20px;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
 
 .nv-hero-banner {
   position: relative;
   display: flex;
   align-items: center;
-  width: calc(100% + 40px);
-  height: 160px;
-  margin: 0 -20px;
-  padding: 10px 0 12px 20px;
+  height: 200px;
+  padding: 0 18px 0 20px;
   box-sizing: border-box;
-  background: transparent;
   overflow: hidden;
   contain: layout paint;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
+  background:
+    radial-gradient(92% 72% at 82% 10%, rgba(255, 209, 0, 0.2) 0%, rgba(255, 209, 0, 0) 62%),
+    linear-gradient(165deg, #0a57c8 0%, #004aad 48%, #003d8f 100%);
 }
 
-.nv-hero-road {
+/* Warm halo behind the food stage. */
+.nv-hero-banner::after {
+  content: '';
   position: absolute;
-  top: 0;
-  right: -20px;
-  width: 58%;
-  height: 100%;
+  top: -30px;
+  right: -40px;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 209, 0, 0.16), rgba(255, 209, 0, 0));
   pointer-events: none;
-  z-index: 0;
-  fill: var(--hd-accent, #EBCB8B);
 }
 
-/* ── Left column: eyebrow, swapping headlines, static CTA ─────────────── */
-.nv-hero-copy {
+.nv-hero-inner {
   position: relative;
   z-index: 2;
-  flex: 0 0 52%;
-  max-width: 52%;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  transform-origin: top center;
+}
+
+/* ── Left column ──────────────────────────────────────────────────────── */
+.nv-hero-copy {
+  position: relative;
+  z-index: 3;
+  flex: 0 0 45%;
+  max-width: 45%;
   min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  justify-content: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .nv-hero-eyebrow {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 5px;
-  max-width: 100%;
-}
-
-.nv-hero-eyebrow-text {
-  color: var(--hd-muted, rgba(255, 255, 255, 0.82));
+  gap: 6px;
+  margin: 0;
   font-size: 10.5px;
-  font-weight: 600;
-  line-height: 1;
+  font-weight: 700;
   letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.78);
   white-space: nowrap;
 }
 
@@ -66,322 +79,415 @@
   justify-content: center;
   padding: 2px 8px;
   border-radius: 999px;
-  background: var(--hd-accent, #EBCB8B);
-  color: var(--hd-primary, #5D0D18);
+  background: #ffd100;
+  color: #0b2a5b;
   font-size: 10.5px;
   font-weight: 900;
   font-style: italic;
-  line-height: 1.2;
   letter-spacing: -0.02em;
-  white-space: nowrap;
-  box-shadow: 0 2px 6px rgba(62, 7, 16, 0.22);
-}
-
-.nv-hero-headline-stage {
-  position: relative;
-  width: 100%;
-  min-width: 0;
-  height: 68px;
+  box-shadow: 0 2px 6px rgba(0, 20, 60, 0.25);
 }
 
 .nv-hero-headline {
-  position: absolute;
-  inset: 0;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: flex-start;
+  margin: 0;
   min-width: 0;
-  pointer-events: none;
+  line-height: 0.9;
 }
 
-/* will-change only while the loop is actually running. */
-.nv-hero-banner:not(.is-paused) .nv-hero-headline,
-.nv-hero-banner:not(.is-paused) .nv-hero-food {
-  will-change: transform, opacity;
+.nv-hero-with {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.82);
 }
 
-.nv-hero-headline--a {
-  animation: nv-hero-copy-a 5s linear infinite;
-}
-
-.nv-hero-headline--b {
-  animation: nv-hero-copy-b 5s linear infinite;
-}
-
-/* One line per element: a long API string is clipped with an ellipsis instead
-   of wrapping, so the fixed 160 px stage can never overflow. */
-.nv-hero-a-line1,
-.nv-hero-a-line2,
-.nv-hero-b-line1,
-.nv-hero-b-line2,
-.nv-hero-b-price {
+.nv-hero-free,
+.nv-hero-delivery {
   display: block;
   max-width: 100%;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.nv-hero-a-line1 {
-  color: var(--hd-ink, #FFFFFF);
-  font-size: 19px;
-  font-weight: 900;
-  line-height: 1.02;
-  letter-spacing: -0.02em;
-  text-shadow: 0 2px 6px rgba(62, 7, 16, 0.35);
-}
-
-.nv-hero-a-line2 {
-  color: var(--hd-accent, #EBCB8B);
   font-size: 31px;
   font-weight: 900;
-  font-style: italic;
-  line-height: 0.96;
-  letter-spacing: -0.03em;
-  text-shadow:
-    0 2px 0 rgba(62, 7, 16, 0.55),
-    0 5px 12px rgba(62, 7, 16, 0.4);
+  letter-spacing: -0.035em;
+  white-space: nowrap;
+  text-shadow: 0 2px 0 rgba(0, 20, 60, 0.32), 0 6px 14px rgba(0, 20, 60, 0.22);
 }
 
-.nv-hero-b-line1 {
-  color: var(--hd-accent, #EBCB8B);
-  font-size: 23px;
-  font-weight: 900;
-  line-height: 0.98;
-  letter-spacing: -0.03em;
-  text-shadow: 0 2px 0 rgba(62, 7, 16, 0.5);
+.nv-hero-free {
+  color: #ffd100;
 }
 
-.nv-hero-b-line2 {
-  color: var(--hd-ink, #FFFFFF);
-  font-size: 23px;
-  font-weight: 900;
-  line-height: 0.98;
-  letter-spacing: -0.03em;
-  text-shadow: 0 2px 0 rgba(62, 7, 16, 0.45);
-}
-
-.nv-hero-b-price {
-  margin-top: 3px;
-  color: var(--hd-muted, rgba(255, 255, 255, 0.82));
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.1;
-}
-
-.nv-hero-b-price-val {
-  color: var(--hd-accent, #EBCB8B);
-  font-size: 14px;
-  font-weight: 900;
+.nv-hero-delivery {
+  color: #ffffff;
 }
 
 .nv-hero-cta {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  max-width: 100%;
-  overflow: hidden;
+  margin-top: 5px;
+  padding: 10px 18px;
   border: 0;
   border-radius: 999px;
-  background: var(--hd-cta-bg, #EBCB8B);
-  color: var(--hd-cta-ink, #3E0710);
-  padding: 7px 15px;
-  font-size: 11px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #ffe04a 0%, #ffd100 55%, #f5c400 100%);
+  color: #0b2a5b;
+  font: inherit;
+  font-size: 11.5px;
   font-weight: 900;
   line-height: 1;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: nowrap;
-  text-overflow: ellipsis;
-  box-shadow: 0 3px 10px rgba(62, 7, 16, 0.28);
+  box-shadow: 0 7px 16px rgba(0, 20, 60, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.45);
   cursor: pointer;
-  transition: transform 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.nv-hero-cta:active {
-  transform: scale(0.96);
+.nv-hero-sheen {
+  position: absolute;
+  top: -40%;
+  bottom: -40%;
+  left: 0;
+  width: 46%;
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.85) 50%, rgba(255, 255, 255, 0) 100%);
+  transform: translate3d(-180%, 0, 0) skewX(-18deg);
+  animation: nv-hero-sheen 4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  pointer-events: none;
 }
 
-/* ── Right column: animated food stage ────────────────────────────────── */
+@keyframes nv-hero-sheen {
+  0%,
+  62% {
+    transform: translate3d(-180%, 0, 0) skewX(-18deg);
+    opacity: 0;
+  }
+  66% {
+    opacity: 0.9;
+  }
+  86%,
+  100% {
+    transform: translate3d(330%, 0, 0) skewX(-18deg);
+    opacity: 0;
+  }
+}
+
+/* ── Right column: arches + food stage ────────────────────────────────── */
 .nv-hero-stage {
   position: absolute;
   top: 0;
   right: 0;
-  width: 52%;
-  height: 100%;
-  pointer-events: none;
+  bottom: 0;
+  width: 57%;
   z-index: 1;
+  pointer-events: none;
 }
 
-.nv-hero-food {
+.nv-hero-arch {
   position: absolute;
-  right: 0;
+  display: block;
+  background: linear-gradient(180deg, #ffe45c 0%, #ffd100 46%, #efbc00 100%);
+  border-radius: 999px 999px 8px 8px;
+  box-shadow: inset 0 -10px 20px rgba(173, 125, 0, 0.2), inset 0 2px 0 rgba(255, 255, 255, 0.45);
+}
+
+.nv-hero-arch--a {
+  left: 7%;
+  top: 36px;
+  width: 82px;
+  height: 108px;
+}
+
+.nv-hero-arch--b {
+  right: 2%;
+  top: 14px;
+  width: 98px;
+  height: 134px;
+}
+
+.nv-hero-item {
+  position: absolute;
+}
+
+/* Drop-shadow lives on the image, the bob on its parent layer: the picture is
+   rastered once and only the layer transform moves, so the filter never
+   re-runs while the hero floats. */
+.nv-hero-art {
+  display: block;
   width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 9px 10px rgba(3, 20, 58, 0.4));
+  pointer-events: none;
+  -webkit-user-drag: none;
 }
 
-.nv-hero-food--plates {
+.nv-hero-float {
+  width: 100%;
+  height: 100%;
+}
+
+.nv-hero-root:not(.is-paused) .nv-hero-float {
+  will-change: transform;
+}
+
+.nv-hero-item--paper {
+  left: 8%;
+  top: 44px;
+  width: 78px;
+  height: 100px;
+  z-index: 2;
+}
+
+.nv-hero-item--mug {
+  left: 52%;
+  top: 58px;
+  width: 92px;
+  height: 96px;
+  z-index: 3;
+}
+
+.nv-hero-item--idli {
+  left: -4px;
   bottom: 2px;
-  height: 114px;
-  animation: nv-hero-plates 5s linear infinite;
+  width: 120px;
+  height: 72px;
+  z-index: 4;
 }
 
-.nv-hero-food--chai {
+.nv-hero-item--rice {
+  right: -6px;
+  bottom: -12px;
+  width: 144px;
+  height: 103px;
+  z-index: 5;
+}
+
+.nv-hero-item--filter {
+  left: -14px;
+  bottom: 32px;
+  width: 56px;
+  height: 64px;
+  z-index: 6;
+}
+
+.nv-hero-steam {
+  position: absolute;
+  left: 52%;
   top: 16px;
-  height: 118px;
-  animation: nv-hero-chai 5s linear infinite;
+  width: 96px;
+  height: 60px;
+  z-index: 7;
+  overflow: visible;
 }
 
-/* ── Five-second seamless loop ────────────────────────────────────────── */
-/* 0-42% state A hold | 42-52% A→B | 52-90% state B hold | 90-100% B→A */
-
-/* The two copies swap one after the other (A is gone before B appears), so the
-   headline is never a double-exposed mix of both states. */
-@keyframes nv-hero-copy-a {
-  0%,
-  42% {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  46% {
-    opacity: 0;
-    transform: translate3d(0, -10px, 0);
-  }
-  93.9% {
-    opacity: 0;
-    transform: translate3d(0, 10px, 0);
-    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-  }
-  99%,
-  100% {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
+.nv-hero-steam-wisp {
+  stroke: url(#nv-steam-gradient);
+  stroke-width: 5;
+  stroke-linecap: round;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: nv-hero-steam-rise 3.2s ease-in-out infinite;
 }
 
-@keyframes nv-hero-copy-b {
-  0%,
-  45.9% {
+@keyframes nv-hero-steam-rise {
+  0% {
     opacity: 0;
-    transform: translate3d(0, 12px, 0);
-    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    transform: translate3d(0, 6px, 0) scaleY(0.8);
   }
-  51%,
-  90% {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  22% {
+    opacity: 0.7;
   }
-  94%,
-  100% {
-    opacity: 0;
-    transform: translate3d(0, -10px, 0);
-  }
-}
-
-@keyframes nv-hero-plates {
-  0%,
-  42% {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-    animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
-  }
-  52%,
-  90% {
-    opacity: 0;
-    transform: translate3d(0, 135%, 0);
-    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-  }
-  100% {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-}
-
-@keyframes nv-hero-chai {
-  0%,
-  41.5% {
-    opacity: 0;
-    transform: translate3d(0, -145%, 0);
-  }
-  42% {
-    opacity: 1;
-    transform: translate3d(0, -145%, 0);
-    animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
-  52%,
-  90% {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-    animation-timing-function: cubic-bezier(0.4, 0, 0.8, 1);
-  }
-  98% {
-    opacity: 1;
-    transform: translate3d(0, -145%, 0);
+  55% {
+    opacity: 0.42;
+    transform: translate3d(var(--nv-steam-drift, 0px), -8px, 0) scaleY(1.05);
   }
   100% {
     opacity: 0;
-    transform: translate3d(0, -145%, 0);
+    transform: translate3d(calc(var(--nv-steam-drift, 0px) * 0.4), -18px, 0) scaleY(1.1);
   }
 }
 
-/* ── Paused states ────────────────────────────────────────────────────── */
-/* play-state keeps currentTime, so a resume continues the same cycle. */
-.nv-hero-banner.is-paused .nv-hero-headline,
-.nv-hero-banner.is-paused .nv-hero-food {
+/* ── Bottom promo strip ───────────────────────────────────────────────── */
+.nv-hero-strip {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  height: 34px;
+  padding: 0 14px;
+  background: #00398a;
+  border-top: 1px solid rgba(255, 209, 0, 0.26);
+  color: #ffd100;
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.nv-hero-sparkle {
+  flex: 0 0 auto;
+  width: 11px;
+  height: 11px;
+  color: #ffd100;
+  animation: nv-hero-twinkle 2.6s ease-in-out infinite;
+}
+
+.nv-hero-sparkle--left {
+  animation-delay: 0.3s;
+}
+
+.nv-hero-sparkle--right {
+  width: 8px;
+  height: 8px;
+  animation-delay: 1.4s;
+}
+
+@keyframes nv-hero-twinkle {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(0.78) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.14) rotate(20deg);
+  }
+}
+
+/* ── Held state (covered page, hidden tab, off-screen, reduced motion) ── */
+.nv-hero-root.is-paused .nv-hero-sheen,
+.nv-hero-root.is-paused .nv-hero-sparkle,
+.nv-hero-root.is-paused .nv-hero-steam-wisp {
   animation-play-state: paused;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nv-hero-banner .nv-hero-headline,
-  .nv-hero-banner .nv-hero-food {
+  .nv-hero-sheen,
+  .nv-hero-sparkle,
+  .nv-hero-steam-wisp {
     animation: none;
-    will-change: auto;
   }
-
-  .nv-hero-banner .nv-hero-headline--a,
-  .nv-hero-banner .nv-hero-food--plates {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-
-  .nv-hero-banner .nv-hero-headline--b,
-  .nv-hero-banner .nv-hero-food--chai {
+  .nv-hero-sheen {
     opacity: 0;
-    transform: translate3d(0, -145%, 0);
+  }
+  .nv-hero-sparkle {
+    opacity: 0.7;
+    transform: none;
+  }
+  .nv-hero-steam-wisp {
+    opacity: 0.55;
   }
 }
 
-/* The sheet's side padding changes at these widths; the banner bleeds past it
-   so the road reaches the screen edge while the copy keeps the gutter. */
+/* ── Width adjustments ────────────────────────────────────────────────── */
 @media (max-width: 380px) {
-  .nv-hero-banner {
+  .nv-hero-root {
     width: calc(100% + 28px);
     margin: 0 -14px;
-    padding-left: 14px;
+  }
+  .nv-hero-banner {
+    padding: 0 12px 0 14px;
+  }
+  .nv-hero-free,
+  .nv-hero-delivery {
+    font-size: 27px;
+  }
+  .nv-hero-arch--a {
+    width: 74px;
+    height: 98px;
+  }
+  .nv-hero-arch--b {
+    width: 88px;
+    height: 122px;
+  }
+  .nv-hero-item--paper {
+    width: 70px;
+    height: 90px;
+    top: 48px;
+  }
+  .nv-hero-item--mug {
+    width: 82px;
+    height: 86px;
+  }
+  .nv-hero-item--idli {
+    width: 108px;
+    height: 65px;
+  }
+  .nv-hero-item--rice {
+    width: 130px;
+    height: 93px;
+    right: 0;
+  }
+  .nv-hero-item--filter {
+    width: 50px;
+    height: 57px;
+  }
+  .nv-hero-steam {
+    width: 86px;
+  }
+  .nv-hero-strip {
+    font-size: 9.5px;
+    letter-spacing: 0.8px;
+    gap: 7px;
+  }
+}
+
+@media (min-width: 420px) {
+  .nv-hero-arch--a {
+    width: 90px;
+    height: 116px;
+  }
+  .nv-hero-arch--b {
+    width: 106px;
+    height: 144px;
+  }
+  .nv-hero-item--paper {
+    width: 84px;
+    height: 108px;
+  }
+  .nv-hero-item--mug {
+    width: 100px;
+    height: 104px;
+  }
+  .nv-hero-item--idli {
+    width: 132px;
+    height: 79px;
+  }
+  .nv-hero-item--rice {
+    width: 156px;
+    height: 111px;
+  }
+  .nv-hero-item--filter {
+    width: 60px;
+    height: 69px;
+  }
+  .nv-hero-steam {
+    width: 104px;
   }
 }
 
 @media (min-width: 600px) {
-  .nv-hero-banner {
+  .nv-hero-root {
     width: calc(100% + 32px);
     margin: 0 -16px;
-    padding-left: 16px;
   }
-}
-
-@media (max-width: 360px) {
-  .nv-hero-a-line1 {
-    font-size: 17px;
+  .nv-hero-banner {
+    height: 210px;
   }
-
-  .nv-hero-a-line2 {
-    font-size: 27px;
+  .nv-hero-free,
+  .nv-hero-delivery {
+    font-size: 34px;
   }
-
-  .nv-hero-b-line1,
-  .nv-hero-b-line2 {
-    font-size: 20px;
+  .nv-hero-strip {
+    height: 36px;
+    font-size: 11px;
   }
 }

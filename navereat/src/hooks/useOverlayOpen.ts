@@ -41,13 +41,25 @@ export function useOverlayOpen(): boolean {
  * The router location a *tab cache* sees is the one it was cached with, so a
  * covered page cannot learn from `useLocation` that it is covered. The hash is
  * the one signal every layer shares.
+ *
+ * React Router navigates with `history.pushState`, which fires neither
+ * `hashchange` nor `popstate`; the app's own navigation events close that gap.
+ * `before-navigate` lands before the push, so it notifies on a microtask, once
+ * the new hash is in the URL.
  */
+const NAV_EVENTS = ['navereat:transition-start', 'navereat:transition-end'] as const;
+
 const subscribeHash = (listener: () => void): (() => void) => {
+  const notifySoon = () => queueMicrotask(listener);
   window.addEventListener('hashchange', listener);
   window.addEventListener('popstate', listener);
+  window.addEventListener('navereat:before-navigate', notifySoon);
+  NAV_EVENTS.forEach((name) => window.addEventListener(name, listener));
   return () => {
     window.removeEventListener('hashchange', listener);
     window.removeEventListener('popstate', listener);
+    window.removeEventListener('navereat:before-navigate', notifySoon);
+    NAV_EVENTS.forEach((name) => window.removeEventListener(name, listener));
   };
 };
 

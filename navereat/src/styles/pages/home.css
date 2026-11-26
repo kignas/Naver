@@ -464,6 +464,82 @@ body {
   opacity: calc(1 - var(--hp));
 }
 
+/* Pinned bar lifts off the feed once the location row is gone. Discrete
+   state, not a per-frame shadow animation. */
+.home-screen.is-header-collapsed .search-row .search-box,
+.home-screen.is-header-collapsed .search-row .veg-box {
+  box-shadow: 0 8px 22px rgba(2, 18, 52, 0.22), 0 2px 6px rgba(2, 18, 52, 0.1) !important;
+}
+
+/* Rolling placeholder: the outgoing word is popped out of flow, so the slot
+   clips the vertical roll instead of moving the row. */
+.home-screen .hero-header .search-dish-slot {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.home-screen .hero-header .search-dish {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+/* VEG knob: a framer `layout` element inside a flex track, so the spring
+   travels between the two ends instead of reading a CSS translate. */
+.home-screen .hero-header .veg-track {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.home-screen .hero-header .veg-track.on {
+  justify-content: flex-end;
+}
+
+.home-screen .hero-header .veg-thumb {
+  position: relative;
+  left: auto;
+  top: auto;
+  transform: none;
+  flex: 0 0 auto;
+}
+
+.home-screen .hero-header .veg-track.on .veg-thumb {
+  transform: none;
+}
+
+.home-screen .hero-header .veg-box.is-veg .veg-label-txt {
+  color: #159c56;
+}
+
+.home-screen .hero-header .veg-track::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 99px;
+  border: 1.5px solid rgba(32, 184, 102, 0.55);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.home-screen .hero-header .veg-track.on::after {
+  animation: nv-veg-glow 2.4s ease-in-out infinite;
+}
+
+@keyframes nv-veg-glow {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.08);
+  }
+}
+
 /* Compact the pinned controls, never the row: the row keeps its exact box so
    the bar has no seam against the status bar or the content below it. */
 .home-screen.is-header-collapsed .search-row .search-box {
@@ -497,5 +573,9 @@ body {
   .home-screen.is-header-collapsed .search-row .search-box,
   .home-screen.is-header-collapsed .search-row .veg-box {
     transform: none;
+  }
+  .home-screen .hero-header .veg-track.on::after {
+    animation: none;
+    opacity: 0.7;
   }
 }

@@ -1,27 +1,58 @@
-import type { CSSProperties, RefObject } from 'react';
+import { useEffect, useState, type RefObject } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useSearchPlaceholder } from '../../hooks/useSearchPlaceholder';
 import { useHashPath, useOverlayOpen } from '../../hooks/useOverlayOpen';
 
+const ROLL_TRANSITION = { type: 'spring', stiffness: 420, damping: 32, mass: 0.6 } as const;
+
+const isSearchField = (node: EventTarget | null): boolean => {
+  const element = node as HTMLElement | null;
+  if (!element || typeof element.closest !== 'function') return false;
+  return Boolean(element.closest('.search-box, .ew-search-sheet, input[type="search"], input[type="text"]'));
+};
+
 /**
- * The rotating search placeholder lives in its own component: its timer used to
- * re-render the whole Home page every ~2 s, including while Home was covered by
- * a pushed route or another tab. Now a tick re-renders this span only, and the
- * rotation is paused whenever Home is not the visible top route or a sheet or
- * the search overlay is open.
+ * "Search for" stays static; only the dish rolls. AnimatePresence pops the
+ * outgoing word up and brings the next one in from below. The cycle is paused
+ * the moment Home is covered or the user focuses/types into a search field.
  */
 export function SearchPlaceholderText({ scrollerRef }: { scrollerRef: RefObject<HTMLDivElement | null> }) {
   const pathname = useHashPath();
   const overlayOpen = useOverlayOpen();
-  const { dish, duration } = useSearchPlaceholder(scrollerRef, pathname !== '/' || overlayOpen);
+  const [focused, setFocused] = useState(false);
+  const { dish } = useSearchPlaceholder(scrollerRef, pathname !== '/' || overlayOpen || focused);
+
+  useEffect(() => {
+    const onFocusIn = (event: FocusEvent) => {
+      if (isSearchField(event.target)) setFocused(true);
+    };
+    const onFocusOut = (event: FocusEvent) => {
+      if (isSearchField(event.target)) setFocused(false);
+    };
+    document.addEventListener('focusin', onFocusIn);
+    document.addEventListener('focusout', onFocusOut);
+    return () => {
+      document.removeEventListener('focusin', onFocusIn);
+      document.removeEventListener('focusout', onFocusOut);
+    };
+  }, []);
+
   return (
-    <span className="search-text" id="search-placeholder" aria-label={`Search "${dish}"`}>
-      <span className="search-static">Search&nbsp;</span>
-      <span
-        className="search-dish is-sliding"
-        key={dish}
-        style={{ '--search-dish-duration': `${duration}ms` } as CSSProperties}
-      >
-        &quot;{dish}&quot;
+    <span className="search-text" id="search-placeholder" aria-label={`Search for ${dish}`}>
+      <span className="search-static">Search&nbsp;for&nbsp;</span>
+      <span className="search-dish-slot">
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.span
+            key={dish}
+            className="search-dish"
+            initial={{ y: 14, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -14, opacity: 0 }}
+            transition={ROLL_TRANSITION}
+          >
+            &quot;{dish}&quot;
+          </motion.span>
+        </AnimatePresence>
       </span>
     </span>
   );

@@ -1,123 +1,83 @@
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useState, type RefObject } from 'react';
 
-export const SEARCH_DISHES = [
-  'Biryani',
-  'Pizza',
-  'Momos',
-  'Rolls',
-  'Chowmein',
-  'Fried Rice',
-  'Chicken Biryani',
-  'Puchka',
-  'Burger',
-  'Dosa',
-  'Momo',
-  'Noodles',
-  'Thali',
-  'Sweets',
-  'Pasta',
-] as const;
+export const SEARCH_DISHES = ['Pizza', 'Biryani', 'Dosa', 'Chai', 'Momos'] as const;
 
-const FIRST_DELAY_MS = 600;
-// Long enough that a page revealed by a pop keeps the text it was showing when
-// the user left, instead of changing a beat after the page lands.
-const RESUME_DELAY_MS = 1000;
-const INITIAL_INTERVAL_MS = 1800;
-const INITIAL_TRANSITION_MS = 600;
+const INTERVAL_MS = 2500;
+// A downward fling is the one moment a text swap costs frames; hold the cycle
+// until the feed settles.
+const SCROLL_SETTLE_MS = 800;
 
+/**
+ * The rolling search term. Isolated in its own component so a tick re-renders
+ * one span instead of the Home page, and paused whenever Home is covered, the
+ * document is hidden or the user is scrolling.
+ */
 export function useSearchPlaceholder(
   scrollerRef: RefObject<HTMLElement | null>,
   paused = false,
-): {
-  dish: string;
-  duration: number;
-} {
+): { dish: string } {
   const [index, setIndex] = useState(0);
-  const [duration, setDuration] = useState(INITIAL_TRANSITION_MS);
-  // The rotation restarts its effect every time the page is uncovered. Resuming
-  // from the dish that is already on screen keeps the header text still on
-  // return instead of jumping back to the start of the list.
-  const indexRef = useRef(0);
-  indexRef.current = index;
-  const startedRef = useRef(false);
 
   useEffect(() => {
-    // A covered page must not schedule work: the rotation stops and the effect
-    // tears its listeners down until the page is the active route again.
     if (paused) return;
-    let current = indexRef.current;
-    let transitionMs = INITIAL_TRANSITION_MS;
-    let intervalMs = INITIAL_INTERVAL_MS;
+
     let timer: number | null = null;
-    let scrollStopTimer: number | null = null;
-    let visibilityTimer: number | null = null;
-    let scrollingDown = false;
+    let settleTimer: number | null = null;
+    let scrolling = false;
+    let lastY = scrollerRef.current?.scrollTop ?? window.scrollY;
 
-    const scroller = scrollerRef.current;
-    let lastScrollY = scroller?.scrollTop ?? window.scrollY;
-
-    const stopTimer = () => {
+    const stop = () => {
       if (timer !== null) {
         window.clearTimeout(timer);
         timer = null;
       }
     };
 
-    const scheduleNext = (delay = intervalMs) => {
-      stopTimer();
-      if (document.hidden || scrollingDown) return;
-      timer = window.setTimeout(tick, delay);
+    const schedule = () => {
+      stop();
+      if (document.hidden) return;
+      timer = window.setTimeout(() => {
+        if (document.hidden || scrolling) {
+          schedule();
+          return;
+        }
+        setIndex((current) => (current + 1) % SEARCH_DISHES.length);
+        schedule();
+      }, INTERVAL_MS);
     };
 
-    const tick = () => {
-      if (document.hidden || scrollingDown) return;
-      current = (current + 1) % SEARCH_DISHES.length;
-      setIndex(current);
-      setDuration(transitionMs);
-      transitionMs = Math.min(1100, transitionMs + 100);
-      intervalMs = Math.min(3200, intervalMs + 180);
-      scheduleNext();
-    };
-
-    const handleScroll = () => {
-      const y = scroller?.scrollTop ?? window.scrollY;
-      const down = y > lastScrollY + 2;
-      lastScrollY = y;
+    const onScroll = () => {
+      const y = scrollerRef.current?.scrollTop ?? window.scrollY;
+      const down = y > lastY + 2;
+      lastY = y;
       if (!down) return;
-      scrollingDown = true;
-      stopTimer();
-      if (scrollStopTimer !== null) window.clearTimeout(scrollStopTimer);
-      scrollStopTimer = window.setTimeout(() => {
-        scrollingDown = false;
-        lastScrollY = scroller?.scrollTop ?? window.scrollY;
-        scheduleNext(500);
-      }, 900);
+      scrolling = true;
+      stop();
+      if (settleTimer !== null) window.clearTimeout(settleTimer);
+      settleTimer = window.setTimeout(() => {
+        scrolling = false;
+        lastY = scrollerRef.current?.scrollTop ?? window.scrollY;
+        schedule();
+      }, SCROLL_SETTLE_MS);
     };
 
-    const handleVisibility = () => {
-      if (document.hidden) {
-        stopTimer();
-        if (visibilityTimer !== null) window.clearTimeout(visibilityTimer);
-      } else if (!scrollingDown) {
-        if (visibilityTimer !== null) window.clearTimeout(visibilityTimer);
-        visibilityTimer = window.setTimeout(() => scheduleNext(300), 300);
-      }
+    const onVisibility = () => {
+      if (document.hidden) stop();
+      else schedule();
     };
 
-    const scrollTarget: HTMLElement | Window = scroller ?? window;
-    scrollTarget.addEventListener('scroll', handleScroll, { passive: true });
-    document.addEventListener('visibilitychange', handleVisibility);
-    scheduleNext(startedRef.current ? RESUME_DELAY_MS : FIRST_DELAY_MS);
-    startedRef.current = true;
+    const scrollTarget: HTMLElement | Window = scrollerRef.current ?? window;
+    scrollTarget.addEventListener('scroll', onScroll, { passive: true });
+    document.addEventListener('visibilitychange', onVisibility);
+    schedule();
 
     return () => {
-      stopTimer();
-      if (scrollStopTimer !== null) window.clearTimeout(scrollStopTimer);
-      if (visibilityTimer !== null) window.clearTimeout(visibilityTimer);
-      scrollTarget.removeEventListener('scroll', handleScroll);
-      document.removeEventListener('visibilitychange', handleVisibility);
+      stop();
+      if (settleTimer !== null) window.clearTimeout(settleTimer);
+      scrollTarget.removeEventListener('scroll', onScroll);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [paused, scrollerRef]);
 
-  return { dish: SEARCH_DISHES[index], duration };
+  return { dish: SEARCH_DISHES[index] };
 }
