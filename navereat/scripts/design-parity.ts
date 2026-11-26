@@ -902,17 +902,21 @@ async function main(): Promise<void> {
   // ── "What's on your mind?" filters Home in place (Item 19 part 3) ───
   // The app keeps Home mounted in a route layer, so a click has to be aimed at
   // the visible copy rather than at the first match in the document.
-  const originalCards = (expected: number) =>
-    home.original.waitForFunction(
-      (n) => document.querySelectorAll('#restaurant-list .u99-card-host').length === n,
-      expected,
-      { timeout: 15000 },
-    );
-
-  // The category captures compare the feed, not the cart bar an earlier step
-  // left behind (the seeded session carries 3 items): a cart-less context shows
-  // the same demo feed with nothing floating over the section crop.
+  // The category captures compare the feed, not the cart bars an earlier step
+  // left behind (the seeded session carries 3 items): both sides open a
+  // cart-less session, so neither frame has a bar over the section crop.
+  // One context per side on purpose: the app writes `nearbite_address` and
+  // `nearbite_cart` as it boots, and a shared context would deliver those as
+  // `storage` events to the original, whose listener reloads its restaurant
+  // list and drops the category.
+  const originalContext = await makeContext('emptycart');
   const categoryContext = await makeContext('emptycart');
+  const categoryOriginal = await originalContext.newPage();
+  await categoryOriginal.route(originalApiRoute, mockApi);
+  await categoryOriginal.goto(`http://127.0.0.1:${originalPort}/index.html`, { waitUntil: 'domcontentloaded' });
+  await categoryOriginal.waitForSelector('#restaurant-list .u99-card-host', { timeout: 20000 });
+  await stripChrome(categoryOriginal);
+  await categoryOriginal.evaluate(() => document.fonts.ready);
   const categoryApp = await categoryContext.newPage();
   await categoryApp.goto(`http://127.0.0.1:${appPort}/#/`, { waitUntil: 'domcontentloaded' });
   await categoryApp.waitForFunction(
@@ -933,9 +937,14 @@ async function main(): Promise<void> {
   // Selected + filtered: "Momos" is sold by two restaurants, and the ring's
   // label is also a substring of those dish names, so both search terms (the
   // original sends the label, this app sends the ring's `query`) agree here.
-  await home.original.click('[data-category-name="Momos"]');
+  await stripChrome(categoryOriginal);
+  await categoryOriginal.click('[data-category-name="Momos"]');
   await categoryApp.locator('[data-category-name="Momos"]:visible').first().click();
-  await originalCards(2);
+  await categoryOriginal.waitForFunction(
+    () => document.querySelectorAll('#restaurant-list .u99-card-host').length === 2,
+    null,
+    { timeout: 15000 },
+  );
   await categoryApp.waitForFunction(
     () => {
       const layer =
@@ -950,9 +959,9 @@ async function main(): Promise<void> {
   console.log(
     '[parity] category: original and app both list 2 restaurants for "Momos" in place (hash unchanged)',
   );
-  await home.original.waitForTimeout(400);
+  await categoryOriginal.waitForTimeout(400);
   await categoryApp.waitForTimeout(400);
-  await capture('home-category-selected', home.original, categoryApp, {
+  await capture('home-category-selected', categoryOriginal, categoryApp, {
     element: '#mind-section',
     probes: ['.cat-item.is-selected', '.cat-item.is-selected .cat-name', '.cat-name'],
     note: 'the tapped category is marked selected in place, no navigation',
@@ -960,17 +969,20 @@ async function main(): Promise<void> {
   // The section box is the comparison: it drops the hero (a deliberate header
   // difference) and the floating nav (chrome the original does not have), so
   // what is left is the title, the chips and the cards the category changed.
-  await capture('home-category-filtered', home.original, categoryApp, {
+  await capture('home-category-filtered', categoryOriginal, categoryApp, {
     element: '#restaurants-section',
     probes: ['#restaurants-title', '.u99-card-host', '.u99-restaurant-name'],
     note: 'the Home feed filtered in place by the selected category',
   });
 
   // Empty: a category nobody sells. The original is told the same thing the
-  // demo search answers, so both sides receive "no dishes".
+  // demo search answers, so both sides receive "no dishes". This one runs on
+  // the long-lived home page: its tap toggles and a late re-render of the
+  // cart-less copy can restore the full list, while here the block is stable
+  // and the cart bar stays out of the crop because the page cannot scroll.
   await home.original.route(/\/restaurants\/search/, (route) => json(route, { menuItems: [] }));
-  await home.original.click('[data-category-name="Puchka"]');
   await categoryApp.locator('[data-category-name="Puchka"]:visible').first().click();
+  await home.original.click('[data-category-name="Puchka"]');
   await home.original.waitForSelector('#restaurant-list .state-block', { timeout: 15000 });
   await categoryApp.waitForFunction(
     () => {
@@ -983,10 +995,13 @@ async function main(): Promise<void> {
     null,
     { timeout: 15000 },
   );
-  await home.original.waitForTimeout(300);
   await categoryApp.waitForTimeout(300);
-  // The section frame keeps the app's floating nav at its bottom edge: that is
-  // chrome the original does not have, and it is listed as intentional.
+  // Both pages use `#white-cart-root` for the floating bar (the app mirrors the
+  // original's id), and the long-lived home page carries its toast. Remove it
+  // on both sides so the crop is the state, not the cart chrome.
+  const dropCartBar = (page: Page): Promise<void> =>
+    page.evaluate(() => document.querySelectorAll('#white-cart-root').forEach((node) => node.remove()));
+  await Promise.all([dropCartBar(home.original), dropCartBar(categoryApp)]);
   await capture('home-category-empty', home.original, categoryApp, {
     element: '#restaurants-section',
     probes: ['.state-block', '.state-title', '.state-sub', '.state-btn'],
@@ -994,6 +1009,7 @@ async function main(): Promise<void> {
   });
   await home.original.unroute(/\/restaurants\/search/);
   await categoryContext.close();
+  await originalContext.close();
 
   // Skeleton: both sides given the same delay, so the loading state is the
   // thing on screen. The app is in api mode for this one, because that is where

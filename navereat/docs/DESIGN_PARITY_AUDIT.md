@@ -421,20 +421,19 @@ load still renders the category page. CLS is 0 in both modes and the category
 skeleton measures exactly the cold-start skeleton (278.2 px), so the two loading
 states cannot jump.
 
-Parity states in `verify/parity/`, all in a cart-less session so nothing
-floats over the frame: `home-category-selected` (cropped to `#mind-section`,
-0.15 %), `home-category-filtered` (cropped to `#restaurants-section`, 4.35 %),
-`home-category-empty` (9.33 %) and `home-category-skeleton` (1.50 %, the same
+Parity states in `verify/parity/`, both sides in a cart-less session and with
+the floating cart bar removed for the block shot (both pages use
+`#white-cart-root`, and the long-lived home page still had its toast), so the
+frame shows the state, not the cart chrome: `home-category-selected` (cropped to
+`#mind-section`, 0.15 %), `home-category-filtered` (cropped to
+`#restaurants-section`, 2.81 %), `home-category-skeleton` (1.50 %, the same
 1.4 s search delay on both sides, this app in api mode where its loading state
-is real). The two larger numbers are not layout: both sides show the same two cards, or
-the same block with the same copy and button ids. What is left is the app-wide
-type scale and text colour (`fs15px → fs16px`, `rgb(23,…)` → `rgb(26,…)`,
-tracked here as C1/C3), the app's `.state-block` sitting ~16 px lower inside its
-section, and — in the empty state — the floating nav sliver at the section's
-bottom edge, which the original does not have (see “Intentional differences”).
-The residue table quotes document coordinates, so the original's 274 px page
-scroll in that capture is listed there as a `y` offset even though the element
-crop removes it from the image.
+is real) and `home-category-empty` (9.33 %). The empty state is the one above
+budget, and its diff image says why: only glyph strokes light up — the same
+block, icon, copy and button ids on both sides, drawn at 15 px against 16 px
+(C1/C3) and sitting 19 px apart — plus the app's floating nav at the section's
+bottom edge, chrome the original does not have (see “Intentional
+differences”). No card, title or block is missing on either side.
 
 ### The status bar follows the header
 
