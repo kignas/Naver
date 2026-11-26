@@ -155,6 +155,10 @@ export const toCategory = (raw: Raw): Category => ({
 export const toBanner = (raw: Raw): Banner => ({
   id: str(raw._id ?? raw.id),
   title: str(raw.title),
+  subtitle: str(raw.subtitle),
+  offerText: str(raw.offerText),
+  badgeText: str(raw.badgeText),
+  ctaText: str(raw.ctaText),
   image: imageOr(raw.mobileImage || raw.image, 780),
   link: str(raw.ctaUrl || raw.link),
   placement: str(raw.placement, 'home'),

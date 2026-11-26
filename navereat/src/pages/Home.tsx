@@ -101,7 +101,7 @@ export function Home() {
         />
 
         <div className="hero-sheet">
-          <HeroBanner />
+          <HeroBanner onCtaClick={openUnder99} />
           <div className="ew-strip" aria-hidden="true">
             Nearby restaurants &middot; {location?.area ?? 'Demo City'}
           </div>

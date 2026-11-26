@@ -373,17 +373,31 @@ async function capture(
   name: string,
   original: Page,
   app: Page,
-  options: { probes?: string[]; element?: string; cropTop?: number; note?: string } = {},
+  options: { probes?: string[]; element?: string; cropTop?: number; cropBelow?: string; note?: string } = {},
 ): Promise<void> {
-  const { probes = [], element, cropTop, note } = options;
+  const { probes = [], element, cropTop, cropBelow, note } = options;
   const shot = async (page: Page, label: 'original' | 'navereat'): Promise<PNG> => {
     await page.evaluate(
       () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
     );
     for (let attempt = 0; attempt < 4; attempt += 1) {
-      const buffer = element
-        ? await page.locator(element).first().screenshot()
-        : await page.screenshot({ clip: cropTop ? { x: 0, y: 0, width: viewport.width, height: cropTop } : undefined });
+      // cropBelow cuts at each page's own landmark, so a deliberate header
+      // difference cannot hide a change in the content underneath. Only used at
+      // scrollTop 0, where viewport and document coordinates coincide.
+      const below = cropBelow
+        ? await page.evaluate((selector) => {
+            const target = document.querySelector(selector);
+            return target ? Math.max(0, Math.round(target.getBoundingClientRect().bottom)) : 0;
+          }, cropBelow)
+        : 0;
+      const clip = element
+        ? undefined
+        : cropTop
+          ? { x: 0, y: 0, width: viewport.width, height: cropTop }
+          : cropBelow
+            ? { x: 0, y: below, width: viewport.width, height: Math.max(1, viewport.height - below) }
+            : undefined;
+      const buffer = element ? await page.locator(element).first().screenshot() : await page.screenshot({ clip });
       const png = PNG.sync.read(buffer);
       const uniform = isUniform(png);
       if (!uniform || attempt === 3) {
@@ -512,6 +526,12 @@ const freezeText = async (page: Page): Promise<void> => {
       .forEach((el) => {
         (el as HTMLElement).style.animation = 'none';
       });
+    document.getAnimations().forEach((animation) => {
+      if (/^nv-hero-/.test((animation as CSSAnimation).animationName || '')) {
+        animation.pause();
+        animation.currentTime = 0;
+      }
+    });
   });
 };
 
@@ -636,9 +656,6 @@ async function main(): Promise<void> {
       '.loc-sub',
       '.search-box',
       '.veg-box',
-      '.banner-title',
-      '.banner-subtitle',
-      '.banner-cta',
       '#restaurants-title',
       '.cat-name',
       '.filter-pill',
@@ -647,6 +664,13 @@ async function main(): Promise<void> {
       '#white-cart-root',
     ],
     note: 'Home at scrollTop 0',
+  });
+
+  // Item 18 replaced the static hero slide with an animated banner, so the
+  // header is expected to differ. Everything below the hero sheet must not.
+  await capture('home-below-header', home.original, home.app, {
+    cropBelow: '.hero-sheet',
+    note: 'everything below the hero sheet, header differences excluded',
   });
 
   await scrollToCard(home.original, false);

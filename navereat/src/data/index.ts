@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MenuItem, Restaurant } from './demo';
-import type { Address, DataSource, DataSourceMode, PlatformStatus, SearchResult } from './dataSource';
+import type { Address, Banner, DataSource, DataSourceMode, PlatformStatus, SearchResult } from './dataSource';
 import { deriveLocationLabel, type LocationLabel } from './locationLabel';
 
 export { deriveLocationLabel, LOGGED_OUT_LABEL, PLATFORM_AREA, type LocationLabel } from './locationLabel';
@@ -117,6 +117,17 @@ export function useHomeFeed(enabled = true) {
   const mode = useDataSourceMode();
   const query = useApiQuery(
     () => loadDataSource('api').then((source) => source.getHome()),
+    [],
+    enabled && mode === 'api',
+  );
+  return { mode, ...query };
+}
+
+/** The home hero banner copy, in api mode only; demo keeps the neutral defaults. */
+export function useHomeBanners(enabled = true) {
+  const mode = useDataSourceMode();
+  const query = useApiQuery<Banner[]>(
+    () => loadDataSource('api').then((source) => source.getBanners('home')),
     [],
     enabled && mode === 'api',
   );

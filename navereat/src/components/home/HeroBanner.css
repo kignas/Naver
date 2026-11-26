@@ -1,0 +1,387 @@
+/* Scoped promo animation layer inside the Home hero sheet.
+   Five-second loop, transform + opacity only, fixed 160 px height so the
+   header's flow height never changes (CLS = 0). Every selector is scoped to
+   .nv-hero-*; the colours come from the header tokens set on .hero-sheet. */
+
+.nv-hero-banner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: calc(100% + 40px);
+  height: 160px;
+  margin: 0 -20px;
+  padding: 10px 0 12px 20px;
+  box-sizing: border-box;
+  background: transparent;
+  overflow: hidden;
+  contain: layout paint;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.nv-hero-road {
+  position: absolute;
+  top: 0;
+  right: -20px;
+  width: 58%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  fill: var(--hd-accent, #EBCB8B);
+}
+
+/* ── Left column: eyebrow, swapping headlines, static CTA ─────────────── */
+.nv-hero-copy {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 52%;
+  max-width: 52%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 6px;
+}
+
+.nv-hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+}
+
+.nv-hero-eyebrow-text {
+  color: var(--hd-muted, rgba(255, 255, 255, 0.82));
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.nv-hero-brand-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--hd-accent, #EBCB8B);
+  color: var(--hd-primary, #5D0D18);
+  font-size: 10.5px;
+  font-weight: 900;
+  font-style: italic;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(62, 7, 16, 0.22);
+}
+
+.nv-hero-headline-stage {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  height: 68px;
+}
+
+.nv-hero-headline {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  min-width: 0;
+  pointer-events: none;
+}
+
+/* will-change only while the loop is actually running. */
+.nv-hero-banner:not(.is-paused) .nv-hero-headline,
+.nv-hero-banner:not(.is-paused) .nv-hero-food {
+  will-change: transform, opacity;
+}
+
+.nv-hero-headline--a {
+  animation: nv-hero-copy-a 5s linear infinite;
+}
+
+.nv-hero-headline--b {
+  animation: nv-hero-copy-b 5s linear infinite;
+}
+
+/* One line per element: a long API string is clipped with an ellipsis instead
+   of wrapping, so the fixed 160 px stage can never overflow. */
+.nv-hero-a-line1,
+.nv-hero-a-line2,
+.nv-hero-b-line1,
+.nv-hero-b-line2,
+.nv-hero-b-price {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.nv-hero-a-line1 {
+  color: var(--hd-ink, #FFFFFF);
+  font-size: 19px;
+  font-weight: 900;
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+  text-shadow: 0 2px 6px rgba(62, 7, 16, 0.35);
+}
+
+.nv-hero-a-line2 {
+  color: var(--hd-accent, #EBCB8B);
+  font-size: 31px;
+  font-weight: 900;
+  font-style: italic;
+  line-height: 0.96;
+  letter-spacing: -0.03em;
+  text-shadow:
+    0 2px 0 rgba(62, 7, 16, 0.55),
+    0 5px 12px rgba(62, 7, 16, 0.4);
+}
+
+.nv-hero-b-line1 {
+  color: var(--hd-accent, #EBCB8B);
+  font-size: 23px;
+  font-weight: 900;
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+  text-shadow: 0 2px 0 rgba(62, 7, 16, 0.5);
+}
+
+.nv-hero-b-line2 {
+  color: var(--hd-ink, #FFFFFF);
+  font-size: 23px;
+  font-weight: 900;
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+  text-shadow: 0 2px 0 rgba(62, 7, 16, 0.45);
+}
+
+.nv-hero-b-price {
+  margin-top: 3px;
+  color: var(--hd-muted, rgba(255, 255, 255, 0.82));
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.nv-hero-b-price-val {
+  color: var(--hd-accent, #EBCB8B);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.nv-hero-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: var(--hd-cta-bg, #EBCB8B);
+  color: var(--hd-cta-ink, #3E0710);
+  padding: 7px 15px;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  box-shadow: 0 3px 10px rgba(62, 7, 16, 0.28);
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+.nv-hero-cta:active {
+  transform: scale(0.96);
+}
+
+/* ── Right column: animated food stage ────────────────────────────────── */
+.nv-hero-stage {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 52%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.nv-hero-food {
+  position: absolute;
+  right: 0;
+  width: 100%;
+}
+
+.nv-hero-food--plates {
+  bottom: 2px;
+  height: 114px;
+  animation: nv-hero-plates 5s linear infinite;
+}
+
+.nv-hero-food--chai {
+  top: 16px;
+  height: 118px;
+  animation: nv-hero-chai 5s linear infinite;
+}
+
+/* ── Five-second seamless loop ────────────────────────────────────────── */
+/* 0-42% state A hold | 42-52% A→B | 52-90% state B hold | 90-100% B→A */
+
+/* The two copies swap one after the other (A is gone before B appears), so the
+   headline is never a double-exposed mix of both states. */
+@keyframes nv-hero-copy-a {
+  0%,
+  42% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  46% {
+    opacity: 0;
+    transform: translate3d(0, -10px, 0);
+  }
+  93.9% {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  99%,
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes nv-hero-copy-b {
+  0%,
+  45.9% {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  51%,
+  90% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  94%,
+  100% {
+    opacity: 0;
+    transform: translate3d(0, -10px, 0);
+  }
+}
+
+@keyframes nv-hero-plates {
+  0%,
+  42% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
+  }
+  52%,
+  90% {
+    opacity: 0;
+    transform: translate3d(0, 135%, 0);
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes nv-hero-chai {
+  0%,
+  41.5% {
+    opacity: 0;
+    transform: translate3d(0, -145%, 0);
+  }
+  42% {
+    opacity: 1;
+    transform: translate3d(0, -145%, 0);
+    animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  52%,
+  90% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    animation-timing-function: cubic-bezier(0.4, 0, 0.8, 1);
+  }
+  98% {
+    opacity: 1;
+    transform: translate3d(0, -145%, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, -145%, 0);
+  }
+}
+
+/* ── Paused states ────────────────────────────────────────────────────── */
+/* play-state keeps currentTime, so a resume continues the same cycle. */
+.nv-hero-banner.is-paused .nv-hero-headline,
+.nv-hero-banner.is-paused .nv-hero-food {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-hero-banner .nv-hero-headline,
+  .nv-hero-banner .nv-hero-food {
+    animation: none;
+    will-change: auto;
+  }
+
+  .nv-hero-banner .nv-hero-headline--a,
+  .nv-hero-banner .nv-hero-food--plates {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+
+  .nv-hero-banner .nv-hero-headline--b,
+  .nv-hero-banner .nv-hero-food--chai {
+    opacity: 0;
+    transform: translate3d(0, -145%, 0);
+  }
+}
+
+/* The sheet's side padding changes at these widths; the banner bleeds past it
+   so the road reaches the screen edge while the copy keeps the gutter. */
+@media (max-width: 380px) {
+  .nv-hero-banner {
+    width: calc(100% + 28px);
+    margin: 0 -14px;
+    padding-left: 14px;
+  }
+}
+
+@media (min-width: 600px) {
+  .nv-hero-banner {
+    width: calc(100% + 32px);
+    margin: 0 -16px;
+    padding-left: 16px;
+  }
+}
+
+@media (max-width: 360px) {
+  .nv-hero-a-line1 {
+    font-size: 17px;
+  }
+
+  .nv-hero-a-line2 {
+    font-size: 27px;
+  }
+
+  .nv-hero-b-line1,
+  .nv-hero-b-line2 {
+    font-size: 20px;
+  }
+}

@@ -416,16 +416,14 @@ body {
    per-frame layout. The banner and the offer strip live in `.hero-sheet`, which
    scrolls away underneath the pinned bar.
 
-   --hp (0–1) and --hsy (px) are written once per frame by the same hook.
-   Everything they drive is transform/opacity only: no size, offset or font
-   property changes, so the header's flow height is identical at every scroll
-   position and the page at scrollTop 0 renders exactly like the original. */
+   --hp (0–1) is written once per frame by the same hook. Everything it drives
+   is transform/opacity only: no size, offset or font property changes, so the
+   header's flow height is identical at every scroll position. */
 /* Written by the header hook on :root, not on .home-screen: a route
    transition freezes and restores every inline style inside the page, which
    would put a stale --hp back. */
 :root {
   --hp: 0;
-  --hsy: 0;
   --pin-top: 59px;
   --pin-inset: 6px;
 }
@@ -466,10 +464,6 @@ body {
   opacity: calc(1 - var(--hp));
 }
 
-.home-screen.is-header-collapsed .header-slide__art {
-  transform: translate3d(0, min(calc(var(--hsy) * 0.32px), 70px), 0);
-}
-
 /* Compact the pinned controls, never the row: the row keeps its exact box so
    the bar has no seam against the status bar or the content below it. */
 .home-screen.is-header-collapsed .search-row .search-box {
@@ -480,11 +474,6 @@ body {
 .home-screen.is-header-collapsed .search-row .veg-box {
   transform-origin: top right;
   transform: scale(calc(1 - 0.08 * var(--hp)));
-}
-
-/* Only while the finger is moving. */
-.home-screen.is-header-motion .header-slide__art {
-  will-change: transform;
 }
 
 @media (max-width: 380px) {
@@ -505,7 +494,6 @@ body {
   .home-screen.is-header-collapsed .loc-row {
     opacity: 1;
   }
-  .home-screen.is-header-collapsed .header-slide__art,
   .home-screen.is-header-collapsed .search-row .search-box,
   .home-screen.is-header-collapsed .search-row .veg-box {
     transform: none;

@@ -1,5 +1,5 @@
 /**
- * Item 11A evidence: Home header collapse, pinned search row, hero parallax.
+ * Item 11A evidence: Home header collapse and the pinned search row.
  *
  * Serves the production build, captures the six scroll frames, composes a
  * labelled strip, and verifies that the header's flow height is identical at
@@ -55,8 +55,8 @@ try {
   await page.waitForSelector('#restaurant-list .u99-restaurant-card');
   await page.waitForTimeout(1200);
 
-  // The placeholder dish and the banner intro animation are time-based; freeze
-  // them before every capture so two runs of this script are byte-comparable.
+  // The placeholder dish and the hero loop are time-based; freeze both before
+  // every capture so two runs of this script are byte-comparable.
   const freeze = () =>
     page.evaluate(() => {
       document.querySelectorAll('.search-dish').forEach((el) => {
@@ -65,11 +65,12 @@ try {
         el.style.animation = 'none';
         el.style.transform = 'none';
       });
-      document
-        .querySelectorAll('.header-slide.is-active .banner-badge, .header-slide.is-active .banner-title, .header-slide.is-active .banner-subtitle, .header-slide.is-active .banner-offer, .header-slide.is-active .banner-cta')
-        .forEach((el) => {
-          el.style.animation = 'none';
-        });
+      document.getAnimations().forEach((animation) => {
+        if (/^nv-hero-/.test(animation.animationName || '')) {
+          animation.pause();
+          animation.currentTime = 0;
+        }
+      });
     });
   await freeze();
 

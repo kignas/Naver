@@ -12,6 +12,9 @@ const OVERLAY_CLASSES = [
 
 const bodyHasOverlay = (): boolean => OVERLAY_CLASSES.some((name) => document.body.classList.contains(name));
 
+/** The overlay signal without a subscription: used by class-driven pauses. */
+export const overlayOpen = (): boolean => sheetCount() > 0 || bodyHasOverlay();
+
 /**
  * True while a sheet, the search overlay or another modal owns the screen.
  * Legacy sheets only announce themselves through body classes, so the body

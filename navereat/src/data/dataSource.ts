@@ -6,6 +6,11 @@ export type DataSourceMode = 'demo' | 'api';
 export interface Banner {
   id: string;
   title: string;
+  /** Fields the original home-banners.js renders; optional because not every record has them. */
+  subtitle?: string;
+  offerText?: string;
+  badgeText?: string;
+  ctaText?: string;
   image: string;
   link: string;
   placement: string;

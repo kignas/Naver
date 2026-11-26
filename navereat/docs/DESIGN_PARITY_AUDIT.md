@@ -23,12 +23,13 @@ and the same seeded `localStorage`, and writes:
 | `verify/parity/side/<state>.png` | original ǀ navereat strip |
 | `verify/parity/report.json` | diff % + computed-style/geometry probes |
 
-`verify/` is git-ignored, so screenshots stay local. 34 states are captured:
+`verify/` is git-ignored, so screenshots stay local. 35 states are captured:
 login, home (0, scrolled, collapsed header, filter sheet, cart-bar clear/empty),
 search (idle, typing, results, empty), ₹99 Store, Category, Restaurant (top,
 filters, scrolled, customization open/selected/scrolled/error), Cart (items,
 scrolled, coupon list, cooking sheet, tip sheet, payment sheet, empty), offer
-popup, order processing, order placed, Orders, Tracking, Profile.
+popup, order processing, order placed, Orders, Tracking, Profile, and
+`home-below-header` (the region under the hero sheet, cropped per page).
 
 ## Headline numbers
 
@@ -71,6 +72,12 @@ runs (a blank-frame screenshot is retried up to 4×).
 | home-searchrow-style | 14.13 % | intended compaction |
 | cart-coupon-list | 15.93 % | demo data |
 | home-header-collapsed | 39.60 % | original has no pinned bar |
+
+The `home*` rows predate the animated hero banner (2026-11-26). They were not
+re-measured: the reference copy of the original frontend is not in this
+container. The header is now a deliberate difference; the invariant that still
+holds is `home-below-header` (0 px at 360×640, 0.30 % at 390×844 — the subpixel
+phase of the old 190.23 px sheet).
 
 ## Cross-cutting defects (each explains several rows)
 
@@ -135,9 +142,13 @@ produces most of the `fs16px → fs15px` probe noise.
   **"Restaurants near you"** (w209 vs w177 px).
 * Cart bar sits 74 px higher (`y770` → `y696`) — a direct consequence of the
   floating bottom nav (intentional), see “Intentional differences”.
-* Hero art: the dish is ~4–6 px right and ~3 % larger than the original; the
-  copy (`Good Food / Closer to Home.`), CTA and banner colours match exactly
-  (`banner-title` identical at `x38 y136 w163 h47`, 23 px/900).
+* Hero banner (Item 18): the static slide was replaced by a 5 s animated banner
+  (`src/components/home/HeroBanner.tsx`, `#hero-banner-region`) that swaps two
+  headline/food states. It keeps the original's 390×190 sheet geometry minus the
+  30 px offer strip, so the banner itself is 160 px tall on both widths and the
+  feed starts 30 px higher (main `y301` vs `y331`). This is an intentional
+  content change, so `home` / `home-scrolled` still differ here; everything
+  **below** the hero sheet is unchanged and tracked by `home-below-header`.
 * Header (location row + search + VEG) matches at scrollTop 0.
 * Collapsed header: intended, the original scrolls its header away (see below).
 
@@ -242,10 +253,32 @@ home filter sheet (apart from one label).
 
 Floating bottom nav (hence the cart bar sitting 74 px higher), brand rename
 (Eatswada → Navereat), demo data (coupon list, thresholds, addresses, offer
-amounts, restaurant sections), header collapse/pinned search row + hero parallax
-(the original scrolls its header away, so `home-header-collapsed` = 39 % is
-expected), the search-row 0.94 compaction (14.4 % element diff), the 5th filter
-rail label.
+amounts, restaurant sections), header collapse/pinned search row (the original
+scrolls its header away, so `home-header-collapsed` = 39 % is expected), the
+search-row 0.94 compaction (14.4 % element diff), the 5th filter rail label, and
+the animated hero banner.
+
+### The animated hero banner is a header-only change
+
+The banner is the only place where this app deliberately departs from the
+original's Home header. To keep that honest, the harness captures
+`home-below-header`: both pages are cropped at their own `.hero-sheet` bottom
+and diffed, so a header change cannot hide a change in the feed.
+
+The same comparison runs locally against any two builds:
+
+```bash
+node scripts/scroll0-diff.mjs after before   # captures, then diffs below the header
+```
+
+It reports two things per viewport: the geometry of the feed landmarks
+(`#restaurants-title`, `.cat-item`, `.filter-pill`, `.u99-card-host`,
+`.u99-restaurant-name`, `.u99-meta`) in content coordinates, and a pixel diff
+of the region between `.home-main` and the fixed chrome. The geometry check is
+exact (every landmark within 0.5 px). The pixel number carries a subpixel
+residue when the header height changes, because the old 190.23 px sheet painted
+the feed at a fractional offset: 0 px at 360×640, 0.30 % at 390×844, against a
+measured 0.29 % noise floor for a 1 px self-shift of a single build.
 
 ## Remaining work (all intentional or demo data)
 
@@ -254,7 +287,10 @@ rail label.
   away. Documented as intentional in the 12C work.
 * `cart-coupon-list` 15.93 % — demo coupons vs the mock's empty list.
 * `tracking` 9.52 % — the app shows a live map block the original lacks.
-* `home` / cart-bar states 3.44–4.68 % — the floating nav lifts the cart bar.
+* `home` / cart-bar states 3.44–4.68 % — the floating nav lifts the cart bar and
+  the hero banner is a deliberate content change.
+* `home-below-header` — the zero-diff guard for everything under the hero sheet
+  (see “The animated hero banner is a header-only change”).
 
 Closed on 2026-11-25: payment sheet (24.48 % → 0.12 %), search overlay
 (4.61 % → 1.1 %), offer popup (58.42 % → 2.21 %), ₹99 Store (14.52 % → 0.52 %).

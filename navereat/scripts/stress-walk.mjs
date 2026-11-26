@@ -206,7 +206,7 @@ const FIXES = [
   { match: /ew-search-thumb|ew-search-/, fix: 'search thumbs are fixed-size boxes' },
   { match: /cat-result-img/, fix: 'category results reserve the image box' },
   { match: /login-hero-art/, fix: 'login hero has intrinsic width/height' },
-  { match: /header-slide__art|hero-art/, fix: 'hero art is absolutely positioned inside a fixed-aspect banner' },
+  { match: /header-slide__art|hero-art|nv-hero-/, fix: 'hero art is absolutely positioned inside a fixed-height banner' },
   { match: /wc-img|ew-cd-logo/, fix: 'cart thumbnails use fixed boxes' },
   { match: /u99-restaurant-name|u99-meta|u99-free-row|u99-discount-line|u99-card/, fix: 'home cards keep a fixed copy block; fonts are primed before the first route' },
   { match: /filter-pill|u99-filter|chip/, fix: 'filter rows keep a fixed row height' },

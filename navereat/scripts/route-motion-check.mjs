@@ -9,7 +9,9 @@
  *     the slide starts,
  *   - tab switches do not animate,
  *   - a left-edge swipe-back never moves the page underneath,
- *   - push/pop FPS and tap -> first frame stay inside the budgets.
+ *   - push/pop FPS and tap -> first frame stay inside the budgets,
+ *   - the Home hero banner is the only animation on Home: it pauses while Home
+ *     is covered and resumes from the same currentTime, never restarting.
  */
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
@@ -129,6 +131,27 @@ const initScript = () => {
   };
   window.__rmTabProbe = () => {
     probe.tab = { layers: document.querySelectorAll('.route-layer').length, animations: document.getAnimations().filter((a) => a.playState === 'running').length };
+  };
+  // Hero banner state: its own animations are allowlisted by name, everything
+  // else on Home has to be idle.
+  window.__rmHero = () => {
+    const node = document.querySelector('#hero-banner-region');
+    const all = document.getAnimations();
+    const named = (a) => typeof a.animationName === 'string' && a.animationName.length > 0;
+    const own = all.filter((a) => named(a) && /^nv-hero-/.test(a.animationName));
+    // Property transitions belong to the route machinery; only named keyframe
+    // animations other than the banner's would be a stray Home animation.
+    const others = all.filter((a) => a.playState === 'running' && named(a) && !/^nv-hero-/.test(a.animationName));
+    const transitions = all.filter((a) => a.playState === 'running' && !named(a)).map((a) => a.transitionProperty || 'transition');
+    return {
+      present: Boolean(node),
+      paused: node ? node.classList.contains('is-paused') : null,
+      running: own.filter((a) => a.playState === 'running').length,
+      held: own.filter((a) => a.playState === 'paused').length,
+      time: own.length ? Math.max(...own.map((a) => Number(a.currentTime) || 0)) : -1,
+      others: [...new Set(others.map((a) => a.animationName))],
+      transitions: [...new Set(transitions)],
+    };
   };
   window.__rmRead = () => probe;
 };
@@ -305,6 +328,130 @@ try {
   check('swipe-back: the page underneath never moves', !stackMoved, swipeTrace.map((s) => s.stack).join(' | '));
   check('swipe-back: the top page follows the finger', swipeTrace.some((s) => s.top !== 'none' && s.top !== 'matrix(1, 0, 0, 1, 0, 0)'), swipeTrace.map((s) => s.top).join(' | '));
   await sleep(500);
+
+  // Back to Home for the banner checks: the swipe above can leave the
+  // restaurant header collapsed, so use the tab bar.
+  const waitForHome = async () => {
+    await page.waitForSelector('.route-tab-cache.is-active #home-header', { timeout: 15000 });
+    await sleep(260);
+  };
+  const navPoint = async (path) => visiblePoint(`[data-nav-item="${path}"]`);
+  const clickPoint = async (point) => {
+    if (!point) throw new Error('nothing to click');
+    await page.mouse.click(point.x, point.y);
+  };
+  // Cart uses .ct-dh-back, restaurant and store pages use .ew-hd-back. The page
+  // is still sliding in when the content first paints, so retry briefly.
+  const backOnce = async () => {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      for (const selector of ['.ct-dh-back', '.ew-hd-back']) {
+        const point = await visiblePoint(selector, 0);
+        if (point) return clickPoint(point);
+      }
+      await sleep(100);
+    }
+    throw new Error('no back button on screen');
+  };
+  await clickPoint(await navPoint('/'));
+  await waitForHome();
+
+  // Item 18: the banner is the only thing animating on Home, it pauses while
+  // Home is covered, and it resumes from the same currentTime afterwards.
+  const heroState = () => page.evaluate(() => window.__rmHero());
+  const roundTrip = async (name, leave, returnHome) => {
+    const before = await heroState();
+    await leave();
+    await sleep(420);
+    const covered = await heroState();
+    await returnHome();
+    await waitForHome();
+    const after = await heroState();
+    check(
+      `${name}: banner paused while Home is covered`,
+      covered.present && covered.paused === true && covered.running === 0 && covered.held > 0,
+      `paused=${covered.paused} running=${covered.running} held=${covered.held}`,
+    );
+    check(
+      `${name}: banner resumes without restarting`,
+      after.paused === false && after.running > 0 && after.time >= before.time,
+      `time ${Math.round(before.time)} → ${Math.round(after.time)} ms, running ${after.running}`,
+    );
+    check(
+      `${name}: nothing else on Home animates`,
+      after.others.length === 0,
+      after.others.join(', ') || `none (transitions: ${after.transitions.join(', ') || 'none'})`,
+    );
+  };
+
+  await roundTrip(
+    'return from History',
+    async () => {
+      await clickPoint(await navPoint('/orders'));
+      await page.waitForSelector('.orders-page', { timeout: 15000 });
+    },
+    async () => {
+      await clickPoint(await navPoint('/'));
+    },
+  );
+
+  const openRestaurant = async () => {
+    const card3 = await visiblePoint('#restaurant-list .u99-restaurant-head');
+    await clickPoint(card3);
+    await page.waitForSelector('.menu-item', { timeout: 15000 });
+    await sleep(200);
+  };
+  await roundTrip('return from Restaurant', openRestaurant, async () => {
+    await backOnce();
+    await waitForHome();
+  });
+
+  await roundTrip(
+    'return from Cart',
+    async () => {
+      await openRestaurant();
+      await page.locator('.nb-add-btn:not(.nb-add-btn--cust)').first().click();
+      await page.waitForSelector('#es-pink-inner', { timeout: 15000 });
+      await sleep(300);
+      await page.locator('#es-pink-inner').click();
+      await page.waitForSelector('.ct-cta', { timeout: 15000 });
+      await sleep(250);
+    },
+    async () => {
+      await backOnce();
+      await page.waitForSelector('.menu-item', { timeout: 15000 });
+      await sleep(450);
+      // The restaurant restores its scroll offset, which puts the header back
+      // button off-screen; scroll it up before tapping.
+      await page.evaluate(() => document.querySelector('.route-layer.is-top .rest-scroll')?.scrollTo(0, 0));
+      await sleep(320);
+      await backOnce();
+    },
+  );
+
+  await roundTrip(
+    'return from Profile',
+    async () => {
+      await page.evaluate(() => document.querySelector('.route-tab-cache.is-active .home-scroll')?.scrollTo(0, 0));
+      await sleep(320);
+      await clickPoint(await visiblePoint('.btn-profile', 0));
+      await page.waitForSelector('.profile-page', { timeout: 15000 });
+      await sleep(200);
+    },
+    async () => {
+      await page.locator('.profile-page .icon-btn.back').first().click();
+    },
+  );
+
+  await roundTrip(
+    'return from Search',
+    async () => {
+      await page.locator('.search-box').first().click();
+      await sleep(400);
+    },
+    async () => {
+      await page.keyboard.press('Escape');
+    },
+  );
 
   // FPS from the per-frame samples taken during each slide.
   const fpsOf = (probe) => {

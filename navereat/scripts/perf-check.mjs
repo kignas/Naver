@@ -510,6 +510,12 @@ const clsTransitions = async (browser) => {
   transitions.push(await measure('push: Home → Restaurant', () => page.locator('.u99-restaurant-head').first().click(), 900));
   await page.waitForSelector('.menu-item', { timeout: 15000 });
   await page.waitForTimeout(350);
+  transitions.push(await measure('pop: Restaurant → Home', () => page.locator('.ew-hd-back').first().click(), 800));
+  await page.waitForSelector('#home-header', { timeout: 15000 });
+  await page.waitForTimeout(400);
+  transitions.push(await measure('push: Home → Restaurant (return leg)', () => page.locator('.u99-restaurant-head').first().click(), 900));
+  await page.waitForSelector('.menu-item', { timeout: 15000 });
+  await page.waitForTimeout(350);
   transitions.push(await measure('push: Restaurant → Cart', () => page.locator('#es-pink-inner').click(), 900));
   await page.waitForSelector('.ct-cta', { timeout: 15000 });
   if (!(await page.locator('#ct-pay-confirm-btn').count())) {
@@ -779,6 +785,22 @@ const navAndCoveredHome = async (browser) => {
   covered.layoutCount = after.LayoutCount - before.LayoutCount;
   covered.recalcStyleCount = after.RecalcStyleCount - before.RecalcStyleCount;
 
+  // Item 18: while Home is covered every banner animation must be held, and the
+  // pause itself must not keep costing style work.
+  const banner = await page.evaluate(() => {
+    const node = document.querySelector('#hero-banner-region');
+    const own = document.getAnimations().filter((a) => /^nv-hero-/.test(a.animationName || ''));
+    return {
+      present: Boolean(node),
+      paused: node ? node.classList.contains('is-paused') : null,
+      total: own.length,
+      running: own.filter((a) => a.playState === 'running').length,
+      states: [...new Set(own.map((a) => a.playState))],
+    };
+  });
+  covered.idle = covered.mutations === 0 && covered.recalcStyleCount === 0 && covered.layoutCount === 0;
+  covered.bannerIdle = banner.present && banner.paused === true && banner.running === 0;
+
   await sample();
   await page.locator('.rest-page .ew-hd-back').first().click();
   await page.waitForTimeout(1000);
@@ -797,7 +819,7 @@ const navAndCoveredHome = async (browser) => {
   };
 
   await context.close();
-  return { push, pop, covered, routeAssets };
+  return { push, pop, covered, banner, routeAssets };
 };
 
 // The floating cart bar is chrome, like the nav: a pushed page slides over it
@@ -1058,7 +1080,9 @@ try {
     navCovered.push.hiddenAfterSlide === true &&
     navCovered.covered.renders === 0 &&
     navCovered.covered.mutations === 0 &&
-    navCovered.covered.placeholderChanged === false;
+    navCovered.covered.placeholderChanged === false &&
+    navCovered.covered.idle === true &&
+    navCovered.covered.bannerIdle === true;
   // Boot cost: the entry chunk is what a cold start pays for before any route
   // exists, so it gets a hard gzip ceiling (a route splitting change that moves
   // code into the entry must not slip through unnoticed).
@@ -1157,7 +1181,8 @@ try {
         `median tap→slide-start ${medianSlideStart.toFixed(1)} ms (budget ${slideStartBudget} ms), ` +
         `covered page identity push ${outgoingPush.identity} / pop ${outgoingPop.identity}, home re-renders under push ${outgoingPush.homeRendersDuring}, ` +
         `nav moved push ${navCovered.push.navMovedDuringSlide} / pop ${navCovered.pop.navMovedDuringSlide}, ` +
-        `covered home renders ${navCovered.covered.renders} / mutations ${navCovered.covered.mutations}, ` +
+        `covered home renders ${navCovered.covered.renders} / mutations ${navCovered.covered.mutations} / recalcs ${navCovered.covered.recalcStyleCount} / layouts ${navCovered.covered.layoutCount}, ` +
+        `covered banner paused ${navCovered.banner?.paused} running ${navCovered.banner?.running} of ${navCovered.banner?.total}, ` +
         `cart bar moved push ${cartBar.push.movedDuringSlide} / pop ${cartBar.pop.movedDuringSlide}, ` +
         `bar present at pop start ${cartBar.pop.presentAtSlideStart}, ` +
         `push frames dropped 1x ${one.droppedFrames} / 6x ${six.droppedFrames}, ` +

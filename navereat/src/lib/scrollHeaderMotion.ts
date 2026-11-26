@@ -14,9 +14,6 @@ interface ScrollHeaderMotionOptions {
 const FALLBACK_PIN_TOP = 59;
 const STORE_STEP = 24;
 const IDLE_MS = 160;
-// The hero art is clipped by the banner, so its parallax is capped in CSS;
-// stop recomputing the shift once the cap is reached.
-const PARALLAX_LIMIT = 220;
 
 /**
  * Drives the Home header from a single passive listener and one rAF per frame.
@@ -52,16 +49,14 @@ export function useScrollHeaderMotion({ scroller, host, header, onScrollTop }: S
     let idle = 0;
     let stored = -1;
     let lastProgress = -1;
-    let lastShift = -1;
     let lastCollapsed = false;
 
     const apply = () => {
       frame = 0;
       const top = scrollEl.scrollTop;
       const progress = reduced?.matches ? 0 : Math.min(1, Math.max(0, top / pinTop));
-      // Once the header has scrolled away both values are clamped, so stop
+      // Once the header has scrolled away the value is clamped, so stop
       // writing: a custom property write invalidates the whole header subtree.
-      const shift = Math.round(Math.min(top, PARALLAX_LIMIT));
       // The transforms only exist once the header starts collapsing: at rest
       // the elements must stay untransformed so the page renders (and
       // rasterises) exactly like the original.
@@ -73,10 +68,6 @@ export function useScrollHeaderMotion({ scroller, host, header, onScrollTop }: S
       if (Math.abs(progress - lastProgress) > 0.001) {
         lastProgress = progress;
         varsEl.style.setProperty('--hp', progress.toFixed(3));
-      }
-      if (shift !== lastShift) {
-        lastShift = shift;
-        varsEl.style.setProperty('--hsy', String(shift));
       }
       if (Math.abs(top - stored) >= STORE_STEP) {
         stored = top;
