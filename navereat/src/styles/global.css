@@ -463,8 +463,8 @@ ol {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
 }
 
+/* Spacing comes from the ported rule's `gap`; a margin here doubled it. */
 .filter-pill .icon {
-  margin-right: 6px;
   font-size: 10px;
 }
 

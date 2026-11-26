@@ -64,19 +64,23 @@ runs (a blank-frame screenshot is retried up to 4×).
 | search-empty | 2.37 % | parity |
 | category | 2.49 % | parity |
 | orders | 2.72 % | demo data |
-| home-scrolled | 4.70 % | cart-bar offset only |
-| home-below-header | 12.80 % | chrome + inset + accent (see below) |
-| home-searchrow-style | 18.19 % | intended compaction |
+| home-scrolled | 4.74 % | cart-bar offset only |
+| tracking | 9.53 % | live map block |
+| home-below-header | 9.65 % | section-title copy + chrome (see below) |
+| home-searchrow-style | 13.36 % | intended compaction |
 | cart-coupon-list | 15.97 % | demo data |
-| home | 44.84 % | header + hero banner (intentional) |
-| home-cartbar-empty | 44.78 % | header + hero banner |
-| home-cartbar-clear | 44.85 % | header + hero banner |
-| home-header-collapsed | 90.21 % | original has no pinned bar |
+| home-cartbar-clear | 23.61 % | header + hero banner (intentional) |
+| home | 23.65 % | header + hero banner (intentional) |
+| home-cartbar-empty | 23.66 % | header + hero banner |
+| home-header-collapsed | 60.13 % | original has no pinned bar |
 
 The `home*` rows were re-measured on 2026-11-26 against the original frontend
 (cloned read-only into `/workspace/reference/Nearbite-main`). They moved because
-the Home header is now the royal-blue tactile header and the hero banner is an
-animated 160 px sheet, both deliberate (see “Intentional differences”).
+the Home header is the tactile oxblood header and the hero banner is an animated
+200 px sheet, both deliberate (see “Intentional differences”). Restoring the
+oxblood/gold palette (see “The Home theme”) took `home` from 44.84 % to 23.65 %
+and `home-header-collapsed` from 90.21 % to 60.13 %; fixing the category and chip
+regressions took `home-below-header` from 12.80 % to 9.65 %.
 
 `home-below-header` is the guard for everything under the hero sheet. It used to
 crop at `.hero-sheet` on both pages, a selector only this app has; on the
@@ -84,16 +88,54 @@ original the crop silently started at y = 0, so the state compared the
 original's header against this app's feed and its number meant nothing. The
 harness now takes a per-page landmark (`.ew-strip` / `#hero-banner-region` for
 the original, `.hero-sheet` here) and the two crops start at the same content
-point. The residual 12.8 % is real and explained:
+point.
 
-* the fixed chrome — the floating nav and the cart bar — is painted inside the
-  crop on this app and does not exist in the original;
-* C1: the feed starts 14 px lower (main `y667` vs `y653` for
-  `#restaurants-title`);
-* the blue section accent (`#004AAD`) against the original's burgundy, and the
-  section-title copy (“Restaurants near you” vs “Recommended with deals”).
+### Home below the header, region by region (measured)
+
+The harness now also splits the crop into 20 px bands, names each band from this
+app's own landmarks and reports the share of differing pixels in it
+(`bands` in `verify/parity/report.json`, printed as `[parity] bands …`). That is
+how the 9.65 % is attributed:
+
+| region | app y | diff in band | cause | status |
+| --- | --- | --- | --- | --- |
+| section title row | 345–365 | 0 % | — | parity |
+| category rail, row 1 (Pizza … Sweets) | 365–465 | 0 % | icons were drawn at 86 px, the original at 103 px (`scale(1.2)`) | **fixed** |
+| category labels | 465–505 | 0 % | 14 px/700, `#2a2f3a` both | parity |
+| category rail, row 2 (Chowmein … Ice cream) | 505–585 | 0 % | same fix | **fixed** |
+| gap above the chips | 585–625 | 0 % | — | parity |
+| filter chips | 625–645 | 16.6 % | chip 1 matches exactly (91 px); chips 2–5 sit 2 px right because “Near & Fast” is 125 px vs 123 px (the bolt glyph's advance differs from the original's icon-font glyph) | residual 2 px |
+| section title copy | 665–685 | 12.3 % | “Restaurants near you” (177 px) vs “Recommended with deals” (209 px) | intentional |
+| first card, top edge | 685–705 | 1.7 % | card border lands 1 px off after the title | residual |
+| cards 1–2 | 705–844 | 17–59 % | the floating cart bar (y694–756) and the tab bar (y768–832) are painted over the cards; the original's fixed bar sits at y770 | intentional chrome (masked out of the 9.65 %) |
+
+Two regressions were found and fixed here (see “The Home theme” and
+`docs/DESIGN_PARITY_AUDIT.md` history in commit `f6c1a10`):
+
+1. **Category icons were 20 % too small.** The original draws them at
+   `transform: scale(1.2)` inside the ring (`css/home.bundle.css`), this app had
+   `transform: none`. Now `scale(1.2)` (and `scale(1.24)` when selected, as the
+   original does).
+2. **Chip icon + label spacing was doubled.** `src/styles/global.css` had
+   `.filter-pill .icon { margin-right: 6px }` on top of the ported rule's
+   `gap: 6px`, so every icon chip was 6 px wide and the label 6 px late. The
+   margin is gone; chip 1 is now 91 px, exactly the original's.
+
+Also fixed: the chip icons were 11 px against the original's 14 px (they are
+`<Icon size={14}>` now).
+
+The 14 px offset between the two pages is **not** a content inset: the crops
+start at each page's own hero bottom (`y331` original, `y345` here), and every
+feed landmark sits at the same distance from it (`#restaurants-title` 322 px in
+both, `.cat-item` 38 px, `.filter-pill` 274 px, `.u99-card-host` 356 px). The
+best-alignment shift the harness finds is therefore 0 px, and the number is
+made of real differences, not displacement.
 
 ## Cross-cutting defects (each explains several rows)
+
+C1, C2, C3 and C4 below were found on 2026-11-25 and are **closed** — the
+measurements in their tables are the historical ones, kept so the fix can be
+re-checked. The current values are in the closing paragraph of each entry.
 
 ### C1. Body content is inset 16 px too far on every content page
 `main` in this app adds `padding: 18px 16px 24px` on top of the page's own
@@ -114,6 +156,12 @@ Consequence: restaurant cards are 32 px narrower, 2-up ₹99 cards are 16 px
 narrower and 10 px shorter, and 4th category icons / chips get clipped.
 Fix once in the shared page wrapper → removes most of Home, ₹99 and Category.
 
+**Closed.** Every landmark now starts where the original's does: `.u99-card-host`
+`x16 w358` in both, `#restaurants-title x18`, `.cat-name x31`,
+`.filter-pill x18`. The feed sits 14 px lower in absolute terms only because the
+header block above it is 14 px taller (banner 200 px vs the original's 190.23 px
+plus strip), not because of an inset.
+
 ### C2. ₹99 Store hero copy is dark instead of white
 `.u99-hero-copy` inherits `color: #fff` in the original, but the child rules win
 in this app:
@@ -127,13 +175,21 @@ in this app:
 Also `.u99-hero` starts at `y0` in the original and `y4` here (a 4 px wrapper
 offset on the ₹99 page).
 
+**Closed.** `under99` is 0.52 % — the hero copy is white in both.
+
 ### C3. Home restaurant card title is grey instead of ink
 `.u99-restaurant-name` is `#101828` in the original and `#7B8190` in this app —
 the restaurant names read as disabled text.
 
+**Closed.** Both pages report `rgb(16, 24, 40)` / 18 px / 800.
+
 ### C4. Home filter chips are 2 px smaller
 `.filter-pill` font-size `14px` (original) vs `12px` (app); same padding, radius
 and shadow. Makes the Home chip row visually lighter.
+
+**Closed.** Both are 14 px/600 with `padding: 9px 14px`, radius 14 px, shadow.
+The chip row's remaining 16.6 % band is the 2 px accumulated offset described in
+“Home below the header, region by region”.
 
 ### C5. Missing ids used by the original markup
 The design is close but these hooks are **classes** here instead of the
@@ -158,11 +214,12 @@ produces most of the `fs16px → fs15px` probe noise.
   floating bottom nav (intentional), see “Intentional differences”.
 * Hero banner (Item 18): the static slide was replaced by a 5 s animated banner
   (`src/components/home/HeroBanner.tsx`, `#hero-banner-region`) that swaps two
-  headline/food states. It keeps the original's 390×190 sheet geometry minus the
-  30 px offer strip, so the banner itself is 160 px tall on both widths and the
-  feed starts 30 px higher (main `y301` vs `y331`). This is an intentional
-  content change, so `home` / `home-scrolled` still differ here; everything
-  **below** the hero sheet is unchanged and tracked by `home-below-header`.
+  headline/food states. The banner is 200 px tall over the same 34 px offer
+  strip, so the header block ends at `y345` against the original's `y331` (the
+  original's `.banner-wrap` is `aspect-ratio: 2.05/1` → 190.23 px at 390 wide).
+  This is an intentional content change, so `home` / `home-scrolled` still differ
+  here; everything **below** the hero sheet keeps the original's rhythm and is
+  tracked by `home-below-header`.
 * Header (location row + search + VEG) matches at scrollTop 0.
 * Collapsed header: intended, the original scrolls its header away (see below).
 
@@ -299,7 +356,7 @@ original's Home header. To keep that honest, the harness captures
 original's `.ew-strip` / `#hero-banner-region`, this app's `.hero-sheet`) and
 diffed, so a header change cannot hide a change in the feed. The crop used to
 assume both pages had `.hero-sheet`; the original never did, so it was measuring
-nothing — see “Headline numbers” for the corrected 12.8 % and its causes.
+nothing — see “Headline numbers” for the corrected 9.65 % and its causes.
 
 The same comparison runs locally against any two builds:
 
@@ -316,19 +373,54 @@ residue when the header height changes, because the sheet paints the feed at a
 fractional offset; the parity state `home-below-header` is the same measurement
 across builds and is now cropped at matching landmarks on both pages.
 
+## The Home theme is oxblood + gold (restored 2026-11-26)
+
+The original frontend's `index.html` overrides the raspberry default with
+
+```css
+--hd-primary:#5D0D18; --hd-accent:#EBCB8B; --hd-on-light:#5D0D18;
+--hd-cta-bg:#EBCB8B; --hd-cta-ink:#3E0710;   /* "Premium oxblood + gold theme" */
+```
+
+and this app shipped exactly that until commit **`bc025bd`** (“Home:
+spring-animated hero banner and tactile header”, released as v1.0.64) rewrote
+the same block in `src/styles/original/home-final.css` as a
+“Royal blue + golden yellow theme”: `--hd-primary #004AAD`,
+`--hd-accent #FFD100`, `--hd-accent-ink #0B2A5B`, `--hd-on-light #0044A8`,
+`--hd-cta-bg #FFD100`, `--hd-cta-ink #0B2A5B`, the location pin chip from white
+to `#FFD100`, `.store-top` from `#7A5A60` to `#64748B`, the CTA chevron tint to
+`rgba(11,42,91,.14)`, the active banner dot to `#FFD100` and the section accent
+bar (`.sec-title::before`) from `#5D0D18` to `#004AAD`. `HeroBanner.css`
+followed with a `#0a57c8 → #004aad → #003d8f` shell and gold-on-navy ink, and
+`statusBarTheme.ts` asked for `#004AAD`. `git log -S 004AAD` finds no earlier
+commit: blue entered in `bc025bd` and nowhere else.
+
+Blue is not in the original at all (`grep -r 004AAD /workspace/reference/Nearbite-main` → nothing), so it was reverted on 2026-11-26: the theme block, the
+banner shell (`#6b1520 → #5d0d18 → #44070e`, gold accents on `#EBCB8B`), the
+strip (`#44070e` on gold) and the status bar (`#5D0D18`) are oxblood + gold
+again, with the banner's choreography untouched (same keyframes, same timings,
+colour-only change). `statusbar-check` asserts the bar equals the header colour
+and passes on `#5D0D18` at both viewports.
+
+The palette lives in `src/styles/tokens.css` as `--theme-burgundy #5d0d18`,
+`--theme-gold #ebcb8b`, `--theme-gold-ink #3e0710`, `--theme-cream #fff9eb`.
+
 ## Remaining work (all intentional or demo data)
 
-* `home-header-collapsed` 39.60 % and `home-searchrow-style` 14.13 % — the app
+* `home-header-collapsed` 60.13 % and `home-searchrow-style` 13.36 % — the app
   pins a compact search row and collapses the header; the original scrolls it
-  away. Documented as intentional in the 12C work.
+  away. Documented as intentional in the 12C work. The number is large because
+  at that scroll offset the two screenshots show different content at the top of
+  the frame, not because anything is misplaced.
 * `cart-coupon-list` 15.93 % — demo coupons vs the mock's empty list.
 * `tracking` 9.52 % — the app shows a live map block the original lacks.
-* `home` / cart-bar states 44.8–44.9 % — the royal-blue header and the animated
-  hero banner are deliberate; `home-scrolled` (4.70 %) is the cart bar lifted by
+* `home` / cart-bar states 23.6 % — the oxblood tactile header and the animated
+  hero banner are deliberate; `home-scrolled` (4.74 %) is the cart bar lifted by
   the floating nav.
-* `home-below-header` 12.80 % — the feed guard; the residual is the fixed chrome
-  painted in the crop, the 14 px C1 inset, the blue accent and the section-title
-  copy (see “Headline numbers”).
+* `home-below-header` 9.65 % — the feed guard; the residual is the fixed chrome
+  painted in the crop and the section-title copy. Region by region in “Home
+  below the header, region by region”; two real regressions (category icon
+  scale, chip icon margin) were found and fixed on the way.
 
 Closed on 2026-11-25: payment sheet (24.48 % → 0.12 %), search overlay
 (4.61 % → 1.1 %), offer popup (58.42 % → 2.21 %), ₹99 Store (14.52 % → 0.52 %).

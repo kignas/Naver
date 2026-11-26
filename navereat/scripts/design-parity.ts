@@ -289,12 +289,14 @@ const probe = (page: Page, selectors: string[]): Promise<Record<string, string>>
         `sh${style.boxShadow === 'none' ? 'none' : 'yes'}`,
         `pad${style.paddingTop},${style.paddingRight},${style.paddingBottom},${style.paddingLeft}`,
         `gap${style.rowGap}`,
+        `ff${style.fontFamily.split(',')[0].replace(/["']/g, '')}`,
+        `ls${style.letterSpacing}`,
       ].join(' ');
     }
     return out;
   }, selectors);
 
-const PROBE_FIELDS = ['x', 'y', 'w', 'h', 'fs', 'c', 'bg', 'r', 'sh', 'pad', 'gap'];
+const PROBE_FIELDS = ['x', 'y', 'w', 'h', 'fs', 'c', 'bg', 'r', 'sh', 'pad', 'gap', 'ff', 'ls'];
 
 const compareProbes = (selector: string, original: string, app: string): ProbeResult => {
   const diff: string[] = [];
@@ -323,11 +325,19 @@ const compareProbes = (selector: string, original: string, app: string): ProbeRe
   return { selector, original, app, diff };
 };
 
+interface BandRow {
+  /** Content y range in the app, in CSS px. */
+  y: string;
+  landmarks: string[];
+  diffPct: number;
+}
+
 interface Capture {
   name: string;
   diffPct: number;
   diffPctRaw: number;
   probes: ProbeResult[];
+  bands?: { shift: number; aligned: number; unshifted: number; rows: BandRow[] };
   note?: string;
 }
 
@@ -380,11 +390,14 @@ async function capture(
     /** Landmarks to cut below. A per-page map is required when the two pages
      *  name the same region differently (the original has no `.hero-sheet`). */
     cropBelow?: string | string[] | { original: string | string[]; navereat: string | string[] };
+    /** Split the diff into horizontal bands and name them by these app
+     *  landmarks, so a large number can be attributed to regions. */
+    bands?: string[];
     note?: string;
   } = {},
 ): Promise<void> {
-  const { probes = [], element, cropTop, cropBelow, note } = options;
-  const shot = async (page: Page, label: 'original' | 'navereat'): Promise<PNG> => {
+  const { probes = [], element, cropTop, cropBelow, bands, note } = options;
+  const shot = async (page: Page, label: 'original' | 'navereat'): Promise<{ png: PNG; below: number }> => {
     await page.evaluate(
       () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
     );
@@ -418,7 +431,7 @@ async function capture(
       const uniform = isUniform(png);
       if (!uniform || attempt === 3) {
         await fs.writeFile(path.join(outRoot, label, `${name}.png`), PNG.sync.write(png));
-        return png;
+        return { png, below };
       }
       if (uniform) await page.waitForTimeout(600);
     }
@@ -426,10 +439,12 @@ async function capture(
   };
   const a = await shot(original, 'original');
   const b = await shot(app, 'navereat');
-  const width = Math.min(a.width, b.width);
-  const height = Math.min(a.height, b.height);
-  const rawA = cropPng(a, width, height);
-  const rawB = cropPng(b, width, height);
+  const aPng = a.png;
+  const bPng = b.png;
+  const width = Math.min(aPng.width, bPng.width);
+  const height = Math.min(aPng.height, bPng.height);
+  const rawA = cropPng(aPng, width, height);
+  const rawB = cropPng(bPng, width, height);
 
   const diff = new PNG({ width, height });
   const pixelsRaw = pixelmatch(rawA.data, rawB.data, diff.data, width, height, { threshold: 0.12 });
@@ -441,8 +456,8 @@ async function capture(
     const rects = [...originalRects, ...appRects];
     const scale = width / viewport.width;
     let maskedArea = 0;
-    const maskedA = cropPng(a, width, height);
-    const maskedB = cropPng(b, width, height);
+    const maskedA = cropPng(aPng, width, height);
+    const maskedB = cropPng(bPng, width, height);
     for (const rect of rects) {
       const w = Math.min(rect.w, viewport.width - rect.x);
       const h = Math.min(rect.h, height / scale - rect.y);
@@ -458,9 +473,102 @@ async function capture(
   // Side-by-side strip for quick human review.
   const side = new PNG({ width: width * 2 + 8, height });
   side.data.fill(24);
-  PNG.bitblt(cropPng(a, width, height), side, 0, 0, width, height, 0, 0);
-  PNG.bitblt(cropPng(b, width, height), side, 0, 0, width, height, width + 8, 0);
+  PNG.bitblt(cropPng(aPng, width, height), side, 0, 0, width, height, 0, 0);
+  PNG.bitblt(cropPng(bPng, width, height), side, 0, 0, width, height, width + 8, 0);
   await fs.writeFile(path.join(outRoot, 'side', `${name}.png`), PNG.sync.write(side));
+
+  // Attribute the number. The two crops start at the same content point but the
+  // app's own padding can offset everything below it, so the share is measured
+  // both at zero shift (what pixelmatch reports) and at the best alignment: a
+  // pure offset is a different defect from a real difference.
+  let bandReport: Capture['bands'];
+  if (bands?.length) {
+    const scale = width / viewport.width;
+    const bandPx = Math.max(1, Math.round(20 * scale));
+    const landmarks = await app.evaluate(
+      (selectors: string[]) =>
+        selectors.map((selector) => {
+          const target = document.querySelector(selector);
+          if (!target) return { selector, top: null, bottom: null };
+          const rect = target.getBoundingClientRect();
+          return { selector, top: Math.round(rect.top), bottom: Math.round(rect.bottom) };
+        }),
+      bands,
+    );
+    const diffAt = (y: number, other: number): number => {
+      let count = 0;
+      const rowA = y * width * 4;
+      const rowB = other * width * 4;
+      for (let x = 0; x < width; x += 1) {
+        const i = rowA + x * 4;
+        const j = rowB + x * 4;
+        const delta = Math.max(
+          Math.abs(rawA.data[i] - rawB.data[j]),
+          Math.abs(rawA.data[i + 1] - rawB.data[j + 1]),
+          Math.abs(rawA.data[i + 2] - rawB.data[j + 2]),
+        );
+        if (delta > 40) count += 1;
+      }
+      return count;
+    };
+    const rowsFor = (shift: number, step = 1): number[] => {
+      const rows = new Array<number>(height).fill(0);
+      for (let y = 0; y < height; y += step) {
+        const other = y + shift;
+        if (other < 0 || other >= height) continue;
+        rows[y] = diffAt(y, other);
+      }
+      return rows;
+    };
+    const limit = Math.round(32 * scale);
+    let best = { shift: 0, pixels: Number.POSITIVE_INFINITY };
+    for (let shift = -limit; shift <= limit; shift += 2) {
+      let total = 0;
+      for (let y = 0; y < height; y += 4) {
+        const other = y + shift;
+        if (other >= 0 && other < height) total += diffAt(y, other);
+      }
+      if (total < best.pixels) best = { shift, pixels: total };
+    }
+    for (let shift = best.shift - 2; shift <= best.shift + 2; shift += 1) {
+      let total = 0;
+      for (let y = 0; y < height; y += 1) {
+        const other = y + shift;
+        if (other >= 0 && other < height) total += diffAt(y, other);
+      }
+      if (total < best.pixels) best = { shift, pixels: total };
+    }
+    const alignedRows = rowsFor(best.shift);
+    const plainRows = rowsFor(0);
+    const sum = (list: number[]) => list.reduce((total, value) => total + value, 0);
+    const pct = (pixels: number, area: number) => Number(((pixels / Math.max(1, area)) * 100).toFixed(2));
+    const bandRows: BandRow[] = [];
+    for (let start = 0; start < height; start += bandPx) {
+      const end = Math.min(height, start + bandPx);
+      let pixels = 0;
+      for (let y = start; y < end; y += 1) pixels += alignedRows[y];
+      const appTop = Math.round(b.below + start / scale);
+      const appBottom = Math.round(b.below + end / scale);
+      bandRows.push({
+        y: `${appTop}–${appBottom}`,
+        landmarks: landmarks
+          .filter((item) => item.top != null && item.bottom != null && item.top < appBottom && item.bottom > appTop)
+          .map((item) => item.selector),
+        diffPct: pct(pixels, (end - start) * width),
+      });
+    }
+    bandReport = {
+      shift: Number((best.shift / scale).toFixed(1)),
+      aligned: pct(sum(alignedRows), width * height),
+      unshifted: pct(sum(plainRows), width * height),
+      rows: bandRows,
+    };
+    const hot = bandRows.filter((row) => row.diffPct >= 1);
+    console.log(
+      `[parity] bands ${name}: best shift ${bandReport.shift}px → ${bandReport.aligned}% aligned, ${bandReport.unshifted}% unshifted`,
+    );
+    for (const row of hot) console.log(`           y ${row.y}  ${String(row.diffPct).padStart(5)}%  ${row.landmarks.join(', ')}`);
+  }
 
   const probeResults: ProbeResult[] = [];
   if (probes.length) {
@@ -472,7 +580,7 @@ async function capture(
   }
   const diffPct = Number(((pixels / usableArea) * 100).toFixed(2));
   const diffPctRaw = Number(((pixelsRaw / (width * height)) * 100).toFixed(2));
-  results.push({ name, diffPct, diffPctRaw, probes: probeResults, note });
+  results.push({ name, diffPct, diffPctRaw, probes: probeResults, bands: bandReport, note });
   const changed = probeResults.map((entry) => `${entry.selector}(${entry.diff.join('; ')})`).join(' | ');
   console.log(
     `[parity] ${name.padEnd(28)} ${String(diffPct).padStart(6)}% raw ${String(diffPctRaw).padStart(6)}%  ${changed.slice(0, 200)}`,
@@ -674,9 +782,16 @@ async function main(): Promise<void> {
       '.veg-box',
       '#restaurants-title',
       '.cat-name',
+      '.cat-item',
+      '.cat-item img',
+      '.cat-ring',
       '.filter-pill',
+      '.filter-pill i, .filter-pill svg',
+      '.filter-pill:nth-child(3)',
+      '.filter-pill:nth-child(2)',
       '.u99-restaurant-name',
       '.u99-meta',
+      '.u99-card-host',
       '#white-cart-root',
     ],
     note: 'Home at scrollTop 0',
@@ -686,6 +801,20 @@ async function main(): Promise<void> {
   // header is expected to differ. Everything below the hero sheet must not.
   await capture('home-below-header', home.original, home.app, {
     cropBelow: { original: ['.ew-strip', '#hero-banner-region'], navereat: ['.hero-sheet'] },
+    bands: [
+      '.cat-row',
+      '.cat-item',
+      '.cat-name',
+      '.sec-title',
+      '#restaurants-title',
+      '.u99-filter-row',
+      '.filter-pill',
+      '.u99-card-host',
+      '.u99-restaurant-name',
+      '.u99-meta',
+      '.u99-card',
+      '.u99-offer',
+    ],
     note: 'everything below the hero sheet, header differences excluded',
   });
 

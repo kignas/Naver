@@ -85,9 +85,11 @@ body {
   background: transparent;
 }
 
+/* The original draws its category art at 120% inside the ring, so the line art
+   reads at the same optical size here (no ring, so nothing is clipped). */
 .home-screen #mind-section .cat-ring img {
   object-fit: contain;
-  transform: none;
+  transform: scale(1.2);
   border-radius: 0;
   background: transparent;
 }
@@ -99,7 +101,7 @@ body {
 }
 
 .home-screen #mind-section .cat-item.is-selected .cat-ring img {
-  transform: none;
+  transform: scale(1.24);
 }
 
 .home-screen #mind-section .cat-item.is-selected .cat-name {

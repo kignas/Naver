@@ -1,7 +1,7 @@
-// Home's tactile header is the royal-blue theme (home-final.css --hd-primary),
+// Home's tactile header is the oxblood theme (home-final.css --hd-primary),
 // so the non-overlay status bar has to use that colour, not the oxblood it had
 // before the header was restyled.
-export const HEADER_HOME = '#004AAD';
+export const HEADER_HOME = '#5D0D18';
 export const HEADER_LOGIN_YELLOW = '#FFD92F';
 export const HEADER_WHITE = '#FFFFFF';
 // Rendered top-left of the 99 Store hero gradient (hd-primary -> hd-active at
@@ -15,7 +15,7 @@ export interface StatusBarTheme {
 
 /**
  * The Android status bar is non-overlay, so it must match the top edge of the
- * route header exactly. Home's header is the royal-blue theme from
+ * route header exactly. Home's header is the oxblood theme from
  * home-final.css; Login's hero is yellow; the remaining app bars are white.
  */
 export function statusBarTheme(pathname: string): StatusBarTheme {

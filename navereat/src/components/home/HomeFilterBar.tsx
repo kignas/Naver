@@ -27,7 +27,7 @@ export const HomeFilterBar = memo(function HomeFilterBar({ filtersOpen, onOpenFi
         className={`filter-pill filter-pill-sheet${filtersOpen ? ' active' : ''}`}
         onClick={onOpenFilters}
       >
-        <Icon name="solid:sliders" size={11} /> Filters
+        <Icon name="solid:sliders" size={14} /> <span>Filters</span>
       </button>
       <button
         type="button"
@@ -35,7 +35,7 @@ export const HomeFilterBar = memo(function HomeFilterBar({ filtersOpen, onOpenFi
         aria-pressed={nearFast}
         onClick={() => toggleHomeFlag('nearFast')}
       >
-        <Icon name="solid:bolt-lightning" size={11} style={NEAR_FAST_ICON_STYLE} /> Near &amp; Fast
+        <Icon name="solid:bolt-lightning" size={14} style={NEAR_FAST_ICON_STYLE} /> <span>Near &amp; Fast</span>
       </button>
       <button
         type="button"

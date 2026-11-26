@@ -1,4 +1,4 @@
-/* Home hero: royal-blue shell, two gold arches, transparent food cut-outs.
+/* Home hero: oxblood shell, two gold arches, transparent food cut-outs.
    Every running animation is transform/opacity only and is held while the
    page is covered (`is-paused`), so a cached Home paints nothing per frame.
    Heights are fixed so the header's flow height never changes (CLS = 0). */
@@ -21,8 +21,8 @@
   overflow: hidden;
   contain: layout paint;
   background:
-    radial-gradient(92% 72% at 82% 10%, rgba(255, 209, 0, 0.2) 0%, rgba(255, 209, 0, 0) 62%),
-    linear-gradient(165deg, #0a57c8 0%, #004aad 48%, #003d8f 100%);
+    radial-gradient(92% 72% at 82% 10%, rgba(235, 203, 139, 0.2) 0%, rgba(235, 203, 139, 0) 62%),
+    linear-gradient(165deg, #6b1520 0%, #5d0d18 48%, #44070e 100%);
 }
 
 /* Warm halo behind the food stage. */
@@ -34,7 +34,7 @@
   width: 260px;
   height: 260px;
   border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(255, 209, 0, 0.16), rgba(255, 209, 0, 0));
+  background: radial-gradient(closest-side, rgba(235, 203, 139, 0.16), rgba(235, 203, 139, 0));
   pointer-events: none;
 }
 
@@ -79,13 +79,13 @@
   justify-content: center;
   padding: 2px 8px;
   border-radius: 999px;
-  background: #ffd100;
-  color: #0b2a5b;
+  background: #ebcb8b;
+  color: #3e0710;
   font-size: 10.5px;
   font-weight: 900;
   font-style: italic;
   letter-spacing: -0.02em;
-  box-shadow: 0 2px 6px rgba(0, 20, 60, 0.25);
+  box-shadow: 0 2px 6px rgba(62, 7, 16, 0.25);
 }
 
 .nv-hero-headline {
@@ -112,11 +112,11 @@
   font-weight: 900;
   letter-spacing: -0.035em;
   white-space: nowrap;
-  text-shadow: 0 2px 0 rgba(0, 20, 60, 0.32), 0 6px 14px rgba(0, 20, 60, 0.22);
+  text-shadow: 0 2px 0 rgba(62, 7, 16, 0.32), 0 6px 14px rgba(62, 7, 16, 0.22);
 }
 
 .nv-hero-free {
-  color: #ffd100;
+  color: #ebcb8b;
 }
 
 .nv-hero-delivery {
@@ -133,8 +133,8 @@
   border: 0;
   border-radius: 999px;
   overflow: hidden;
-  background: linear-gradient(180deg, #ffe04a 0%, #ffd100 55%, #f5c400 100%);
-  color: #0b2a5b;
+  background: linear-gradient(180deg, #f5e2bb 0%, #ebcb8b 55%, #d9b76d 100%);
+  color: #3e0710;
   font: inherit;
   font-size: 11.5px;
   font-weight: 900;
@@ -142,7 +142,7 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: nowrap;
-  box-shadow: 0 7px 16px rgba(0, 20, 60, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  box-shadow: 0 7px 16px rgba(62, 7, 16, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.45);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
@@ -189,9 +189,9 @@
 .nv-hero-arch {
   position: absolute;
   display: block;
-  background: linear-gradient(180deg, #ffe45c 0%, #ffd100 46%, #efbc00 100%);
+  background: linear-gradient(180deg, #f7e6c4 0%, #ebcb8b 46%, #d9b76d 100%);
   border-radius: 999px 999px 8px 8px;
-  box-shadow: inset 0 -10px 20px rgba(173, 125, 0, 0.2), inset 0 2px 0 rgba(255, 255, 255, 0.45);
+  box-shadow: inset 0 -10px 20px rgba(120, 88, 20, 0.22), inset 0 2px 0 rgba(255, 255, 255, 0.45);
 }
 
 .nv-hero-arch--a {
@@ -220,7 +220,7 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
-  filter: drop-shadow(0 9px 10px rgba(3, 20, 58, 0.4));
+  filter: drop-shadow(0 9px 10px rgba(46, 4, 10, 0.4));
   pointer-events: none;
   -webkit-user-drag: none;
 }
@@ -322,9 +322,9 @@
   gap: 9px;
   height: 34px;
   padding: 0 14px;
-  background: #00398a;
-  border-top: 1px solid rgba(255, 209, 0, 0.26);
-  color: #ffd100;
+  background: #44070e;
+  border-top: 1px solid rgba(235, 203, 139, 0.26);
+  color: #ebcb8b;
   font-size: 10.5px;
   font-weight: 900;
   letter-spacing: 1.1px;
@@ -336,7 +336,7 @@
   flex: 0 0 auto;
   width: 11px;
   height: 11px;
-  color: #ffd100;
+  color: #ebcb8b;
   animation: nv-hero-twinkle 2.6s ease-in-out infinite;
 }
 
