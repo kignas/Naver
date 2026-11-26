@@ -2,23 +2,24 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProp
 import { useLocation } from 'react-router-dom';
 import { isTabPath, useAppNav } from '../lib/navigation';
 import { useSearchStore } from '../store/searchStore';
-import { tapHaptic } from '../lib/haptics';
-import { Icon } from './Icon';
-import type { IconName } from './icons';
+import { lightImpact } from '../lib/haptics';
+import { NavGlyph, type NavGlyphName } from './NavGlyph';
 import '../styles/bottom-nav.css';
 
 interface NavEntry {
   to: string;
   label: string;
-  icon: IconName;
+  glyph: NavGlyphName;
 }
 
 const ITEMS: NavEntry[] = [
-  { to: '/', label: 'Home', icon: 'solid:house' },
-  { to: '/orders', label: 'History', icon: 'solid:receipt' },
+  { to: '/', label: 'Home', glyph: 'home' },
+  { to: '/orders', label: 'History', glyph: 'history' },
 ];
 
 const DRAG_THRESHOLD = 6;
+/** Icon animation length; the class is dropped a frame after it ends. */
+const GLYPH_ANIM_MS = 420;
 
 function activeIndexFor(pathname: string): number {
   if (pathname === '/orders') return 1;
@@ -76,6 +77,20 @@ export function BottomNav() {
   const suppressClickRef = useRef(false);
   const [dragging, setDragging] = useState(false);
 
+  // Which tabs animate: `from` shrinks and cross-fades to its outline, `to`
+  // pops in. Cleared once the keyframes have played, so a re-render never
+  // replays them.
+  const [glyphMove, setGlyphMove] = useState<{ from: number; to: number } | null>(null);
+  const lastActiveRef = useRef(activeIndex);
+  useEffect(() => {
+    const from = lastActiveRef.current;
+    lastActiveRef.current = activeIndex;
+    if (from === activeIndex) return undefined;
+    setGlyphMove({ from, to: activeIndex });
+    const timer = window.setTimeout(() => setGlyphMove(null), GLYPH_ANIM_MS + 20);
+    return () => window.clearTimeout(timer);
+  }, [activeIndex]);
+
   useEffect(() => {
     document.body.classList.toggle('has-bottom-nav', visible);
     return () => document.body.classList.remove('has-bottom-nav');
@@ -88,7 +103,8 @@ export function BottomNav() {
     if (!element || !tab) return;
     const navRect = element.getBoundingClientRect();
     const tabRect = tab.getBoundingClientRect();
-    setMetrics({ x: tabRect.left - navRect.left, width: tabRect.width });
+    // The indicator is positioned against the padding box, inside the hairline.
+    setMetrics({ x: tabRect.left - navRect.left - element.clientLeft, width: tabRect.width });
   }, [activeIndex]);
 
   useLayoutEffect(() => {
@@ -107,7 +123,7 @@ export function BottomNav() {
     if (!item) return;
     if (searchOpen) closeSearch(true);
     if (pathname !== item.to) {
-      tapHaptic();
+      lightImpact();
       nav.tab(item.to);
     }
   };
@@ -172,8 +188,10 @@ export function BottomNav() {
     if (target && navRef.current) {
       const navRect = navRef.current.getBoundingClientRect();
       const targetRect = target.getBoundingClientRect();
-      setMetrics({ x: targetRect.left - navRect.left, width: targetRect.width });
+      setMetrics({ x: targetRect.left - navRect.left - navRef.current.clientLeft, width: targetRect.width });
     }
+    // A drag that commits on a different tab is a user-initiated change, so it
+    // gets the same light impact as a tap.
     if (nearest !== activeIndex) select(nearest);
     window.setTimeout(() => {
       suppressClickRef.current = false;
@@ -206,6 +224,8 @@ export function BottomNav() {
       <span className="nav-indicator" aria-hidden="true" />
       {ITEMS.map((item, index) => {
         const active = index === activeIndex;
+        const entering = glyphMove?.to === index;
+        const leaving = glyphMove?.from === index;
         return (
           <button
             key={item.to}
@@ -213,11 +233,13 @@ export function BottomNav() {
               tabRefs.current[index] = element;
             }}
             type="button"
-            className={`nav-tab tap${active ? ' is-active' : ''}`}
+            className={`nav-tab tap${active ? ' is-active' : ''}${entering ? ' is-enter' : ''}${leaving ? ' is-leave' : ''}`}
             aria-current={active ? 'page' : undefined}
             aria-label={item.label}
             tabIndex={visible ? 0 : -1}
             data-nav-item={item.to}
+            data-glyph={item.glyph}
+            data-glyph-state={active ? 'active' : 'idle'}
             onClick={(event) => {
               if (suppressClickRef.current) {
                 event.preventDefault();
@@ -227,7 +249,7 @@ export function BottomNav() {
             }}
           >
             <span className="nav-icon" aria-hidden="true">
-              <Icon name={item.icon} size={20} />
+              <NavGlyph name={item.glyph} />
             </span>
             <span className="nav-label">{item.label}</span>
           </button>

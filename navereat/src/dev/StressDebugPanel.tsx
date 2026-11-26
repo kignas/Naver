@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { APP_VERSION } from '../lib/appVersion';
 import { DEBUG_EVENT, debugWanted, setDebugEnabled } from '../lib/debugFlag';
 import { loadDataSource, useDataSourceMode, setSourceMode } from '../data';
+import { hapticCount } from '../lib/haptics';
 
 /**
  * Field overlay for the layout-shift hunt: the same numbers the harness sees,
@@ -26,6 +27,7 @@ interface Snapshot {
   fps: number;
   route: string;
   sheets: number;
+  haptics: number;
 }
 
 const SHEET_SELECTOR =
@@ -62,6 +64,7 @@ const buildReport = (events: DebugEvent[], snapshot: Snapshot, version: string):
     `fontscale ${Number(safe.getPropertyValue('--font-scale')) || 1}  root font ${safe.fontSize}`,
     `safe-area top ${safe.getPropertyValue('--safe-top').trim() || '0px'} bottom ${safe.getPropertyValue('--safe-bottom').trim() || '0px'}`,
     `cls       ${snapshot.cls.toFixed(5)} (worst ${snapshot.worst.toFixed(5)})  fps ${snapshot.fps.toFixed(0)}`,
+    `haptics   ${snapshot.haptics}`,
     `sheets    open ${snapshot.sheets}`,
     '',
     ...events.map(formatEvent),
@@ -119,7 +122,7 @@ const shareText = async (text: string): Promise<boolean> => {
 export function StressDebugPanel() {
   const [enabled, setEnabled] = useState(debugWanted);
   const [expanded, setExpanded] = useState(false);
-  const [snapshot, setSnapshot] = useState<Snapshot>({ cls: 0, worst: 0, fps: 0, route: '/', sheets: 0 });
+  const [snapshot, setSnapshot] = useState<Snapshot>({ cls: 0, worst: 0, fps: 0, route: '/', sheets: 0, haptics: 0 });
   const [events, setEvents] = useState<DebugEvent[]>([]);
   const [status, setStatus] = useState('');
   const eventsRef = useRef<DebugEvent[]>([]);
@@ -249,7 +252,15 @@ export function StressDebugPanel() {
     });
     classObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
 
-    const read = () => setSnapshot({ cls, worst, fps, route: route(), sheets: document.querySelectorAll(SHEET_SELECTOR).length });
+    const read = () =>
+      setSnapshot({
+        cls,
+        worst,
+        fps,
+        route: route(),
+        sheets: document.querySelectorAll(SHEET_SELECTOR).length,
+        haptics: hapticCount(),
+      });
     const id = window.setInterval(read, 500);
     read();
 
@@ -324,14 +335,14 @@ export function StressDebugPanel() {
         aria-label="Open stress debug panel"
         style={{ ...shell, left: 8, bottom: 92, padding: '5px 7px', whiteSpace: 'pre' }}
       >
-        {`cls ${snapshot.cls.toFixed(3)} · ${snapshot.fps.toFixed(0)}fps · ${events.length}`}
+        {`cls ${snapshot.cls.toFixed(3)} · ${snapshot.fps.toFixed(0)}fps · ${snapshot.haptics}h · ${events.length}`}
       </button>
     );
   }
 
   const header = [
     `route ${snapshot.route}   sheets ${snapshot.sheets}`,
-    `cls ${snapshot.cls.toFixed(5)} (worst ${snapshot.worst.toFixed(5)})   fps ${snapshot.fps.toFixed(0)}`,
+    `cls ${snapshot.cls.toFixed(5)} (worst ${snapshot.worst.toFixed(5)})   fps ${snapshot.fps.toFixed(0)}   haptics ${snapshot.haptics}`,
     `dpr ${window.devicePixelRatio}  ${window.innerWidth}x${window.innerHeight}` +
       (window.visualViewport
         ? `  visual ${Math.round(window.visualViewport.width)}x${Math.round(window.visualViewport.height)}@${window.visualViewport.scale.toFixed(2)}`

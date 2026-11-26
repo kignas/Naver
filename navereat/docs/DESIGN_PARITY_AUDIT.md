@@ -63,21 +63,35 @@ runs (a blank-frame screenshot is retried up to 4×).
 | offer-popup | 2.21 % | content only — was 58.42 % |
 | search-empty | 2.37 % | parity |
 | category | 2.49 % | parity |
-| orders | 2.90 % | demo data |
-| home | 3.44 % | demo data + cart-bar offset |
-| home-cartbar-empty | 3.44 % | cart-bar offset only |
-| home-cartbar-clear | 3.46 % | cart-bar offset only |
-| home-scrolled | 4.68 % | cart-bar offset only |
-| tracking | 9.52 % | map block (intentional) |
-| home-searchrow-style | 14.13 % | intended compaction |
-| cart-coupon-list | 15.93 % | demo data |
-| home-header-collapsed | 39.60 % | original has no pinned bar |
+| orders | 2.72 % | demo data |
+| home-scrolled | 4.70 % | cart-bar offset only |
+| home-below-header | 12.80 % | chrome + inset + accent (see below) |
+| home-searchrow-style | 18.19 % | intended compaction |
+| cart-coupon-list | 15.97 % | demo data |
+| home | 44.84 % | header + hero banner (intentional) |
+| home-cartbar-empty | 44.78 % | header + hero banner |
+| home-cartbar-clear | 44.85 % | header + hero banner |
+| home-header-collapsed | 90.21 % | original has no pinned bar |
 
-The `home*` rows predate the animated hero banner (2026-11-26). They were not
-re-measured: the reference copy of the original frontend is not in this
-container. The header is now a deliberate difference; the invariant that still
-holds is `home-below-header` (0 px at 360×640, 0.30 % at 390×844 — the subpixel
-phase of the old 190.23 px sheet).
+The `home*` rows were re-measured on 2026-11-26 against the original frontend
+(cloned read-only into `/workspace/reference/Nearbite-main`). They moved because
+the Home header is now the royal-blue tactile header and the hero banner is an
+animated 160 px sheet, both deliberate (see “Intentional differences”).
+
+`home-below-header` is the guard for everything under the hero sheet. It used to
+crop at `.hero-sheet` on both pages, a selector only this app has; on the
+original the crop silently started at y = 0, so the state compared the
+original's header against this app's feed and its number meant nothing. The
+harness now takes a per-page landmark (`.ew-strip` / `#hero-banner-region` for
+the original, `.hero-sheet` here) and the two crops start at the same content
+point. The residual 12.8 % is real and explained:
+
+* the fixed chrome — the floating nav and the cart bar — is painted inside the
+  crop on this app and does not exist in the original;
+* C1: the feed starts 14 px lower (main `y667` vs `y653` for
+  `#restaurants-title`);
+* the blue section accent (`#004AAD`) against the original's burgundy, and the
+  section-title copy (“Restaurants near you” vs “Recommended with deals”).
 
 ## Cross-cutting defects (each explains several rows)
 
@@ -254,16 +268,38 @@ home filter sheet (apart from one label).
 Floating bottom nav (hence the cart bar sitting 74 px higher), brand rename
 (Eatswada → Navereat), demo data (coupon list, thresholds, addresses, offer
 amounts, restaurant sections), header collapse/pinned search row (the original
-scrolls its header away, so `home-header-collapsed` = 39 % is expected), the
-search-row 0.94 compaction (14.4 % element diff), the 5th filter rail label, and
-the animated hero banner.
+scrolls its header away, so `home-header-collapsed` = 90 % is expected), the
+search-row 0.94 compaction (18 % element diff), the 5th filter rail label, the
+royal-blue Home header, the animated hero banner, and the two-tab nav.
+
+### The tab bar (Item 19)
+
+The original has no tab bar; this app's two-tab floating pill is chrome, not a
+port, so every Home state that includes it carries the nav's pixels. Its
+measured geometry, its original SVG glyphs and its haptics are described in the
+README (“Tab bar: the measured look, the glyphs, the haptics”). `nav-check`
+asserts the ratios, the two-tone icon states, the haptic call counts and the
+reduced-motion behaviour, and writes its evidence to `verify/item19/`.
+
+### The status bar follows the header
+
+The Android status bar is non-overlay, so it must match the top edge of the
+route header. When Home's header became royal blue (`#004AAD`) the theme mapping
+in `src/lib/statusBarTheme.ts` still returned the old burgundy `#5D0D18`, and
+`statusbar-check` failed on the two Home viewports (`pageTop #004AAD`). The
+mapping now returns the header's own colour, so the bar blends into the header
+again. Login (yellow), ₹99 Store (`#B73950`) and the white app bars are
+unchanged.
 
 ### The animated hero banner is a header-only change
 
 The banner is the only place where this app deliberately departs from the
 original's Home header. To keep that honest, the harness captures
-`home-below-header`: both pages are cropped at their own `.hero-sheet` bottom
-and diffed, so a header change cannot hide a change in the feed.
+`home-below-header`: each page is cropped at its own hero-sheet bottom (the
+original's `.ew-strip` / `#hero-banner-region`, this app's `.hero-sheet`) and
+diffed, so a header change cannot hide a change in the feed. The crop used to
+assume both pages had `.hero-sheet`; the original never did, so it was measuring
+nothing — see “Headline numbers” for the corrected 12.8 % and its causes.
 
 The same comparison runs locally against any two builds:
 
@@ -276,9 +312,9 @@ It reports two things per viewport: the geometry of the feed landmarks
 `.u99-restaurant-name`, `.u99-meta`) in content coordinates, and a pixel diff
 of the region between `.home-main` and the fixed chrome. The geometry check is
 exact (every landmark within 0.5 px). The pixel number carries a subpixel
-residue when the header height changes, because the old 190.23 px sheet painted
-the feed at a fractional offset: 0 px at 360×640, 0.30 % at 390×844, against a
-measured 0.29 % noise floor for a 1 px self-shift of a single build.
+residue when the header height changes, because the sheet paints the feed at a
+fractional offset; the parity state `home-below-header` is the same measurement
+across builds and is now cropped at matching landmarks on both pages.
 
 ## Remaining work (all intentional or demo data)
 
@@ -287,10 +323,12 @@ measured 0.29 % noise floor for a 1 px self-shift of a single build.
   away. Documented as intentional in the 12C work.
 * `cart-coupon-list` 15.93 % — demo coupons vs the mock's empty list.
 * `tracking` 9.52 % — the app shows a live map block the original lacks.
-* `home` / cart-bar states 3.44–4.68 % — the floating nav lifts the cart bar and
-  the hero banner is a deliberate content change.
-* `home-below-header` — the zero-diff guard for everything under the hero sheet
-  (see “The animated hero banner is a header-only change”).
+* `home` / cart-bar states 44.8–44.9 % — the royal-blue header and the animated
+  hero banner are deliberate; `home-scrolled` (4.70 %) is the cart bar lifted by
+  the floating nav.
+* `home-below-header` 12.80 % — the feed guard; the residual is the fixed chrome
+  painted in the crop, the 14 px C1 inset, the blue accent and the section-title
+  copy (see “Headline numbers”).
 
 Closed on 2026-11-25: payment sheet (24.48 % → 0.12 %), search overlay
 (4.61 % → 1.1 %), offer popup (58.42 % → 2.21 %), ₹99 Store (14.52 % → 0.52 %).

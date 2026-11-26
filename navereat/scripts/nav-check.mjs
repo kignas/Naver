@@ -6,10 +6,26 @@ import { preview } from 'vite';
 
 const appRoot = process.cwd();
 const repoRoot = path.resolve(appRoot, '..');
-const outDir = path.join(repoRoot, 'verify', 'item12a');
+const outDir = path.join(repoRoot, 'verify', 'item19');
 const base = 'http://127.0.0.1:4177';
-const NAV_RESERVE = 86;
-const PILL = 'rgb(31, 31, 35)';
+/** --nav-h (64) + --nav-bottom (12) + 12 */
+const NAV_RESERVE = 88;
+/** Measured spec, ratios of the 64dp container. */
+const H = 64;
+const SPEC = {
+  height: H,
+  side: 14,
+  bottom: 12,
+  gap: Number((0.067 * H).toFixed(2)),
+  icon: Number((0.34 * H).toFixed(2)),
+  iconLabelGap: Number((0.19 * H).toFixed(2)),
+  label: Number((0.205 * H).toFixed(2)),
+  shadowY: Number((0.1 * H).toFixed(2)),
+  shadowBlur: Number((0.35 * H).toFixed(2)),
+};
+const PILL_TOP = 'rgb(42, 42, 46)';
+const PILL_BOTTOM = 'rgb(30, 30, 34)';
+const IDLE_LABEL = 'rgb(28, 28, 40)';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const failures = [];
 
@@ -17,6 +33,8 @@ function check(name, condition, detail = '') {
   console.log(`${condition ? 'PASS' : 'FAIL'} ${name}${detail ? ` — ${detail}` : ''}`);
   if (!condition) failures.push(`${name}${detail ? ` — ${detail}` : ''}`);
 }
+
+const near = (a, b, tolerance = 1) => Math.abs(Number(a) - Number(b)) <= tolerance;
 
 function crop(source, x, y, width, height) {
   const out = new PNG({ width, height });
@@ -52,6 +70,52 @@ function scale(source, factor) {
   return out;
 }
 
+/** Horizontal strip of crops, separated by a white gutter. */
+function strip(images, gap = 6) {
+  const width = images.reduce((sum, image) => sum + image.width, 0) + gap * (images.length - 1);
+  const height = Math.max(...images.map((image) => image.height));
+  const out = new PNG({ width, height });
+  out.data.fill(255);
+  let offsetX = 0;
+  images.forEach((image) => {
+    for (let y = 0; y < image.height; y += 1) {
+      for (let x = 0; x < image.width; x += 1) {
+        const src = (y * image.width + x) * 4;
+        const dst = (y * width + offsetX + x) * 4;
+        out.data[dst] = image.data[src];
+        out.data[dst + 1] = image.data[src + 1];
+        out.data[dst + 2] = image.data[src + 2];
+        out.data[dst + 3] = image.data[src + 3];
+      }
+    }
+    offsetX += image.width + gap;
+  });
+  return out;
+}
+
+/** Stacked crops, separated by a white gutter. */
+function stack(images, gap = 8) {
+  const width = Math.max(...images.map((image) => image.width));
+  const height = images.reduce((sum, image) => sum + image.height, 0) + gap * (images.length - 1);
+  const out = new PNG({ width, height });
+  out.data.fill(255);
+  let offsetY = 0;
+  images.forEach((image) => {
+    for (let y = 0; y < image.height; y += 1) {
+      for (let x = 0; x < image.width; x += 1) {
+        const src = (y * image.width + x) * 4;
+        const dst = ((offsetY + y) * width + x) * 4;
+        out.data[dst] = image.data[src];
+        out.data[dst + 1] = image.data[src + 1];
+        out.data[dst + 2] = image.data[src + 2];
+        out.data[dst + 3] = image.data[src + 3];
+      }
+    }
+    offsetY += image.height + gap;
+  });
+  return out;
+}
+
 async function seed(context, auth = true) {
   await context.addInitScript(({ auth }) => {
     localStorage.clear();
@@ -64,6 +128,22 @@ async function seed(context, auth = true) {
   }, { auth });
 }
 
+/** Counts the platform vibrate calls the haptics module makes in a browser. */
+async function mockVibrate(context) {
+  await context.addInitScript(() => {
+    window.__vibrations = 0;
+    Object.defineProperty(navigator, 'vibrate', {
+      configurable: true,
+      value: () => {
+        window.__vibrations += 1;
+        return true;
+      },
+    });
+  });
+}
+
+const vibrationCount = (page) => page.evaluate(() => window.__vibrations ?? -1);
+
 async function navState(page) {
   return page.evaluate(() => {
     const nav = document.querySelector('.bottom-nav');
@@ -72,38 +152,72 @@ async function navState(page) {
     const indicator = document.querySelector('.nav-indicator');
     const label = active?.querySelector('.nav-label');
     const navRect = nav?.getBoundingClientRect();
-    const indicatorRect = indicator?.getBoundingClientRect();
     const box = (rect) => (rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height, bottom: innerHeight - rect.bottom } : null);
+    const style = nav ? getComputedStyle(nav) : null;
     return {
       hash: location.hash,
       navClass: nav?.className ?? '',
       navRect: box(navRect),
-      navStyle: nav
+      navStyle: style
         ? {
-            background: getComputedStyle(nav).backgroundColor,
-            radius: getComputedStyle(nav).borderRadius,
-            border: getComputedStyle(nav).borderTopWidth,
-            shadow: getComputedStyle(nav).boxShadow !== 'none',
-            opacity: getComputedStyle(nav).opacity,
-            z: getComputedStyle(nav).zIndex,
+            background: style.backgroundColor,
+            radius: style.borderRadius,
+            border: style.borderTopWidth,
+            borderColor: style.borderTopColor,
+            shadow: style.boxShadow,
+            backdrop: style.backdropFilter || style.webkitBackdropFilter || 'none',
+            opacity: style.opacity,
+            z: style.zIndex,
+            vars: {
+              surface: style.getPropertyValue('--nav-surface').trim(),
+              pillTop: style.getPropertyValue('--nav-pill-top').trim(),
+              pillBottom: style.getPropertyValue('--nav-pill-bottom').trim(),
+              idle: style.getPropertyValue('--nav-idle-fg').trim(),
+              gap: style.getPropertyValue('--nav-gap').trim(),
+              icon: style.getPropertyValue('--nav-icon-size').trim(),
+              iconLabelGap: style.getPropertyValue('--nav-icon-label-gap').trim(),
+              labelSize: style.getPropertyValue('--nav-label-size').trim(),
+            },
           }
         : null,
-      tabs: tabs.map((tab) => ({
-        item: tab.getAttribute('data-nav-item'),
-        label: tab.querySelector('.nav-label')?.textContent ?? '',
-        active: tab.classList.contains('is-active'),
-        rect: box(tab.getBoundingClientRect()),
-        labelWidth: tab.querySelector('.nav-label')?.getBoundingClientRect().width ?? 0,
-        labelScrollWidth: tab.querySelector('.nav-label')?.scrollWidth ?? 0,
-        icon: Boolean(tab.querySelector('svg')),
-      })),
+      tabs: tabs.map((tab) => {
+        const tabLabel = tab.querySelector('.nav-label');
+        const glyph = tab.querySelector('.nav-glyph');
+        const activeLayer = tab.querySelector('.nav-glyph__active');
+        const outlineLayer = tab.querySelector('.nav-glyph__outline');
+        const labelStyle = tabLabel ? getComputedStyle(tabLabel) : null;
+        const iconBox = glyph?.getBoundingClientRect();
+        const labelBox = tabLabel?.getBoundingClientRect();
+        return {
+          item: tab.getAttribute('data-nav-item'),
+          glyph: tab.getAttribute('data-glyph'),
+          glyphState: tab.getAttribute('data-glyph-state'),
+          label: tabLabel?.textContent ?? '',
+          active: tab.classList.contains('is-active'),
+          rect: box(tab.getBoundingClientRect()),
+          labelWidth: labelBox?.width ?? 0,
+          labelScrollWidth: tabLabel?.scrollWidth ?? 0,
+          icon: Boolean(glyph),
+          iconSize: iconBox ? { width: iconBox.width, height: iconBox.height } : null,
+          iconGap: iconBox && labelBox ? Math.round((labelBox.top - iconBox.bottom) * 10) / 10 : null,
+          labelStyle: labelStyle
+            ? { size: parseFloat(labelStyle.fontSize), weight: labelStyle.fontWeight, color: labelStyle.color }
+            : null,
+          layers: {
+            active: activeLayer ? Number(getComputedStyle(activeLayer).opacity) : -1,
+            outline: outlineLayer ? Number(getComputedStyle(outlineLayer).opacity) : -1,
+          },
+        };
+      }),
       active: active?.getAttribute('data-nav-item') ?? '',
       activeLabel: label?.textContent ?? '',
       activeColor: active ? getComputedStyle(active).color : '',
-      indicator: indicatorRect
+      indicator: indicator
         ? {
-            ...box(indicatorRect),
+            ...box(indicator.getBoundingClientRect()),
             background: getComputedStyle(indicator).backgroundColor,
+            backgroundImage: getComputedStyle(indicator).backgroundImage,
+            boxShadow: getComputedStyle(indicator).boxShadow,
             transform: getComputedStyle(indicator).transform,
           }
         : null,
@@ -122,12 +236,42 @@ const browser = await chromium.launch({
   headless: true,
   args: ['--no-sandbox'],
 });
-const report = {};
+const report = { spec: SPEC };
+const navClip = { x: 0, y: 844 - SPEC.bottom - SPEC.height - 10, width: 390, height: SPEC.height + 30 };
 
 try {
   await mkdir(outDir, { recursive: true });
+
+  // ---- 0. The spec reference: the same ratios, drawn independently. --------
+  const specPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await specPage.setContent(`<!doctype html><meta charset="utf-8"><style>
+    html,body{margin:0;height:100%;background:#f6f4f7;font-family:Manrope,system-ui,sans-serif}
+    .bar{position:absolute;left:${SPEC.side}px;right:${SPEC.side}px;bottom:${SPEC.bottom}px;height:${SPEC.height}px;
+      background:#fff;border:1px solid rgba(196,196,214,0.6);border-radius:999px;
+      box-shadow:0 ${SPEC.shadowY}px ${SPEC.shadowBlur}px rgba(0,0,0,0.1);display:flex}
+    .slot{position:relative;flex:1 1 0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:${SPEC.iconLabelGap}px;color:#1C1C28}
+    .slot.on{color:#fff}
+    .pill{position:absolute;inset:${SPEC.gap}px;border-radius:999px;
+      background:linear-gradient(180deg,#2A2A2E 0%,#1E1E22 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,0.18)}
+    .glyph{width:${SPEC.icon}px;height:${SPEC.icon}px;position:relative;z-index:1}
+    .lbl{font-size:${SPEC.label}px;font-weight:500;line-height:1;position:relative;z-index:1}
+  </style><div class="bar">
+    <div class="slot on"><span class="pill"></span>
+      <svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3.15 12.15 11.3 3.95a1 1 0 0 1 1.4 0l8.15 8.2"/><path d="M5.6 11.4v7.05a2.15 2.15 0 0 0 2.15 2.15h8.5a2.15 2.15 0 0 0 2.15-2.15V11.4"/></svg>
+      <span class="lbl">Home</span></div>
+    <div class="slot"><svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4.3" y="8.8" width="15.4" height="12" rx="2"/><path d="M8.9 9.2V7.7a3.1 3.1 0 0 1 6.2 0v1.5"/></svg>
+      <span class="lbl">History</span></div>
+  </div>`);
+  await sleep(200);
+  const specShot = PNG.sync.read(await specPage.screenshot({ clip: navClip }));
+  await writeFile(path.join(outDir, 'spec-reference.png'), PNG.sync.write(specShot));
+  await specPage.close();
+
+  // ---- 1. Home: two tabs, charcoal pill, both labels, ratios. -------------
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   await seed(context);
+  await mockVibrate(context);
   const page = await context.newPage();
   await page.goto(`${base}/#/`, { waitUntil: 'networkidle' });
   await page.waitForSelector('.bottom-nav');
@@ -152,86 +296,187 @@ try {
     return state;
   };
 
-  // 1. Home: two tabs, dark pill on the active tab.
   const home = await capture('home', '.home-scroll');
   check('home: exactly two tabs', home.tabs.length === 2, home.tabs.map((tab) => tab.item).join(','));
   check('home: labels are Home and History', home.tabs[0]?.label === 'Home' && home.tabs[1]?.label === 'History', home.tabs.map((tab) => tab.label).join('/'));
   check('home: every tab shows icon and label', home.tabs.every((tab) => tab.icon && tab.label.length > 0));
   check('home: nav visible', home.navClass.includes('is-visible') && home.navStyle?.opacity === '1' && home.bodyHasNav);
   check('home: active is Home', home.active === '/', home.active);
-  check('home: pill colour', home.indicator?.background === PILL, home.indicator?.background);
-  check('home: active label is white', home.activeColor === 'rgb(255, 255, 255)', home.activeColor);
-  check('home: pill covers the active tab', Math.abs(home.indicator.x - home.tabs[0].rect.x) <= 1 && Math.abs(home.indicator.width - home.tabs[0].rect.width) <= 1, `${JSON.stringify(home.indicator)} vs ${JSON.stringify(home.tabs[0].rect)}`);
-  check('home: white surface, hairline, full radius', home.navStyle?.background === 'rgb(255, 255, 255)' && parseFloat(home.navStyle.border) === 1 && home.navStyle.radius === '999px' && home.navStyle.shadow, JSON.stringify(home.navStyle));
-  check('home: floating geometry', home.navRect.height === 62 && home.navRect.bottom === 12 && home.navRect.x === 14, JSON.stringify(home.navRect));
+
+  // Container: white, hairline, pill radius, soft large shadow, no blur.
+  check('home: white surface', home.navStyle?.background === 'rgb(255, 255, 255)', home.navStyle?.background);
+  check(
+    'home: hairline border',
+    near(parseFloat(home.navStyle?.border), 1, 0.01) && /^rgba?\(196, 196, 214/.test(home.navStyle?.borderColor ?? ''),
+    `${home.navStyle?.border} ${home.navStyle?.borderColor}`,
+  );
+  check('home: full pill radius', home.navStyle?.radius === '999px', home.navStyle?.radius);
+  check(
+    'home: shadow 0.10H / 0.35H, 10% black',
+    ['6.4px', '22.4px', 'rgba(0, 0, 0, 0.1)'].every((part) => (home.navStyle?.shadow ?? '').includes(part)),
+    home.navStyle?.shadow,
+  );
+  check('home: no backdrop blur', home.navStyle?.backdrop === 'none', home.navStyle?.backdrop);
+  check(
+    'home: colours are CSS variables',
+    home.navStyle?.vars.surface === '#ffffff' &&
+      home.navStyle?.vars.pillTop === '#2a2a2e' &&
+      home.navStyle?.vars.pillBottom === '#1e1e22' &&
+      home.navStyle?.vars.idle === '#1c1c28',
+    JSON.stringify(home.navStyle?.vars),
+  );
+
+  // Measured geometry.
+  check(
+    'home: floating geometry H=64, 14px sides, 12px bottom',
+    home.navRect.height === 64 && home.navRect.bottom === 12 && home.navRect.x === 14,
+    JSON.stringify(home.navRect),
+  );
   check('home: nav above route/sheet layers', Number(home.navStyle.z) >= 2000, home.navStyle.z);
   check('home: tab touch targets >= 44px', home.tabs.every((tab) => tab.rect.height >= 44), home.tabs.map((tab) => tab.rect.height).join('/'));
-  check('home: labels are not clipped', home.tabs.every((tab) => tab.labelWidth > 0 && tab.labelScrollWidth <= tab.labelWidth + 1), home.tabs.map((tab) => `${tab.labelScrollWidth}/${tab.labelWidth}`).join(' '));
+  check(
+    'home: labels are not clipped',
+    home.tabs.every((tab) => tab.labelWidth > 0 && tab.labelScrollWidth <= tab.labelWidth + 1),
+    home.tabs.map((tab) => `${tab.labelScrollWidth}/${tab.labelWidth}`).join(' '),
+  );
   check('home: reserves nav height', parseFloat(home.paddingBottom) >= NAV_RESERVE, home.paddingBottom);
   check('home: nav node preserved', home.sameNode);
 
-  // 2. History.
+  // Ratios of H.
+  check(
+    'ratios: icon 0.34H=22, label 0.205H=13 @500, gap 0.19H=12, pill inset 0.067H=4.3',
+    // Ratios are rounded to whole dp/sp in CSS, so allow half a unit.
+    home.tabs.every((tab) => near(tab.iconSize.width, SPEC.icon, 0.5) && near(tab.iconSize.height, SPEC.icon, 0.5)) &&
+      home.tabs.every((tab) => near(tab.labelStyle.size, SPEC.label, 0.5) && tab.labelStyle.weight === '500') &&
+      home.tabs.every((tab) => near(tab.iconGap, SPEC.iconLabelGap, 0.6)) &&
+      near(parseFloat(home.navStyle.vars.gap), SPEC.gap, 0.01),
+    JSON.stringify({
+      icons: home.tabs.map((tab) => tab.iconSize),
+      labels: home.tabs.map((tab) => `${tab.labelStyle.size}/${tab.labelStyle.weight}`),
+      gaps: home.tabs.map((tab) => tab.iconGap),
+      pill: home.navStyle.vars.gap,
+    }),
+  );
+
+  // Pill: charcoal gradient, 1px inner highlight, inset by --nav-gap.
+  check(
+    'home: pill is a charcoal vertical gradient',
+    home.indicator?.backgroundImage.includes('linear-gradient') &&
+      home.indicator.backgroundImage.includes(PILL_TOP) &&
+      home.indicator.backgroundImage.includes(PILL_BOTTOM),
+    home.indicator?.backgroundImage,
+  );
+  check(
+    'home: pill has the 1px inner highlight',
+    /rgba\(255, 255, 255, 0\.18\) 0px 0px 0px 1px inset/.test(home.indicator?.boxShadow ?? ''),
+    home.indicator?.boxShadow,
+  );
+  check(
+    'home: pill inset by 0.067H inside the slot',
+    near(home.indicator.x - home.tabs[0].rect.x, SPEC.gap, 0.6) && near(home.indicator.width, home.tabs[0].rect.width - 2 * SPEC.gap, 0.6),
+    `${home.indicator.x - home.tabs[0].rect.x} / ${home.indicator.width} vs ${home.tabs[0].rect.width}`,
+  );
+  check('home: active label is white', home.activeColor === 'rgb(255, 255, 255)', home.activeColor);
+  check('home: idle label is #1C1C28', home.tabs[1].labelStyle.color === IDLE_LABEL, home.tabs[1].labelStyle.color);
+
+  // Icon states.
+  check(
+    'icons: active shows the gradient layer, idle shows the outline',
+    home.tabs[0].layers.active === 1 &&
+      home.tabs[0].layers.outline === 0 &&
+      home.tabs[1].layers.active === 0 &&
+      home.tabs[1].layers.outline === 1,
+    JSON.stringify(home.tabs.map((tab) => tab.layers)),
+  );
+  check(
+    'icons: home glyph is the house, history the bag',
+    home.tabs[0].glyph === 'home' && home.tabs[1].glyph === 'history',
+    home.tabs.map((tab) => tab.glyph).join('/'),
+  );
+
+  // Haptics: nothing fired by the initial render.
+  const vibHome = await vibrationCount(page);
+  check('haptics: none on first paint', vibHome === 0, String(vibHome));
+
+  // ---- 2. History: pill moves, haptic fires exactly once. -----------------
   await page.click('[data-nav-item="/orders"]');
   await sleep(550);
   const history = await capture('history', '.orders-page');
   check('history: active is History', history.active === '/orders' && history.activeLabel === 'History', `${history.active} ${history.activeLabel}`);
-  check('history: pill moved to History', Math.abs(history.indicator.x - history.tabs[1].rect.x) <= 1 && Math.abs(history.indicator.width - history.tabs[1].rect.width) <= 1, JSON.stringify(history.indicator));
-  check('history: pill colour', history.indicator?.background === PILL, history.indicator?.background);
+  check('history: pill moved to History', near(history.indicator.x - history.tabs[1].rect.x, SPEC.gap, 0.6), JSON.stringify({ pill: history.indicator.x, tab: history.tabs[1].rect.x }));
+  check('history: pill colour', history.indicator?.backgroundImage.includes(PILL_TOP), history.indicator?.backgroundImage);
   check('history: reserves nav height', parseFloat(history.paddingBottom) >= NAV_RESERVE, history.paddingBottom);
   check('history: nav node preserved', history.sameNode);
+  check('history: icon states swapped', history.tabs[0].layers.active === 0 && history.tabs[1].layers.active === 1, JSON.stringify(history.tabs.map((tab) => tab.layers)));
+  const vibAfterHistory = await vibrationCount(page);
+  check('haptics: one light impact on the tab change', vibAfterHistory === 1, String(vibAfterHistory));
   const mounted = await page.evaluate(() => ({
     home: window.__homeNode === document.querySelector('.home-screen'),
     orders: window.__ordersNode === document.querySelector('.orders-page'),
   }));
   check('tabs: layers stay mounted', mounted.home && mounted.orders, JSON.stringify(mounted));
 
-  // 3. Indicator slide strip (History -> Home) with mid-flight positions.
-  const navBox = await page.locator('.bottom-nav').boundingBox();
-  const grabFrame = async () => {
-    const png = PNG.sync.read(await page.screenshot({ type: 'png' }));
-    const cropY = Math.max(0, Math.floor((navBox?.y ?? 770) - 8));
-    const cropHeight = Math.min(png.height - cropY, 96);
-    return scale(crop(png, 0, cropY, png.width, cropHeight), 0.65);
-  };
-  const pillStart = history.indicator.x;
-  const frames = [await grabFrame()];
-  await page.evaluate(() => document.querySelector('[data-nav-item="/"]')?.click());
-  await page.waitForFunction(
-    () => document.querySelector('.nav-tab.is-active')?.getAttribute('data-nav-item') === '/',
-    { timeout: 3000 },
-  );
-  const midFlight = [];
-  for (let index = 1; index < 6; index += 1) {
-    midFlight.push(await page.evaluate(() => document.querySelector('.nav-indicator')?.getBoundingClientRect().x ?? -1));
-    frames.push(await grabFrame());
-    await sleep(45);
-  }
-  for (let index = 0; index < frames.length; index += 1) {
-    await writeFile(path.join(outDir, `slide-frame-${index + 1}.png`), PNG.sync.write(frames[index]));
-  }
-  const strip = new PNG({ width: frames.reduce((sum, frame) => sum + frame.width, 0), height: Math.max(...frames.map((frame) => frame.height)) });
-  let offsetX = 0;
-  frames.forEach((frame) => {
-    for (let y = 0; y < frame.height; y += 1) {
-      for (let x = 0; x < frame.width; x += 1) {
-        const src = (y * frame.width + x) * 4;
-        const dst = (y * strip.width + offsetX + x) * 4;
-        strip.data[dst] = frame.data[src];
-        strip.data[dst + 1] = frame.data[src + 1];
-        strip.data[dst + 2] = frame.data[src + 2];
-        strip.data[dst + 3] = frame.data[src + 3];
-      }
-    }
-    offsetX += frame.width;
-  });
-  await writeFile(path.join(outDir, 'nav-slide-strip.png'), PNG.sync.write(strip));
-  report.frames = frames.length;
-  report.strip = 'verify/item12a/nav-slide-strip.png';
-  report.midFlight = midFlight;
-  check('slide: indicator travels between tabs', midFlight.some((x) => Math.abs(x - pillStart) > 4), midFlight.map((x) => Math.round(x)).join(','));
-  await sleep(450);
+  // Tapping the already-active tab is not a change.
+  await page.click('[data-nav-item="/orders"]');
+  await sleep(300);
+  check('haptics: tapping the active tab is silent', (await vibrationCount(page)) === 1, String(await vibrationCount(page)));
 
-  // 4. Search overlay hides the bar; closing restores it.
+  // ---- 3. Icon animation: 8 frames each way. ------------------------------
+  const grabNav = async () => PNG.sync.read(await page.screenshot({ clip: navClip }));
+  const framesToHome = [await grabNav()];
+  await page.evaluate(() => document.querySelector('[data-nav-item="/"]')?.click());
+  await page.waitForFunction(() => document.querySelector('.nav-tab.is-active')?.getAttribute('data-nav-item') === '/', { timeout: 3000 });
+  const midFlight = [];
+  for (let index = 1; index < 8; index += 1) {
+    midFlight.push(await page.evaluate(() => document.querySelector('.nav-indicator')?.getBoundingClientRect().x ?? -1));
+    framesToHome.push(await grabNav());
+    await sleep(50);
+  }
+  await writeFile(path.join(outDir, 'icon-anim-history-home.png'), PNG.sync.write(strip(framesToHome)));
+  check(
+    'icon anim: indicator travels between tabs',
+    midFlight.some((x) => Math.abs(x - (history.tabs[0].rect.x + SPEC.gap)) < 20),
+    midFlight.map((x) => Math.round(x)).join(','),
+  );
+  await sleep(500);
+
+  const framesToHistory = [await grabNav()];
+  await page.evaluate(() => document.querySelector('[data-nav-item="/orders"]')?.click());
+  await page.waitForFunction(() => document.querySelector('.nav-tab.is-active')?.getAttribute('data-nav-item') === '/orders', { timeout: 3000 });
+  for (let index = 1; index < 8; index += 1) {
+    framesToHistory.push(await grabNav());
+    await sleep(50);
+  }
+  await writeFile(path.join(outDir, 'icon-anim-home-history.png'), PNG.sync.write(strip(framesToHistory)));
+  check('icon anim: 8-frame strips written', framesToHome.length === 8 && framesToHistory.length === 8, `${framesToHome.length}/${framesToHistory.length}`);
+
+  await sleep(500);
+  const afterAnim = await page.evaluate(() => ({
+    classes: Array.from(document.querySelectorAll('.nav-tab')).map((tab) => tab.className),
+    running: document.querySelector('.bottom-nav')?.getAnimations({ subtree: true }).filter((animation) => animation.playState === 'running').length ?? -1,
+  }));
+  check(
+    'icon anim: classes cleared and nothing still running',
+    !afterAnim.classes.some((name) => name.includes('is-enter') || name.includes('is-leave')) && afterAnim.running === 0,
+    JSON.stringify(afterAnim),
+  );
+
+  // ---- 4. Programmatic navigation must not vibrate. ----------------------
+  await page.evaluate(() => document.querySelector('[data-nav-item="/"]')?.click());
+  await sleep(600);
+  const beforeProgrammatic = await vibrationCount(page);
+  await page.evaluate(() => {
+    location.hash = '#/orders';
+  });
+  await sleep(700);
+  const afterProgrammatic = await vibrationCount(page);
+  check('haptics: programmatic navigation is silent', afterProgrammatic === beforeProgrammatic, `${beforeProgrammatic} -> ${afterProgrammatic}`);
+  await page.evaluate(() => {
+    location.hash = '#/';
+  });
+  await sleep(700);
+
+  // ---- 5. Search overlay hides the bar; closing restores it. -------------
   await page.locator('.search-box').first().click();
   await sleep(600);
   const duringSearch = await page.evaluate(() => {
@@ -247,7 +492,7 @@ try {
   const afterSearch = await navState(page);
   check('search: nav back after close', afterSearch.navClass.includes('is-visible') && afterSearch.active === '/', `${afterSearch.navClass} ${afterSearch.active}`);
 
-  // 5. Pushed pages: nav hidden, back arrow returns Home.
+  // ---- 6. Pushed pages: nav hidden, back arrow returns Home. -------------
   const pushed = [
     { name: 'under99', open: () => page.locator('.btn-store').first().click(), back: '.u99-circle-btn[aria-label="Back"]', wait: '.u99-page' },
     { name: 'profile', open: () => page.locator('.btn-profile').first().click(), back: '.profile-page .icon-btn.back', wait: '.profile-page' },
@@ -291,7 +536,7 @@ try {
     await routePage.close();
   }
 
-  // 6. Filter sheet keeps its actions above the nav.
+  // ---- 7. Filter sheet keeps its actions above the nav. ------------------
   const sheetPage = await context.newPage();
   await sheetPage.goto(`${base}/#/`, { waitUntil: 'networkidle' });
   await sleep(700);
@@ -321,7 +566,7 @@ try {
   await loginPage.screenshot({ path: path.join(outDir, 'hidden-login.png') });
   await loginContext.close();
 
-  // 7. Fit at 360 / 390 / 430.
+  // ---- 8. Fit at 360 / 390 / 430. ----------------------------------------
   for (const size of [{ width: 360, height: 800 }, { width: 390, height: 844 }, { width: 430, height: 900 }]) {
     const fitContext = await browser.newContext({ viewport: { width: size.width, height: size.height }, isMobile: true, hasTouch: true });
     await seed(fitContext);
@@ -330,15 +575,25 @@ try {
     await sleep(900);
     const state = await navState(fitPage);
     check(`fit ${size.width}: nav inside viewport`, state.navRect.x >= 11 && state.navRect.x + state.navRect.width <= size.width - 11, JSON.stringify(state.navRect));
-    check(`fit ${size.width}: both labels fit`, state.tabs.length === 2 && state.tabs.every((tab) => tab.labelWidth > 0 && tab.labelScrollWidth <= tab.labelWidth + 1), state.tabs.map((tab) => `${tab.labelScrollWidth}/${tab.labelWidth}`).join(' '));
-    check(`fit ${size.width}: pill on History`, Math.abs(state.indicator.x - state.tabs[1].rect.x) <= 1, `${state.indicator.x} vs ${state.tabs[1].rect.x}`);
+    check(
+      `fit ${size.width}: both labels fit`,
+      state.tabs.length === 2 && state.tabs.every((tab) => tab.labelWidth > 0 && tab.labelScrollWidth <= tab.labelWidth + 1),
+      state.tabs.map((tab) => `${tab.labelScrollWidth}/${tab.labelWidth}`).join(' '),
+    );
+    check(`fit ${size.width}: pill on History`, near(state.indicator.x - state.tabs[1].rect.x, SPEC.gap, 0.6), `${state.indicator.x} vs ${state.tabs[1].rect.x}`);
+    check(
+      `fit ${size.width}: icon + label stack fits the pill`,
+      state.tabs.every((tab) => tab.iconSize.height + tab.iconGap + tab.labelStyle.size <= 64 - 2 * SPEC.gap - 2),
+      JSON.stringify(state.tabs.map((tab) => tab.iconSize.height + tab.iconGap + tab.labelStyle.size)),
+    );
     await fitPage.screenshot({ path: path.join(outDir, `fit-${size.width}x${size.height}.png`) });
     await fitContext.close();
   }
 
-  // 8. Drag the pill from History to Home.
+  // ---- 9. Drag the pill from History to Home (haptic on the snap). -------
   const dragContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   await seed(dragContext);
+  await mockVibrate(dragContext);
   const dragPage = await dragContext.newPage();
   await dragPage.goto(`${base}/#/orders`, { waitUntil: 'networkidle' });
   await sleep(800);
@@ -348,6 +603,7 @@ try {
       return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
     }),
   );
+  const dragVibStart = await vibrationCount(dragPage);
   await dragPage.mouse.move(centers[1].x, centers[1].y);
   await dragPage.mouse.down();
   await dragPage.mouse.move(centers[0].x, centers[0].y, { steps: 10 });
@@ -357,9 +613,66 @@ try {
   await sleep(650);
   const dragState = await navState(dragPage);
   check('drag: lands on Home', (dragState.hash === '#/' || dragState.hash === '') && dragState.active === '/', `${dragState.hash} ${dragState.active}`);
+  const dragVibEnd = await vibrationCount(dragPage);
+  check('haptics: drag-snap commit fires one impact', dragVibEnd === dragVibStart + 1, `${dragVibStart} -> ${dragVibEnd}`);
   await dragPage.screenshot({ path: path.join(outDir, 'drag-end.png') });
   await dragContext.close();
 
+  // ---- 10. Reduced motion: no icon animation, instant state. -------------
+  const rmContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
+  await seed(rmContext);
+  const rmPage = await rmContext.newPage();
+  await rmPage.goto(`${base}/#/`, { waitUntil: 'networkidle' });
+  await sleep(700);
+  await rmPage.evaluate(() => document.querySelector('[data-nav-item="/orders"]')?.click());
+  await sleep(120);
+  const rm = await rmPage.evaluate(() => ({
+    running: document.querySelector('.bottom-nav')?.getAnimations({ subtree: true }).filter((animation) => animation.playState === 'running').length ?? -1,
+    layers: Array.from(document.querySelectorAll('.nav-tab')).map((tab) => ({
+      active: Number(getComputedStyle(tab.querySelector('.nav-glyph__active')).opacity),
+      outline: Number(getComputedStyle(tab.querySelector('.nav-glyph__outline')).opacity),
+    })),
+  }));
+  check('reduced motion: no animation runs', rm.running === 0, String(rm.running));
+  check('reduced motion: icon state is instant', rm.layers[0].active === 0 && rm.layers[1].active === 1, JSON.stringify(rm.layers));
+  await rmContext.close();
+
+  // ---- 11. The debug panel shows the haptic count. -----------------------
+  const dbgContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await seed(dbgContext);
+  await mockVibrate(dbgContext);
+  const dbgPage = await dbgContext.newPage();
+  await dbgPage.goto(`${base}/#/?debug=1`, { waitUntil: 'networkidle' });
+  await sleep(900);
+  await dbgPage.click('[data-nav-item="/orders"]');
+  await sleep(1300);
+  const collapsed = await dbgPage.evaluate(() => document.querySelector('#nbp-debug-root')?.textContent ?? '');
+  await dbgPage.locator('[aria-label="Open stress debug panel"]').click();
+  await sleep(700);
+  const panel = await dbgPage.evaluate(() => document.querySelector('#nbp-debug-root')?.textContent ?? '');
+  check(
+    'debug panel: shows the haptic count',
+    /haptics 1/.test(panel) && /1h/.test(collapsed),
+    `${collapsed.replace(/\s+/g, ' ').slice(0, 60)} | ${panel.replace(/\s+/g, ' ').slice(0, 80)}`,
+  );
+  await dbgContext.close();
+
+  // ---- 12. Side-by-side against the spec reference. ----------------------
+  const appNav = PNG.sync.read(await page.screenshot({ clip: navClip }));
+  await writeFile(path.join(outDir, 'nav-home-crop.png'), PNG.sync.write(appNav));
+  await writeFile(path.join(outDir, 'nav-vs-spec.png'), PNG.sync.write(stack([crop(appNav, 0, 0, 390, navClip.height), crop(specShot, 0, 0, 390, navClip.height)], 10)));
+
+  report.ratios = {
+    H,
+    containerHeight: SPEC.height,
+    sideMargin: SPEC.side,
+    bottom: SPEC.bottom,
+    pillInset: SPEC.gap,
+    icon: SPEC.icon,
+    iconLabelGap: SPEC.iconLabelGap,
+    labelSize: SPEC.label,
+    shadow: `0 ${SPEC.shadowY}px ${SPEC.shadowBlur}px rgba(0,0,0,0.10)`,
+  };
   report.screens = shots;
   report.failures = failures;
   await writeFile(path.join(outDir, 'nav-report.json'), `${JSON.stringify(report, null, 2)}\n`);

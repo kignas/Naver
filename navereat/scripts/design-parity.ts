@@ -373,7 +373,15 @@ async function capture(
   name: string,
   original: Page,
   app: Page,
-  options: { probes?: string[]; element?: string; cropTop?: number; cropBelow?: string; note?: string } = {},
+  options: {
+    probes?: string[];
+    element?: string;
+    cropTop?: number;
+    /** Landmarks to cut below. A per-page map is required when the two pages
+     *  name the same region differently (the original has no `.hero-sheet`). */
+    cropBelow?: string | string[] | { original: string | string[]; navereat: string | string[] };
+    note?: string;
+  } = {},
 ): Promise<void> {
   const { probes = [], element, cropTop, cropBelow, note } = options;
   const shot = async (page: Page, label: 'original' | 'navereat'): Promise<PNG> => {
@@ -384,11 +392,19 @@ async function capture(
       // cropBelow cuts at each page's own landmark, so a deliberate header
       // difference cannot hide a change in the content underneath. Only used at
       // scrollTop 0, where viewport and document coordinates coincide.
-      const below = cropBelow
-        ? await page.evaluate((selector) => {
-            const target = document.querySelector(selector);
-            return target ? Math.max(0, Math.round(target.getBoundingClientRect().bottom)) : 0;
-          }, cropBelow)
+      const belowSelectors =
+        typeof cropBelow === 'string' || Array.isArray(cropBelow) ? cropBelow : cropBelow?.[label] ?? [];
+      const below = belowSelectors.length
+        ? await page.evaluate((selectors: string[]) => {
+            // The last landmark wins: a page may add an element after its
+            // equivalent region (the original's offer strip sits under the
+            // banner), and the crop belongs below the whole header block.
+            const bottoms = selectors
+              .map((selector) => document.querySelector(selector))
+              .filter((target): target is Element => Boolean(target))
+              .map((target) => Math.round(target.getBoundingClientRect().bottom));
+            return bottoms.length ? Math.max(0, Math.max(...bottoms)) : 0;
+          }, Array.isArray(belowSelectors) ? belowSelectors : [belowSelectors])
         : 0;
       const clip = element
         ? undefined
@@ -669,7 +685,7 @@ async function main(): Promise<void> {
   // Item 18 replaced the static hero slide with an animated banner, so the
   // header is expected to differ. Everything below the hero sheet must not.
   await capture('home-below-header', home.original, home.app, {
-    cropBelow: '.hero-sheet',
+    cropBelow: { original: ['.ew-strip', '#hero-banner-region'], navereat: ['.hero-sheet'] },
     note: 'everything below the hero sheet, header differences excluded',
   });
 

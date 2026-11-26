@@ -78,10 +78,11 @@ npm run android:debug     # cd android && ./gradlew assembleDebug
 
 The generated APK is at `android/app/build/outputs/apk/debug/app-debug.apk`.
 The `android/` folder is committed. Portrait only; the hardware back button runs
-the pop transition and exits on Home. The status bar is burgundy with light icons
-on themed pages (Home, Login, Orders, Restaurant) and white with dark icons
-elsewhere; the navigation bar stays white. Safe-area insets are applied to the
-bottom nav, cart bar, and checkout footer.
+the pop transition and exits on Home. The status bar takes the colour of the
+route header's top edge — Home's royal blue `#004AAD`, Login's yellow, ₹99
+Store's `#B73950`, white elsewhere — with light or dark icons chosen by that
+colour's contrast; the navigation bar stays white. Safe-area insets are applied
+to the bottom nav, cart bar, and checkout footer.
 
 The app icon and splash use a gold “N” on burgundy. Android disables overscroll
 glow, text zoom, long-press selection outside inputs, and cleartext traffic.
@@ -207,6 +208,56 @@ page underneath exactly where it was. Tab switches stay instant.
   even when the router commits the new hash before the popstate handler runs:
   leaving a detail page for a tab route is always a pop, so the reverse slide
   runs instead of an instant swap.
+
+### Tab bar: the measured look, the glyphs, the haptics (Item 19, part 1)
+
+The bar is a white floating pill, 14 px from the sides and floating above the
+bottom inset, with a 1 px grey-lilac hairline and a soft shadow. Its whole
+geometry is a ratio table of the container height `H = 64dp`
+(`--nav-h` in `src/styles/tokens.css`):
+
+| part | ratio | value |
+| --- | --- | --- |
+| container height | H | 64 dp |
+| side margin | — | 14 px |
+| shadow | 0.10·H offset, 0.35·H blur, 10 % black | `0 6.4px 22.4px rgba(0,0,0,.10)` |
+| active pill inset (top/bottom/sides) | 0.067·H | 4.3 px |
+| icon box | 0.34·H | 22 dp |
+| icon → label gap | 0.19·H | 12 dp |
+| label size / weight | 0.205·H | 13 sp / 500 |
+
+Both tabs always show an icon and a label, stacked and centred: the active one
+on the charcoal pill (`#2A2A2E → #1E1E22`, 1 px inner highlight
+`rgba(255,255,255,.18)`, white label), the idle one on white with a `#1C1C28`
+label. Every colour is a `--nav-*` custom property on `.bottom-nav.nav-float`;
+there is no backdrop filter.
+
+* The two glyphs are original SVGs (`src/components/NavGlyph.tsx`), not brand
+  assets: a house (coral→red gradient) and a bag/receipt (gold→amber with coral
+  lines). Each glyph stacks an outline layer and a gradient layer, so the state
+  change is an opacity cross-fade and nothing re-mounts.
+* On a tab change the entering glyph pops (scale 0.7 → 1.12 → 1), the house
+  roof lifts and settles, its door fades in, the bag body bounces and its handle
+  swings; the leaving glyph shrinks through 0.85 and settles while the cross-fade
+  turns it into its outline; the label fades and slides 6 px. All of it is
+  `transform`/`opacity` on `transform-box: fill-box` groups over 420 ms, and
+  `prefers-reduced-motion: reduce` drops every keyframe and transition, leaving
+  the instant state swap.
+* The sliding pill and drag-to-switch are unchanged: the indicator box is the
+  tab slot minus `--nav-gap`, measured from the nav's padding box.
+* `src/lib/haptics.ts` has one `HAPTICS_ENABLED` switch, a throttled (80 ms)
+  `lightImpact()` that uses `@capacitor/haptics` natively and `navigator.vibrate`
+  in a browser, and fails silently. It fires only on a user-initiated change to a
+  *different* tab — a tap or a drag-snap commit — never on a programmatic route
+  change, never on the already-active tab, and never on first paint. The debug
+  panel shows the running impact count (`haptics N`).
+* `@capacitor/haptics` is the only new dependency. Its Android manifest declares
+  the same `android.permission.VIBRATE` the app already had, so the built APK's
+  permission set is unchanged.
+* `npm run nav-check` asserts the ratios above, the two-tone icon states, the
+  haptic call counts (with `navigator.vibrate` mocked), the reduced-motion
+  behaviour, and writes an 8-frame strip of each direction plus a side-by-side
+  against a reference drawn from the same ratios to `verify/item19/`.
 
 ### Route stylesheets stay inside their own page (Item 13, follow-up)
 

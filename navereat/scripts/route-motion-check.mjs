@@ -179,19 +179,28 @@ try {
   await page.waitForSelector('#home-header', { timeout: 15000 });
   await sleep(1200);
 
+  // Scrolls the first candidate into view and probes a few heights, because the
+  // floating nav and cart bar sit on top of the feed and can cover a card's
+  // midpoint without covering the card.
   const visiblePoint = (selector, minY = 120) =>
-    page.evaluate(({ sel, minY: floor }) => {
-      for (const node of document.querySelectorAll(sel)) {
-        const r = node.getBoundingClientRect();
-        const cx = Math.round(r.left + r.width / 2);
-        const cy = Math.round(r.top + r.height / 2);
-        if (cy > floor && cy < window.innerHeight - 40) {
-          const hit = document.elementFromPoint(cx, cy);
-          if (hit && (hit === node || node.contains(hit))) return { x: cx, y: cy };
+    page.evaluate(
+      async ({ sel, minY: floor }) => {
+        for (const node of document.querySelectorAll(sel)) {
+          node.scrollIntoView({ block: 'center', behavior: 'instant' });
+          await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          const r = node.getBoundingClientRect();
+          const cx = Math.round(r.left + r.width / 2);
+          for (const fraction of [0.5, 0.3, 0.7]) {
+            const cy = Math.round(r.top + r.height * fraction);
+            if (cy <= floor || cy >= window.innerHeight - 40) continue;
+            const hit = document.elementFromPoint(cx, cy);
+            if (hit && (hit === node || node.contains(hit))) return { x: cx, y: cy };
+          }
         }
-      }
-      return null;
-    }, { sel: selector, minY });
+        return null;
+      },
+      { sel: selector, minY },
+    );
 
   const record = async (name, targets, waitAfter) => {
     const start = Date.now();
@@ -358,13 +367,21 @@ try {
   // Item 18: the banner is the only thing animating on Home, it pauses while
   // Home is covered, and it resumes from the same currentTime afterwards.
   const heroState = () => page.evaluate(() => window.__rmHero());
+  // The banner holds its animations while it is off screen, so "resumes on
+  // return" only means anything with Home back at the top.
+  const homeToTop = async () => {
+    await page.evaluate(() => document.querySelector('.home-scroll')?.scrollTo(0, 0));
+    await sleep(160);
+  };
   const roundTrip = async (name, leave, returnHome) => {
+    await homeToTop();
     const before = await heroState();
     await leave();
     await sleep(420);
     const covered = await heroState();
     await returnHome();
     await waitForHome();
+    await homeToTop();
     const after = await heroState();
     check(
       `${name}: banner paused while Home is covered`,
