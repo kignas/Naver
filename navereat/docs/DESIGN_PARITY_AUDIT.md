@@ -416,7 +416,7 @@ asserts: hash stays `#/`, the tile is selected, the skeleton appears first
 narrows to the two roll sellers, a chip narrows it to one, veg + category shows
 the filters block, Clear filters keeps the category, a second tap restores all
 eight cards, a dish-less category shows the empty block, Refresh re-queries,
-Home → Restaurant → back keeps the selection, and a cold `#/category/Rolls`
+Home → Restaurant → back and Home → Cart → back both keep the selection, and a cold `#/category/Rolls`
 load still renders the category page. CLS is 0 in both modes and the category
 skeleton measures exactly the cold-start skeleton (278.2 px), so the two loading
 states cannot jump.

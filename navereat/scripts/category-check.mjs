@@ -386,6 +386,23 @@ try {
     );
     check('demo: back on Home the title is still the category', returned.title === 'Rolls near you', returned.title);
 
+    // ...and a Cart round trip: the selection is Home state, not page state.
+    await page.evaluate(() => {
+      location.hash = '#/cart';
+    });
+    await page.waitForFunction(() => location.hash.startsWith('#/cart'), null, { timeout: 8000 });
+    await page.waitForTimeout(500);
+    await page.goBack();
+    await page.waitForFunction(() => location.hash === '#/', null, { timeout: 8000 });
+    await page.waitForTimeout(800);
+    const fromCart = await readHome(page);
+    report.demo.fromCart = fromCart;
+    check(
+      'demo: back from the cart the category is still selected and applied',
+      fromCart.selected.join(',') === 'Rolls' && fromCart.cards === 2 && fromCart.title === 'Rolls near you',
+      `${fromCart.selected.join(',')} · ${fromCart.cards} cards · ${fromCart.title}`,
+    );
+
     // The category page is still reachable, but only by deep link.
     // A cold load, the way a shared link arrives.
     const deepPage = await context.newPage();
