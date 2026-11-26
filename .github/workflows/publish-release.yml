@@ -27,6 +27,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Needed for .github/scripts/publish-release.sh; nothing else is used.
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/scripts
+          sparse-checkout-cone-mode: false
+
       - name: Download the APKs from run ${{ inputs.run_id }}
         env:
           GH_TOKEN: ${{ github.token }}
