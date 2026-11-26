@@ -45,13 +45,22 @@ export function loadRouteComponent(key: LazyRouteKey): Promise<ComponentType | n
   if (cached) return Promise.resolve(cached);
   const pending = componentLoads.get(key);
   if (pending) return pending;
-  const load = routeLoaders[key]().then((module) => {
-    const record = module as Record<string, ComponentType | undefined>;
-    const component = record[NAMED_EXPORTS[key]] ?? record.default ?? null;
-    if (component) components.set(key, component);
-    componentLoads.delete(key);
-    return component;
-  });
+  const load = routeLoaders[key]()
+    .then((module) => {
+      const record = module as Record<string, ComponentType | undefined>;
+      const component = record[NAMED_EXPORTS[key]] ?? record.default ?? null;
+      if (component) components.set(key, component);
+      componentLoads.delete(key);
+      return component;
+    })
+    .catch((error: unknown) => {
+      // A failed chunk must not be remembered: the rejected promise used to be
+      // cached for the rest of the session, so one dropped request (or a chunk
+      // name that no longer exists after a redeploy) made every later tap on
+      // that route land on the loading shell forever.
+      componentLoads.delete(key);
+      throw error;
+    });
   componentLoads.set(key, load);
   return load;
 }
@@ -118,13 +127,15 @@ export function preloadRoute(pathname: string): Promise<unknown> {
   // Images must never gate a tap: the route shell frames the slide while they
   // decode in the background.
   void preloadRouteAssets(pathname);
-  return loadRouteComponent(key);
+  // A speculative preload never surfaces an error of its own; the route's own
+  // render asks for the chunk again and shows the retry screen if it fails.
+  return loadRouteComponent(key).catch(() => null);
 }
 
 /** Loads every route chunk once, after the first screen has painted. */
 export function preloadAllRoutes(): void {
   (Object.keys(routeLoaders) as LazyRouteKey[]).forEach((key) => {
-    void loadRouteComponent(key);
+    void loadRouteComponent(key).catch(() => null);
   });
 }
 

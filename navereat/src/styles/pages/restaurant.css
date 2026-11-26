@@ -94,16 +94,12 @@ body.navereat-restaurant .app-viewport {
 
 .rest-page .nb-item-title {
   font-size: 16px !important;
+  letter-spacing: -0.32px !important;
 }
 
 .rest-page .nb-item-media {
   width: 150px !important;
   flex: 0 0 150px !important;
-}
-
-.rest-page .nb-item-title {
-  font-size: 13px !important;
-  letter-spacing: -0.7px !important;
 }
 
 .rest-page .ew-hd-back::before {

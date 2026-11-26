@@ -39,3 +39,12 @@
 .orders-page .live-state-detail {
   margin-top: 2px;
 }
+
+/* The live-status row is a <button> here (it opens the tracking page), so it
+   shrinks to its text and centres it; the original's anchor stretched across
+   the card and left-aligned it. */
+.orders-page .live-state {
+  width: calc(100% - 28px);
+  text-align: left;
+  font-family: inherit;
+}

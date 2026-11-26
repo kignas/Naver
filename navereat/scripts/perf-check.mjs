@@ -785,21 +785,25 @@ const navAndCoveredHome = async (browser) => {
   covered.layoutCount = after.LayoutCount - before.LayoutCount;
   covered.recalcStyleCount = after.RecalcStyleCount - before.RecalcStyleCount;
 
-  // Item 18: while Home is covered every banner animation must be held, and the
-  // pause itself must not keep costing style work.
+  // The hero is the original's static slide: while Home is covered nothing on
+  // it may animate, and no cover/return cycle may restart a hero animation.
   const banner = await page.evaluate(() => {
-    const node = document.querySelector('#hero-banner-region');
-    const own = document.getAnimations().filter((a) => /^nv-hero-/.test(a.animationName || ''));
+    // Scoped to the Home tab: the cached History tab keeps the original's
+    // pulsing live-order dot running while it sits off screen.
+    const home = document.querySelector('.route-tab-cache[data-route="/"]');
+    const node = home ? home.querySelector('#hero-banner-region') : null;
+    const named = (a) => typeof a.animationName === 'string' && a.animationName.length > 0;
+    const inHome = (a) => Boolean(home && a.effect && a.effect.target && home.contains(a.effect.target));
+    const running = document.getAnimations().filter((a) => a.playState === 'running' && named(a) && inHome(a));
     return {
       present: Boolean(node),
-      paused: node ? node.classList.contains('is-paused') : null,
-      total: own.length,
-      running: own.filter((a) => a.playState === 'running').length,
-      states: [...new Set(own.map((a) => a.playState))],
+      total: running.length,
+      running: running.length,
+      states: [...new Set(running.map((a) => a.animationName))],
     };
   });
   covered.idle = covered.mutations === 0 && covered.recalcStyleCount === 0 && covered.layoutCount === 0;
-  covered.bannerIdle = banner.present && banner.paused === true && banner.running === 0;
+  covered.bannerIdle = banner.present && banner.running === 0;
 
   await sample();
   await page.locator('.rest-page .ew-hd-back').first().click();

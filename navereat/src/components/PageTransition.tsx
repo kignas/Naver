@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Location } from 'react-router-dom';
 import { isTabPath, TAB_PATHS, useAppNav } from '../lib/navigation';
 import { applyLayout, captureLayout, refreshSnapshotScroll, type LayoutSnapshot } from '../lib/layoutSnapshot';
@@ -42,6 +42,24 @@ const CachedRoute = memo(function CachedRoute({ content }: { content: ReactNode 
   return <>{content}</>;
 });
 
+/**
+ * Layers, refs, layout snapshots and the readiness gate are all keyed by the
+ * router's location key, but React Router stamps every location it did not
+ * create — a typed hash, a deep link, a hashchange from the browser — with the
+ * same `default` key the first page used. Two routes then share an identity: a
+ * /under99 layer reused Home's cached element and rendered the wrong page.
+ * Router-external locations get a key derived from the route they point at.
+ */
+function useRouteKeyedLocation(location: Location): Location {
+  return useMemo(
+    () =>
+      location.key === 'default' && location.pathname !== '/'
+        ? { ...location, key: `direct:${location.pathname}${location.search}` }
+        : location,
+    [location],
+  );
+}
+
 interface PageTransitionProps {
   location: Location;
   swipeBack?: boolean;
@@ -54,7 +72,8 @@ interface PageTransitionProps {
  * Detail routes slide over the cached tab stack. All page motion is transform
  * only: route layers stay fully opaque.
  */
-export function PageTransition({ location, swipeBack = false, render }: PageTransitionProps) {
+export function PageTransition({ location: incoming, swipeBack = false, render }: PageTransitionProps) {
+  const location = useRouteKeyedLocation(incoming);
   const nav = useAppNav();
   const direction = useNavDirection();
   const directionLatestRef = useRef(direction);
@@ -349,10 +368,14 @@ export function PageTransition({ location, swipeBack = false, render }: PageTran
     const oldLayer: Layer | null =
       top && !isTabPath(top.location.pathname) ? { ...top, phase: 'leave' } : null;
     const newLayer: Layer = { key: location.key, location, phase: 'enter' };
+    // A deep link (or any hash navigation that bypassed nav.push) still leaves
+    // the tab for a detail page: it has to slide in with its own direction and
+    // sit on the history stack, otherwise back would unwind to nowhere.
+    const move: NavDirection = direction === 'tab' ? 'push' : direction;
 
-    if (direction === 'push') {
+    if (move === 'push') {
       historyRef.current = [...historyRef.current, location];
-    } else if (direction === 'pop') {
+    } else if (move === 'pop') {
       historyRef.current = historyRef.current.filter((entry) => entry.key !== top?.location.key);
       if (historyRef.current[historyRef.current.length - 1]?.key !== location.key) {
         historyRef.current = [...historyRef.current, location];
@@ -371,7 +394,7 @@ export function PageTransition({ location, swipeBack = false, render }: PageTran
     // render (no skeleton -> content swap inside the moving layer).
     useNavStore.getState().setPreparing(true);
     setLayers(oldLayer ? [oldLayer, newLayer] : [newLayer]);
-    setStage({ direction, animating: true });
+    setStage({ direction: move, animating: true });
 
     let started = false;
     const start = () => {
@@ -383,16 +406,16 @@ export function PageTransition({ location, swipeBack = false, render }: PageTran
       }
       setPreparing(false);
       setTabShift(true);
-      window.dispatchEvent(new CustomEvent('navereat:transition-start', { detail: { direction } }));
+      window.dispatchEvent(new CustomEvent('navereat:transition-start', { detail: { direction: move } }));
       timerRef.current = window.setTimeout(() => {
         if (runId !== runIdRef.current) return;
         // The shell paid for the slide; the page can now render its full state
         // immediately instead of swapping a skeleton after the transition.
         useNavStore.getState().setPreparing(true);
         setLayers([{ key: location.key, location, phase: 'idle' }]);
-        setStage({ direction, animating: false });
+        setStage({ direction: move, animating: false });
         void waitForRouteReady(location.key, 1500).then(() => useNavStore.getState().setPreparing(false));
-        window.dispatchEvent(new CustomEvent('navereat:transition-end', { detail: { direction } }));
+        window.dispatchEvent(new CustomEvent('navereat:transition-end', { detail: { direction: move } }));
         timerRef.current = null;
       }, PUSH_DURATION);
     };
@@ -448,11 +471,16 @@ export function PageTransition({ location, swipeBack = false, render }: PageTran
     if (startTimerRef.current !== null) window.clearTimeout(startTimerRef.current);
   }, []);
 
+  // Keyed by the route as well as the location: a navigation that does not come
+  // through nav.push (a deep link, a typed hash, a hashchange from the browser)
+  // arrives with the router's default key, so the key alone let a layer reuse
+  // another route's element — a /under99 layer rendered Home.
   const renderCached = (target: Location): ReactNode => {
-    const cached = elementCacheRef.current.get(target.key);
+    const cacheKey = `${target.key}|${target.pathname}${target.search}`;
+    const cached = elementCacheRef.current.get(cacheKey);
     if (cached) return cached;
     const element = render(target);
-    elementCacheRef.current.set(target.key, element);
+    elementCacheRef.current.set(cacheKey, element);
     return element;
   };
 

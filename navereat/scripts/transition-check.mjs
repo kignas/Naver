@@ -210,17 +210,19 @@ try {
   await page.waitForSelector('.ct-cta', { timeout: 15000 });
   await page.waitForTimeout(300);
 
+  // The cart CTA (#btn-checkout) opens the payment sheet; the order is placed
+  // from the sheet's confirm button.
   await page.locator('.ct-cta').first().click();
-  await page.waitForSelector('#btn-checkout', { timeout: 10000 });
-  await page.locator('#btn-checkout').click();
+  await page.waitForSelector('#ct-pay-confirm-btn', { timeout: 15000 });
+  await page.locator('#ct-pay-confirm-btn').click();
   await page.waitForSelector('.ew-os__btn', { timeout: 15000 });
   transitions.push(
     await measure(page, 'Cart → Tracking', () => page.locator('.ew-os__btn').click()),
   );
-  await page.waitForSelector('.ab-btn.floating-back', { timeout: 15000 });
+  await page.waitForSelector('.floating-back', { timeout: 15000 });
   await page.waitForTimeout(300);
   transitions.push(
-    await measure(page, 'Tracking → Cart (pop)', () => page.locator('.ab-btn.floating-back').first().click()),
+    await measure(page, 'Tracking → Cart (pop)', () => page.locator('.floating-back').first().click()),
   );
   await context.close();
 

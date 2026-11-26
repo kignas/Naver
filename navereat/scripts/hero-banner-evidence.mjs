@@ -1,17 +1,17 @@
 /**
- * Item 18 evidence: the animated Home hero banner.
+ * Home hero evidence: the original eatswada.com slide, rendered statically.
  *
  * Serves the production build and writes, for 390x844 and 360x800:
- *   - loop-<vp>-strip.png   the 5 s loop at 0, 1.5, 2.2, 2.7, 4.0 and 4.8 s
- *                           (all hero animations held and seeked, so the frames
- *                           are reproducible),
+ *   - hero-<vp>.png        the banner as it paints,
  *   - scroll-<vp>-strip.png the header at scrollTop 0, 60, 120 and 200 (the
- *                           banner must not move, resize or parallax),
- *   - paused-<vp>.json      the covered-page proof: animation states, the
- *                           currentTime before and after a 6 s covered window,
- *                           and the style/layout/mutation counters for it.
+ *                          banner is in flow: it leaves with the sheet and must
+ *                          not move, resize or parallax on its own),
+ *   - report.json          geometry, overflow and the animation audit.
  *
- * Usage: node scripts/hero-banner-evidence.mjs [--out verify/item18]
+ * The carousel that used to live here was removed: the hero must stay inert,
+ * so the audit fails if any named animation starts on Home.
+ *
+ * Usage: node scripts/hero-banner-evidence.mjs [--out verify/hero]
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -20,22 +20,17 @@ import sharp from 'sharp';
 import { preview } from 'vite';
 
 const root = process.cwd();
-const outDir = path.resolve(root, process.argv.includes('--out') ? process.argv[process.argv.indexOf('--out') + 1] : '../verify/item18');
+const outDir = path.resolve(root, process.argv.includes('--out') ? process.argv[process.argv.indexOf('--out') + 1] : '../verify/hero');
 const viewports = [
   { width: 390, height: 844 },
   { width: 360, height: 800 },
 ];
-const LOOP_MS = [0, 1500, 2200, 2700, 4000, 4800];
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const failures = [];
 
-await mkdir(outDir, { recursive: true });
-const server = await preview({ root, logLevel: 'error', preview: { host: '127.0.0.1', port: 4287, strictPort: true } });
-const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
-
-const seed = () => {
-  localStorage.setItem('nearbite_token', 'demo-token');
-  localStorage.setItem('nearbite_user', JSON.stringify({ name: 'Aarav', phone: '+91 98765 43210' }));
-  sessionStorage.setItem('ew_offers_seen_v1', '["demo"]');
+const check = (name, condition, detail = '') => {
+  console.log(`${condition ? 'PASS' : 'FAIL'} ${name}${detail ? ` — ${detail}` : ''}`);
+  if (!condition) failures.push(`${name}${detail ? ` — ${detail}` : ''}`);
 };
 
 const strip = async (files, labels, out, width) => {
@@ -54,7 +49,17 @@ const strip = async (files, labels, out, width) => {
   await sharp(svg).composite(composites).png().toFile(out);
 };
 
-const report = { viewports: {}, loopMs: LOOP_MS };
+await mkdir(outDir, { recursive: true });
+const server = await preview({ root, logLevel: 'error', preview: { host: '127.0.0.1', port: 4287, strictPort: true } });
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
+
+const seed = () => {
+  localStorage.setItem('nearbite_token', 'demo-token');
+  localStorage.setItem('nearbite_user', JSON.stringify({ name: 'Aarav', phone: '+91 98765 43210' }));
+  sessionStorage.setItem('ew_offers_seen_v1', '["demo"]');
+};
+
+const report = { viewports: {} };
 
 try {
   for (const viewport of viewports) {
@@ -62,48 +67,65 @@ try {
     const context = await browser.newContext({ viewport, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
     await context.addInitScript(seed);
     const page = await context.newPage();
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
     await page.goto('http://127.0.0.1:4287/#/', { waitUntil: 'networkidle' });
     await page.waitForSelector('#hero-banner-region', { timeout: 20000 });
     await page.waitForTimeout(1200);
 
-    const geometry = await page.evaluate(() => {
-      const banner = document.querySelector('#hero-banner-region').getBoundingClientRect();
-      const sheet = document.querySelector('.hero-sheet').getBoundingClientRect();
-      const lines = ['.nv-hero-a-line1', '.nv-hero-a-line2', '.nv-hero-b-line1', '.nv-hero-b-line2', '.nv-hero-cta'].map((selector) => {
+    const audit = await page.evaluate(() => {
+      const banner = document.querySelector('#hero-banner-region');
+      const sheet = document.querySelector('.hero-sheet');
+      const art = document.querySelector('.header-slide__art');
+      const box = (node) => (node ? node.getBoundingClientRect() : null);
+      const named = (a) => typeof a.animationName === 'string' && a.animationName.length > 0;
+      const running = document.getAnimations().filter((a) => a.playState === 'running' && named(a));
+      const lines = ['.banner-title', '.banner-subtitle', '.banner-cta', '.banner-cta__chev', '.ew-strip'].map((selector) => {
         const node = document.querySelector(selector);
-        return { selector, clipped: node.scrollWidth > node.clientWidth + 1, text: node.textContent };
+        return {
+          selector,
+          present: Boolean(node),
+          clipped: node ? node.scrollWidth > node.clientWidth + 1 : true,
+          text: node ? node.textContent.replace(/\s+/g, ' ').trim() : null,
+        };
       });
+      const bannerBox = box(banner);
+      const sheetBox = box(sheet);
+      const artBox = box(art);
       return {
-        banner: { y: banner.y, h: banner.height, w: banner.width },
-        sheet: { y: sheet.y, h: sheet.height },
-        lines,
+        banner: bannerBox && { y: Math.round(bannerBox.y), h: Math.round(bannerBox.height), w: Math.round(bannerBox.width) },
+        sheet: sheetBox && { y: Math.round(sheetBox.y), h: Math.round(sheetBox.height) },
+        art: artBox && { x: Math.round(artBox.x), y: Math.round(artBox.y), w: Math.round(artBox.width), h: Math.round(artBox.height) },
+        rules: getComputedStyle(banner).borderRadius,
+        slides: document.querySelectorAll('#hero-banner-region .header-slide').length,
+        dots: document.querySelectorAll('#hero-banner-region .banner-dot').length,
+        runningAnimations: [...new Set(running.map((a) => a.animationName))],
+        transitions: [...new Set(document.getAnimations().filter((a) => a.playState === 'running' && !named(a)).map((a) => a.transitionProperty || 'transition'))],
         overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        lines,
       };
     });
 
-    // Hold every hero animation so the six frames are exactly the requested times.
-    const seek = (ms) =>
-      page.evaluate((time) => {
-        document.getAnimations().forEach((animation) => {
-          if (/^nv-hero-/.test(animation.animationName || '')) {
-            animation.pause();
-            animation.currentTime = time;
-          }
-        });
-      }, ms);
+    // 5 s of idle time must not start anything: that is the whole point of
+    // replacing the carousel with the original's single static slide.
+    await page.evaluate(() => {
+      window.__heroMutations = 0;
+      const node = document.querySelector('#hero-banner-region');
+      new MutationObserver((records) => {
+        window.__heroMutations += records.length;
+      }).observe(node, { childList: true, subtree: true, attributes: true, characterData: true });
+    });
+    await sleep(5000);
+    const idle = await page.evaluate(() => {
+      const named = (a) => typeof a.animationName === 'string' && a.animationName.length > 0;
+      const running = document.getAnimations().filter((a) => a.playState === 'running' && named(a));
+      return { mutations: window.__heroMutations, running: [...new Set(running.map((a) => a.animationName))] };
+    });
 
-    const loopFiles = [];
-    for (const ms of LOOP_MS) {
-      await seek(ms);
-      await sleep(80);
-      const file = path.join(outDir, `loop-${label}-${ms}.png`);
-      await page.screenshot({ path: file, clip: { x: 0, y: 0, width: viewport.width, height: Math.ceil(geometry.sheet.y + geometry.sheet.h) } });
-      loopFiles.push(file);
-    }
-    const loopStrip = path.join(outDir, `loop-${label}-strip.png`);
-    await strip(loopFiles, LOOP_MS.map((ms) => `${ms} ms`), loopStrip, 300);
+    await page.screenshot({ path: path.join(outDir, `hero-${label}.png`), clip: { x: 0, y: 0, width: viewport.width, height: Math.ceil(audit.sheet.y + audit.sheet.h) } });
 
-    // Scroll strip: the banner is in flow, so it must leave with the sheet.
+    // Scroll strip: the banner is in flow, so it must leave with the sheet and
+    // keep its own height while doing it.
     const scrollFiles = [];
     const scrollRows = [];
     for (const y of [0, 60, 120, 200]) {
@@ -111,7 +133,6 @@ try {
         document.querySelector('.home-scroll').scrollTop = top;
       }, y);
       await sleep(320);
-      await seek(0);
       const file = path.join(outDir, `scroll-${label}-${y}.png`);
       await page.screenshot({ path: file, clip: { x: 0, y: 0, width: viewport.width, height: 320 } });
       scrollFiles.push(file);
@@ -133,104 +154,50 @@ try {
       document.querySelector('.home-scroll').scrollTop = 0;
     });
     await sleep(320);
-
-    // Covered-page proof on a fresh document: the loop/scroll captures above
-    // seek the animations through the Web Animations API, which would outlive
-    // the capture and mask the class-driven pause.
-    await page.close();
-    const proof = await context.newPage();
-    await proof.goto('http://127.0.0.1:4287/#/', { waitUntil: 'networkidle' });
-    await proof.waitForSelector('#restaurant-list [data-home99-restaurant]', { timeout: 20000 });
-    await proof.waitForTimeout(1200);
-
-    // Covered-page proof: hold Home behind a restaurant page for 6 s.
-    const heroState = () =>
-      proof.evaluate(() => {
-        const node = document.querySelector('#hero-banner-region');
-        const own = document.getAnimations().filter((a) => /^nv-hero-/.test(a.animationName || ''));
-        return {
-          paused: node ? node.classList.contains('is-paused') : null,
-          running: own.filter((a) => a.playState === 'running').length,
-          held: own.filter((a) => a.playState === 'paused').length,
-          time: own.length ? Math.max(...own.map((a) => Number(a.currentTime) || 0)) : -1,
-        };
-      });
-    const metrics = async () => {
-      const cdp = await context.newCDPSession(proof);
-      await cdp.send('Performance.enable');
-      const read = async () => Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map((m) => [m.name, m.value]));
-      return { read, cdp };
-    };
-    const perf = await metrics();
-    const before = await heroState();
-    await proof.waitForSelector('#restaurant-list [data-home99-restaurant]', { timeout: 20000 });
-    await proof.locator('#restaurant-list .u99-card-host:not(.rs-skeleton) .u99-restaurant-head').first().click();
-    await proof.waitForSelector('.menu-item', { timeout: 20000 });
-    await proof.evaluate(() => {
-      window.__item18 = { mutations: 0 };
-      const layer = [...document.querySelectorAll('.route-layer')].find((l) => l.querySelector('.home-screen'));
-      if (layer) {
-        new MutationObserver((records) => {
-          window.__item18.mutations += records.length;
-        }).observe(layer, { childList: true, subtree: true, attributes: true, characterData: true });
-      }
-    });
-    await sleep(700);
-    const coveredStart = await heroState();
-    const countersStart = await perf.read();
-    await sleep(6000);
-    const countersEnd = await perf.read();
-    const coveredEnd = await heroState();
-    const mutations = await proof.evaluate(() => window.__item18.mutations);
-    await proof.locator('.rest-page .ew-hd-back').first().click();
-    await proof.waitForSelector('#home-header', { timeout: 20000 });
-    await sleep(200);
-    const after = await heroState();
-    await proof.screenshot({ path: path.join(outDir, `resumed-${label}.png`), clip: { x: 0, y: 0, width: viewport.width, height: Math.ceil(geometry.sheet.y + geometry.sheet.h) } });
     await context.close();
 
-    const delta = (key) => Number((countersEnd[key] - countersStart[key]).toFixed(2));
-    const paused = {
-      geometry,
-      scroll: scrollRows,
-      before,
-      coveredStart,
-      coveredEnd,
-      after,
-      coveredWindowMs: 6000,
-      coveredRecalcStyle: delta('RecalcStyleCount'),
-      coveredLayout: delta('LayoutCount'),
-      coveredMutations: mutations,
-      advancedMs: Math.round(after.time - before.time),
-      heldWhileCovered: coveredStart.paused === true && coveredStart.running === 0 && coveredEnd.time === coveredStart.time,
-      notRestarted: after.time > before.time,
-    };
-    await writeFile(path.join(outDir, `paused-${label}.json`), `${JSON.stringify(paused, null, 2)}\n`);
-    report.viewports[label] = {
-      geometry,
-      loopStrip: path.relative(root, loopStrip),
-      scrollStrip: path.relative(root, scrollStrip),
-      paused: {
-        heldWhileCovered: paused.heldWhileCovered,
-        notRestarted: paused.notRestarted,
-        advancedMs: paused.advancedMs,
-        coveredRecalcStyle: paused.coveredRecalcStyle,
-        coveredLayout: paused.coveredLayout,
-        coveredMutations: paused.coveredMutations,
-      },
-    };
-    console.log(
-      label,
-      JSON.stringify({
-        banner: geometry.banner,
-        overflowX: geometry.overflowX,
-        clipped: geometry.lines.filter((line) => line.clipped).map((line) => line.selector),
-        ...report.viewports[label].paused,
-      }),
+    const heights = new Set(scrollRows.map((row) => row.bannerHeight));
+    check(`${label}: one static slide`, audit.slides === 1 && audit.dots === 0, `slides=${audit.slides} dots=${audit.dots}`);
+    check(`${label}: no hero animation on open`, audit.runningAnimations.length === 0, audit.runningAnimations.join(', ') || 'none');
+    check(`${label}: still inert after 5 s`, idle.running.length === 0 && idle.mutations === 0, `running=${idle.running.join(', ') || 'none'} mutations=${idle.mutations}`);
+    check(`${label}: banner keeps its height while scrolling`, heights.size === 1, [...heights].join(', '));
+    check(`${label}: banner scrolls with the sheet`, scrollRows.every((row, index) => index === 0 || row.bannerTop < scrollRows[index - 1].bannerTop + 0.5), scrollRows.map((row) => row.bannerTop).join(' → '));
+    check(`${label}: no horizontal overflow`, audit.overflowX === 0, `${audit.overflowX}px`);
+    // <br> makes textContent run the lines together, in the original too, so the
+    // copy is compared with whitespace removed.
+    const copy = Object.fromEntries(audit.lines.map((line) => [line.selector, line.text]));
+    const flat = (value) => (value || '').replace(/\s+/g, '');
+    check(`${label}: copy is not clipped`, audit.lines.every((line) => line.present && !line.clipped), audit.lines.filter((line) => !line.present || line.clipped).map((line) => line.selector).join(', ') || 'every line fits');
+    check(
+      `${label}: copy matches eatswada.com`,
+      flat(copy['.banner-title']) === 'GoodFoodClosertoHome.' &&
+        flat(copy['.banner-subtitle']) === 'TastyfoodHappieryou.♥' &&
+        flat(copy['.banner-cta']) === 'OrderNow' &&
+        flat(copy['.ew-strip']).startsWith('Nearbyrestaurants·'),
+      JSON.stringify(copy),
     );
+    check(`${label}: no page errors`, errors.length === 0, errors.join(' | '));
+
+    report.viewports[label] = {
+      geometry: { banner: audit.banner, sheet: audit.sheet, art: audit.art, radius: audit.rules },
+      idle,
+      scroll: scrollRows,
+      copy: audit.lines.map((line) => ({ selector: line.selector, text: line.text })),
+      runningAnimations: audit.runningAnimations,
+      transitions: audit.transitions,
+      overflowX: audit.overflowX,
+      heroShot: path.relative(root, path.join(outDir, `hero-${label}.png`)),
+      scrollStrip: path.relative(root, scrollStrip),
+      errors,
+    };
+    console.log(label, JSON.stringify({ banner: audit.banner, art: audit.art, slides: audit.slides, overflowX: audit.overflowX }));
   }
   await writeFile(path.join(outDir, 'report.json'), `${JSON.stringify(report, null, 2)}\n`);
   console.log(`\nSaved ${path.relative(path.resolve(root, '..'), outDir)}`);
+  if (failures.length) {
+    console.error(`\n${failures.length} FAILED`);
+    process.exitCode = 1;
+  }
 } finally {
   await browser.close();
   await new Promise((resolve) => server.httpServer.close(resolve));

@@ -158,6 +158,9 @@ export const RestaurantFeed = memo(function RestaurantFeed({ ready, scrollerRef 
   );
 
   const shouldVirtualize = filteredRestaurants.length > VIRTUALIZE_THRESHOLD;
+  // The original only claims deals when the visible cards actually carry one.
+  const hasOffers = filteredRestaurants.some((restaurant) => !!restaurant.offer);
+  const feedTitle = activeCategory ? `${activeCategory} near you` : hasOffers ? 'Recommended with deals' : 'Restaurants near you';
   const categoryLoading = categoryStatus === 'loading';
   const categoryFailed = categoryStatus === 'error';
   // `empty` is the dish search finding no restaurant at all; an empty filtered
@@ -186,7 +189,7 @@ export const RestaurantFeed = memo(function RestaurantFeed({ ready, scrollerRef 
     <section className="section" id="restaurants-section">
       <div className="sec-head">
         <h2 className="sec-title" id="restaurants-title">
-          {activeCategory ? `${activeCategory} near you` : 'Restaurants near you'}
+          {feedTitle}
         </h2>
       </div>
       {!feedReady || categoryLoading ? (

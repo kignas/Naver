@@ -38,7 +38,7 @@ export function Category() {
     <div className="page cat-page">
       <div className="cat-header">
           <div className="cat-header-left">
-            <button type="button" className="cat-back tap" onClick={nav.back} aria-label="Back">
+            <button type="button" className="cat-round cat-back tap" onClick={nav.back} aria-label="Back">
               <Icon name="solid:arrow-left" size={14} />
             </button>
             <div>
@@ -46,22 +46,19 @@ export function Category() {
               <p className="cat-sub">Restaurants near you</p>
             </div>
           </div>
-          <button type="button" className="icon-btn tap" onClick={() => openSearch('home')} aria-label="Search">
+          <button type="button" className="cat-round tap" onClick={() => openSearch('home')} aria-label="Search">
             <Icon name="solid:magnifying-glass" size={14} />
           </button>
       </div>
 
       <div className="page-scroll cat-scroll">
         <div className="cat-filterbar">
-          <button type="button" className="filter-pill">
-            <Icon name="solid:sliders" size={10} /> Filter
-          </button>
           <button
             type="button"
             className={`filter-pill${sortRating ? ' active' : ''}`}
             onClick={() => setSortRating((value) => !value)}
           >
-            Sort By <Icon name="solid:chevron-down" size={9} />
+            Top rated first
           </button>
           <button
             type="button"
@@ -123,17 +120,24 @@ export function Category() {
                   <div className="cat-result-body">
                     <div className="cat-result-top">
                       <h3 className="cat-result-name">{restaurant.name}</h3>
+                    </div>
+                    <div className="cat-result-meta">
                       <span className="cat-result-rating">
                         <Icon name="solid:star" size={8} /> {restaurant.rating}
                       </span>
-                    </div>
-                    <div className="cat-result-meta">
-                      <span className="cat-result-time">· {restaurant.time}</span>
+                      <span className="cat-result-meta-sep" aria-hidden="true">·</span>
+                      <span className="cat-result-time">{restaurant.time}</span>
                     </div>
                     <p className="cat-result-cuisine">{restaurant.cuisine}</p>
+                    {restaurant.freeDeliveryRemaining != null && (
+                      <p className="cat-result-free">
+                        {restaurant.freeDeliveryRemaining > 0
+                          ? `Add ₹${restaurant.freeDeliveryRemaining} more to unlock free delivery`
+                          : 'Free delivery unlocked'}
+                      </p>
+                    )}
                     <p className="cat-result-loc">
-                      <Icon name="solid:location-dot" size={9} style={{ color: 'var(--brand-400)' }} />
-                      Demo City · {restaurant.distance}
+                      <Icon name="solid:location-dot" size={9} style={{ color: 'var(--ew-green)' }} /> {restaurant.distance}
                     </p>
                   </div>
                 </button>

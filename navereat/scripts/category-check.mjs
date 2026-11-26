@@ -87,6 +87,10 @@ const readHome = (page) =>
       title: window.__q('#restaurants-title')?.textContent?.trim() ?? '',
       cards: cards.length,
       names: cards.map((card) => card.querySelector('.u99-restaurant-name')?.textContent?.trim() ?? ''),
+      offers: cards.filter((card) => {
+        const line = card.querySelector('.u99-discount-line');
+        return Boolean(line && line.textContent && line.textContent.trim());
+      }).length,
       skeleton: list ? list.querySelectorAll('.rs-skeleton').length : 0,
       isEmptyBlock: Boolean(list?.classList.contains('state-block')),
       emptyTitle: list?.querySelector('.state-title')?.textContent?.trim() ?? '',
@@ -350,7 +354,10 @@ try {
     const restored = await readHome(page);
     report.demo.restored = { ...restored, cls: restoredCls, steps: await readWatch(page) };
     check('demo: tapping again restores the feed', restored.cards === 8 && restored.selected.length === 0, `${restored.cards} cards`);
-    check('demo: the title returns to the default', restored.title === 'Restaurants near you', restored.title);
+    // The original picks the heading from the data: the deal copy only when the
+    // visible cards actually carry an offer.
+    const expectedTitle = restored.offers > 0 ? 'Recommended with deals' : 'Restaurants near you';
+    check('demo: the title returns to the feed heading', restored.title === expectedTitle, `${restored.title} (${restored.offers} cards with an offer)`);
     check('demo: restoring does not shift layout', restoredCls <= 0.01, `cls=${restoredCls}`);
 
     // A category nobody sells -> the original "nothing available" block.

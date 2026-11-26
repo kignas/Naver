@@ -395,12 +395,18 @@ export function SearchOverlay() {
     inputRef.current?.blur();
     if (instantClose) return;
     setClosing(true);
-    closeTimerRef.current = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       setClosing(false);
-      closeTimerRef.current = null;
+      if (closeTimerRef.current === timer) closeTimerRef.current = null;
     }, CLOSE_MS);
+    closeTimerRef.current = timer;
+    // The sheet must never be left in `.is-closing` (visible, not hittable):
+    // a second close call while the fade runs replaces this effect, and the
+    // old cleanup used to drop the timer without dropping the flag.
     return () => {
-      if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
+      window.clearTimeout(timer);
+      if (closeTimerRef.current === timer) closeTimerRef.current = null;
+      setClosing(false);
     };
   }, [clearTimers, instantClose, isOpen, unbindViewport]);
 

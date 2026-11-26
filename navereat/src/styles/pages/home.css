@@ -97,7 +97,8 @@ body {
 }
 
 .home-screen #mind-section .cat-item.is-selected .cat-name {
-  color: #5d0d18;
+  color: #c95b7a;
+  font-weight: 800;
 }
 
 .home-screen #mind-section .cat-name {
@@ -429,24 +430,16 @@ body {
   top: calc(var(--pin-inset, 6px) - var(--pin-top, 59px));
 }
 
-/* Burgundy shell for the banner + strip. Mirrors .hero-header's shell (the
-   banner bleeds through this padding) so the block reads as one surface. */
+/* Shell for the banner + strip: the banner bleeds through this padding so the
+   block reads as one surface. The background is transparent because the banner
+   and the strip paint the burgundy themselves — the strip's own bottom radius
+   has to cut through to the white page, exactly like the original. */
 .home-screen .hero-sheet {
   position: relative;
   z-index: 9;
   padding: 0 20px;
-  background: var(--hd-primary);
+  background: transparent;
   color: var(--hd-ink);
-}
-
-/* The sheet carries the shell's rounded bottom (it used to be painted by the
-   header's ::before, which now ends above the banner). The header's own bottom
-   corners square off so the two blocks meet without a notch. */
-@media (max-width: 599px) {
-  .home-screen .hero-sheet {
-    border-bottom-left-radius: 34px;
-    border-bottom-right-radius: 34px;
-  }
 }
 
 .home-screen .hero-header::before {
@@ -549,14 +542,12 @@ body {
 @media (max-width: 380px) {
   .home-screen .hero-sheet {
     padding: 0 14px;
-    border-bottom-left-radius: 30px;
-    border-bottom-right-radius: 30px;
   }
 }
 
 @media (min-width: 600px) {
   .home-screen .hero-sheet {
-    padding: 0 16px 11px;
+    padding: 0 20px;
   }
 }
 

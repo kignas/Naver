@@ -10,8 +10,8 @@
  *   - tab switches do not animate,
  *   - a left-edge swipe-back never moves the page underneath,
  *   - push/pop FPS and tap -> first frame stay inside the budgets,
- *   - the Home hero banner is the only animation on Home: it pauses while Home
- *     is covered and resumes from the same currentTime, never restarting.
+ *   - the Home hero is the original's static slide: nothing on Home animates
+ *     and the banner keeps its box across every round trip.
  */
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
@@ -132,24 +132,24 @@ const initScript = () => {
   window.__rmTabProbe = () => {
     probe.tab = { layers: document.querySelectorAll('.route-layer').length, animations: document.getAnimations().filter((a) => a.playState === 'running').length };
   };
-  // Hero banner state: its own animations are allowlisted by name, everything
-  // else on Home has to be idle.
+  // The Home hero is the original's single static slide, so "idle" is the
+  // whole contract: nothing on Home may animate, and the banner box must not
+  // change across a round trip. Property transitions belong to the route
+  // machinery and are reported without failing the run.
   window.__rmHero = () => {
-    const node = document.querySelector('#hero-banner-region');
-    const all = document.getAnimations();
+    // Scoped to the Home tab: the original pulses its live-order dot on the
+    // cached History tab, which is off screen and must not fail this audit.
+    const home = document.querySelector('.route-tab-cache[data-route="/"]');
+    const node = home ? home.querySelector('#hero-banner-region') : null;
+    const rect = node ? node.getBoundingClientRect() : null;
     const named = (a) => typeof a.animationName === 'string' && a.animationName.length > 0;
-    const own = all.filter((a) => named(a) && /^nv-hero-/.test(a.animationName));
-    // Property transitions belong to the route machinery; only named keyframe
-    // animations other than the banner's would be a stray Home animation.
-    const others = all.filter((a) => a.playState === 'running' && named(a) && !/^nv-hero-/.test(a.animationName));
-    const transitions = all.filter((a) => a.playState === 'running' && !named(a)).map((a) => a.transitionProperty || 'transition');
+    const inHome = (a) => Boolean(home && a.effect && a.effect.target && home.contains(a.effect.target));
+    const running = document.getAnimations().filter((a) => a.playState === 'running' && inHome(a));
+    const transitions = running.filter((a) => !named(a)).map((a) => a.transitionProperty || 'transition');
     return {
       present: Boolean(node),
-      paused: node ? node.classList.contains('is-paused') : null,
-      running: own.filter((a) => a.playState === 'running').length,
-      held: own.filter((a) => a.playState === 'paused').length,
-      time: own.length ? Math.max(...own.map((a) => Number(a.currentTime) || 0)) : -1,
-      others: [...new Set(others.map((a) => a.animationName))],
+      banner: rect ? { y: Math.round(rect.y), h: Math.round(rect.height), w: Math.round(rect.width) } : null,
+      runningNamed: [...new Set(running.filter(named).map((a) => a.animationName))],
       transitions: [...new Set(transitions)],
     };
   };
@@ -364,11 +364,10 @@ try {
   await clickPoint(await navPoint('/'));
   await waitForHome();
 
-  // Item 18: the banner is the only thing animating on Home, it pauses while
-  // Home is covered, and it resumes from the same currentTime afterwards.
+  // The hero is static (no carousel, no autoplay, no scroll-linked motion), so
+  // the contract is: nothing on Home animates, and the banner keeps its box
+  // across every round trip.
   const heroState = () => page.evaluate(() => window.__rmHero());
-  // The banner holds its animations while it is off screen, so "resumes on
-  // return" only means anything with Home back at the top.
   const homeToTop = async () => {
     await page.evaluate(() => document.querySelector('.home-scroll')?.scrollTo(0, 0));
     await sleep(160);
@@ -384,19 +383,19 @@ try {
     await homeToTop();
     const after = await heroState();
     check(
-      `${name}: banner paused while Home is covered`,
-      covered.present && covered.paused === true && covered.running === 0 && covered.held > 0,
-      `paused=${covered.paused} running=${covered.running} held=${covered.held}`,
+      `${name}: hero stays static while Home is covered`,
+      covered.present && covered.runningNamed.length === 0,
+      covered.runningNamed.join(', ') || 'no running animation',
     );
     check(
-      `${name}: banner resumes without restarting`,
-      after.paused === false && after.running > 0 && after.time >= before.time,
-      `time ${Math.round(before.time)} → ${Math.round(after.time)} ms, running ${after.running}`,
+      `${name}: hero stays static after returning`,
+      after.present && after.runningNamed.length === 0,
+      after.runningNamed.join(', ') || `none (transitions: ${after.transitions.join(', ') || 'none'})`,
     );
     check(
-      `${name}: nothing else on Home animates`,
-      after.others.length === 0,
-      after.others.join(', ') || `none (transitions: ${after.transitions.join(', ') || 'none'})`,
+      `${name}: banner keeps its box`,
+      JSON.stringify(before.banner) === JSON.stringify(after.banner),
+      `${JSON.stringify(before.banner)} → ${JSON.stringify(after.banner)}`,
     );
   };
 

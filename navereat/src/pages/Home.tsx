@@ -101,7 +101,7 @@ export function Home() {
         />
 
         <div className="hero-sheet">
-          <HeroBanner scrollerRef={scrollRef} onCtaClick={openUnder99} />
+          <HeroBanner onCtaClick={openUnder99} />
         </div>
 
         <main className="home-main">

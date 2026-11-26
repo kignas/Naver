@@ -1,6 +1,12 @@
 import { useEffect, useState, type RefObject } from 'react';
 
-export const SEARCH_DISHES = ['Pizza', 'Biryani', 'Dosa', 'Chai', 'Momos'] as const;
+// The original's rotation, in its order: the header opens on "Biryani" and
+// walks the same fifteen dishes.
+export const SEARCH_DISHES = [
+  'Biryani', 'Pizza', 'Momos', 'Rolls', 'Chowmein',
+  'Fried Rice', 'Chicken Biryani', 'Puchka', 'Burger', 'Dosa',
+  'Momo', 'Noodles', 'Thali', 'Sweets', 'Pasta',
+] as const;
 
 const INTERVAL_MS = 2500;
 // A downward fling is the one moment a text swap costs frames; hold the cycle

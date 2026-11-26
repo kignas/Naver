@@ -8,6 +8,7 @@ import { CartBar } from './components/CartBar';
 import { CustomizeProvider } from './components/CustomizeSheet';
 import { PageTransition } from './components/PageTransition';
 import { LazyRoute } from './components/LazyRoute';
+import { RouteBoundary } from './components/RouteBoundary';
 import { RouteReady } from './components/RouteReady';
 import { RouteShell } from './components/RouteShell';
 import { SearchOverlay } from './components/SearchOverlay';
@@ -119,13 +120,15 @@ function AppRoutes() {
           render={(routeLocation) => (
             <Suspense fallback={<RouteShell pathname={routeLocation.pathname} />}>
               <Routes location={routeLocation}>
-                <Route path="/login" element={<Login />} />
+                <Route path="/login" element={<RouteBoundary><Login /></RouteBoundary>} />
                 <Route
                   path="/"
                   element={
-                    <RouteReady>
-                      <Home />
-                    </RouteReady>
+                    <RouteBoundary>
+                      <RouteReady>
+                        <Home />
+                      </RouteReady>
+                    </RouteBoundary>
                   }
                 />
                 <Route path="/under99" element={<LazyRoute routeKey="under99" pathname={routeLocation.pathname} />} />

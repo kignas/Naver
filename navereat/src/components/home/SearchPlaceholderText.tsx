@@ -12,7 +12,7 @@ const isSearchField = (node: EventTarget | null): boolean => {
 };
 
 /**
- * "Search for" stays static; only the dish rolls. AnimatePresence pops the
+ * "Search " stays static; only the quoted dish rolls, as in the original. AnimatePresence pops the
  * outgoing word up and brings the next one in from below. The cycle is paused
  * the moment Home is covered or the user focuses/types into a search field.
  */
@@ -38,8 +38,8 @@ export function SearchPlaceholderText({ scrollerRef }: { scrollerRef: RefObject<
   }, []);
 
   return (
-    <span className="search-text" id="search-placeholder" aria-label={`Search for ${dish}`}>
-      <span className="search-static">Search&nbsp;for&nbsp;</span>
+    <span className="search-text" id="search-placeholder" aria-label={`Search "${dish}"`}>
+      <span className="search-static">Search&nbsp;</span>
       <span className="search-dish-slot">
         <AnimatePresence mode="popLayout" initial={false}>
           <motion.span
