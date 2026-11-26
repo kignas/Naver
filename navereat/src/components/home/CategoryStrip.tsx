@@ -1,7 +1,7 @@
-import { memo, useCallback, useState, type CSSProperties } from 'react';
+import { memo, useState, type CSSProperties } from 'react';
 import { categories } from '../../data/demo';
 import { useHomeFeed } from '../../data';
-import { useAppNav } from '../../lib/navigation';
+import { selectCategory } from '../../lib/categoryMode';
 import { useUiStore } from '../../store/uiStore';
 import { Icon } from '../Icon';
 
@@ -18,7 +18,7 @@ const PLACEHOLDER_MARK = (
 );
 
 export const CategoryStrip = memo(function CategoryStrip() {
-  const nav = useAppNav();
+  const activeCategory = useUiStore((state) => state.home.activeCategory);
   // The stagger belongs to the cold start only. Read at mount, not subscribed:
   // a subscription would re-render ten tiles (and cut whatever animation is
   // still running) the moment the flag flips, and a revisit would replay the
@@ -28,12 +28,6 @@ export const CategoryStrip = memo(function CategoryStrip() {
   const feedState = useHomeFeed();
   const apiLoading = feedState.mode === 'api' && !feedState.data?.categories;
   const tiles = feedState.mode === 'api' ? (feedState.data?.categories ?? []) : categories;
-  const openCategory = useCallback(
-    (name: string, query: string) => {
-      nav.push(`/category/${encodeURIComponent(name)}?q=${encodeURIComponent(query)}`);
-    },
-    [nav],
-  );
   return (
     <section className="section" id="mind-section">
       <div className="sec-head">
@@ -54,36 +48,42 @@ export const CategoryStrip = memo(function CategoryStrip() {
               <span className="cat-name">&nbsp;</span>
             </span>
           ))}
-        {tiles.map((category, index) => (
-          <a
-            className="cat-item"
-            href={`#${encodeURIComponent(category.name)}`}
-            data-category-name={category.name}
-            key={category.id}
-            style={playEntrance ? (CATEGORY_STYLES[index] ?? CATEGORY_STYLES[CATEGORY_STYLES.length - 1]) : undefined}
-            onClick={(event) => {
-              event.preventDefault();
-              openCategory(category.name, category.query);
-            }}
-          >
-            <span className="cat-ring cat-image-shell">
-              <span className="cat-image-placeholder" aria-hidden="true">
-                <span className="cat-placeholder-mark">{PLACEHOLDER_MARK}</span>
+        {tiles.map((category, index) => {
+          const selected = activeCategory !== null && activeCategory.toLowerCase() === category.name.toLowerCase();
+          return (
+            <a
+              className={`cat-item${selected ? ' is-selected' : ''}`}
+              href={`#${encodeURIComponent(category.name)}`}
+              data-category-name={category.name}
+              aria-pressed={selected}
+              key={category.id}
+              style={playEntrance ? (CATEGORY_STYLES[index] ?? CATEGORY_STYLES[CATEGORY_STYLES.length - 1]) : undefined}
+              onClick={(event) => {
+                // The original intercepts the anchor: the category filters Home
+                // in place, it never navigates.
+                event.preventDefault();
+                void selectCategory(category.name, category.query);
+              }}
+            >
+              <span className="cat-ring cat-image-shell">
+                <span className="cat-image-placeholder" aria-hidden="true">
+                  <span className="cat-placeholder-mark">{PLACEHOLDER_MARK}</span>
+                </span>
+                <img
+                  src={category.image}
+                  alt={`${category.name} food delivery in Demo City`}
+                  loading="lazy"
+                  decoding="async"
+                  className="loaded"
+                />
+                <span className="cat-selected-badge" aria-hidden="true">
+                  <Icon name="solid:check" size={10} />
+                </span>
               </span>
-              <img
-                src={category.image}
-                alt={`${category.name} food delivery in Demo City`}
-                loading="lazy"
-                decoding="async"
-                className="loaded"
-              />
-              <span className="cat-selected-badge" aria-hidden="true">
-                <Icon name="solid:check" size={10} />
-              </span>
-            </span>
-            <span className="cat-name">{category.name}</span>
-          </a>
-        ))}
+              <span className="cat-name">{category.name}</span>
+            </a>
+          );
+        })}
       </div>
     </section>
   );

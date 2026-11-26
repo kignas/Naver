@@ -221,6 +221,8 @@ produces most of the `fs16px → fs15px` probe noise.
   here; everything **below** the hero sheet keeps the original's rhythm and is
   tracked by `home-below-header`.
 * Header (location row + search + VEG) matches at scrollTop 0.
+* Category rings filter the feed in place (part 3); see “What's on your mind?”
+  below for the behaviour table and the parity numbers.
 * Collapsed header: intended, the original scrolls its header away (see below).
 
 ### Home filter sheet (`home-filter-sheet` 7.09 %)
@@ -378,15 +380,69 @@ step: the body class, the bar's computed `transform`/`opacity`, the cart bar's
 same transition captured at 2.4 s so six screenshots can land on it),
 `nav-{home,history}-{visible,hidden}.png` and `nav-report.json`.
 
+#### “What's on your mind?” filters Home in place (part 3)
+
+In the original, tapping a category ring never leaves Home: `searchCategory()`
+in `home.js` fetches the category's dishes, keeps the restaurant ids, and the
+same `renderRestaurants()` pass draws the shortened list under a new title. In
+this app the same tap used to push `/category/:type`, which is a different
+screen. That navigation is gone; the tap now filters the feed.
+
+| Behaviour | Original (`home.js`) | Navereat before part 3 | Now |
+| --- | --- | --- | --- |
+| Tap a category ring | `preventDefault()`, `searchCategory(name)`, hash untouched | `nav.push('/category/<name>?q=<query>')` → category page | filters in place, `#/` untouched |
+| Selected look | `.cat-item.is-selected`: ring tint + 2 px ring, image scale 1.24, `.cat-selected-badge` fades/scales in | class and badge existed in CSS but nothing ever added them | `CategoryStrip` adds `is-selected` + `aria-pressed`, so the ported CSS is live (name colour is the app's oxblood — theme difference, see “The Home theme”) |
+| Loading | `showSkeleton()` (two card-shaped skeletons) + title already switched | none (the page navigated) | `categoryStatus === 'loading'` renders the app's cold-start `RestaurantSkeleton` pair — byte-for-byte the same fallback as the first paint |
+| How it filters | `GET /restaurants/search?q=<name>&scope=home` → `data.menuItems` → `restaurantIds` Set → `res.ids.has(rid)` | — | `src/lib/categoryMode.ts` → `DataSource.search(query)`; api mode is the same `/restaurants/search?q=…&scope=home` call, demo mode answers from the demo menu, then the id set intersects the feed |
+| Chips, veg, ₹99 | AND-ed inside `visibleRestaurants()` | — | AND-ed in `RestaurantFeed` (`categorySet` first, then the flags) |
+| Matching dish per card | `categoryMode.itemByRestaurant` is built but **never read** (`grep` finds only writes), so cards are unchanged | — | nothing added: rendering a dish the original never renders would be inventing UI |
+| Title | `"<name> near you"`, restored to “Recommended with deals”/“Restaurants near you” | — | identical; demo data has no offers, so the default is “Restaurants near you” (already listed as intentional) |
+| Tap the same ring again | `categoryMode = null`, status recomputed, re-render, **no refetch** | — | identical (`selectCategory` toggles; no refetch) |
+| Chips emptied the category | status stays `ready` → “No restaurants match your filters” + `#home-clear-filters` → `clearFilters()` | one plain line, “No restaurants match these filters. Try clearing a filter.”, no button, and it also dropped the category | original block, copy, ids and behaviour; Clear filters clears pills/sort and **keeps** the category |
+| Category has no dishes | status `empty` → “No restaurants available yet” + `#home-retry-btn` → `refresh(true)` | — | original block; Refresh re-runs the search, so it cannot lie |
+| The search itself fails | category dropped, `status='error'` → the feed's error block, “Try Again” → `refresh(true)` | silent fallback to the full list, no message | original block and button ids; Try Again clears the category and reloads the feed |
+| Card entrance | `cardFadeUp` re-staggers on every render | — | no replay after the first paint (ITEM 14); measured: 0 running card animations after a tap |
+| Back from a restaurant | list, selection, scroll kept | — | selection, title, scroll and 12B behaviour kept (asserted) |
+| `/category/:type` | reachable only by deep link (tiles are `<a href="#name">` with `preventDefault`) | pushed from Home | still routed by deep link, nothing links to it from Home |
+
+Two deliberate departures, both demo-data-shaped: the search query is the
+ring's own `query` (“Roll”) rather than the label (“Rolls”), because that is the
+string the dish names contain, and the app's `aria-pressed` gives the ring a
+pressed state the original lacks.
+
+`category-check` (in the gate list) taps the ring in demo and api mode and
+asserts: hash stays `#/`, the tile is selected, the skeleton appears first
+(`skeleton:2|cards:0` in a `MutationObserver` trace of the section), the list
+narrows to the two roll sellers, a chip narrows it to one, veg + category shows
+the filters block, Clear filters keeps the category, a second tap restores all
+eight cards, a dish-less category shows the empty block, Refresh re-queries,
+Home → Restaurant → back keeps the selection, and a cold `#/category/Rolls`
+load still renders the category page. CLS is 0 in both modes and the category
+skeleton measures exactly the cold-start skeleton (278.2 px), so the two loading
+states cannot jump.
+
+Parity states in `verify/parity/`, all in a cart-less session so nothing
+floats over the frame: `home-category-selected` (cropped to `#mind-section`,
+0.15 %), `home-category-filtered` (cropped to `#restaurants-section`, 4.35 %),
+`home-category-empty` (9.33 %) and `home-category-skeleton` (1.50 %, the same
+1.4 s search delay on both sides, this app in api mode where its loading state
+is real). The two larger numbers are not layout: both sides show the same two cards, or
+the same block with the same copy and button ids. What is left is the app-wide
+type scale and text colour (`fs15px → fs16px`, `rgb(23,…)` → `rgb(26,…)`,
+tracked here as C1/C3), the app's `.state-block` sitting ~16 px lower inside its
+section, and — in the empty state — the floating nav sliver at the section's
+bottom edge, which the original does not have (see “Intentional differences”).
+The residue table quotes document coordinates, so the original's 274 px page
+scroll in that capture is listed there as a `y` offset even though the element
+crop removes it from the image.
+
 ### The status bar follows the header
 
 The Android status bar is non-overlay, so it must match the top edge of the
-route header. When Home's header became royal blue (`#004AAD`) the theme mapping
-in `src/lib/statusBarTheme.ts` still returned the old burgundy `#5D0D18`, and
-`statusbar-check` failed on the two Home viewports (`pageTop #004AAD`). The
-mapping now returns the header's own colour, so the bar blends into the header
-again. Login (yellow), ₹99 Store (`#B73950`) and the white app bars are
-unchanged.
+route header. `src/lib/statusBarTheme.ts` maps each route to the colour of its
+own header instead of to a hard-coded one: Home is the oxblood `#5D0D18` of
+`.hero-header`, and the bar blends into the header. Login (yellow), ₹99 Store
+(`#B73950`) and the white app bars are unchanged.
 
 ### The animated hero banner is a header-only change
 

@@ -22,6 +22,7 @@ npm run check        # tsc --noEmit + eslint
 npm run build        # typecheck + production build
 npm run scroll-check # every route + sheet at 390x844 and 360x640
 npm run visual       # pixel diff against the original reference
+npm run category-check # "What's on your mind?" filters Home in place (demo + api)
 npm run perf-check        # cold start, CLS, transition FPS, bundle sizes
 npm run perf-transitions  # three push transitions + pop, plus a frame strip
 ```

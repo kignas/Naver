@@ -7,6 +7,14 @@ export type RestaurantTab = 'menu' | 'info';
 /** The boolean feed filters; the VEG toggle and the filter pills share these. */
 export type HomeFlag = 'vegOnly' | 'nearFast' | 'rating4' | 'under30' | 'under100';
 
+/**
+ * `loading` paints the restaurant skeleton, `empty` means the dish search found
+ * no restaurant at all (the original shows "No restaurants available yet" for
+ * that, and "No restaurants match your filters" only when the filters emptied a
+ * non-empty result).
+ */
+export type CategoryStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
+
 export interface HomeUiState {
   vegOnly: boolean;
   nearFast: boolean;
@@ -16,6 +24,13 @@ export interface HomeUiState {
   sortBy: HomeSort;
   activeFilterTab: string;
   scrollTop: number;
+  /** "What's on your mind?": the category filtered in place on Home. */
+  activeCategory: string | null;
+  categoryQuery: string | null;
+  categoryStatus: CategoryStatus;
+  categoryIds: number[];
+  /** Why the category search failed, shown in the feed's error block. */
+  categoryError: string | null;
 }
 
 export interface RestaurantUiState {
@@ -55,6 +70,11 @@ const initialHome: HomeUiState = {
   sortBy: 'recommended',
   activeFilterTab: 'SORT',
   scrollTop: 0,
+  activeCategory: null,
+  categoryQuery: null,
+  categoryStatus: 'idle',
+  categoryIds: [],
+  categoryError: null,
 };
 
 const initialRestaurant: RestaurantUiState = {

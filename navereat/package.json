@@ -18,6 +18,7 @@
     "perf-transitions": "node scripts/transition-check.mjs after",
     "statusbar-check": "vite-node scripts/statusbar-check.ts",
     "nav-check": "node scripts/nav-check.mjs",
+    "category-check": "node scripts/category-check.mjs",
     "transitions:frames": "node scripts/transition-frames.mjs after",
     "motion:evidence": "node scripts/motion-evidence.mjs",
     "sticky-check": "node scripts/sticky-check.mjs",

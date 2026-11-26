@@ -189,6 +189,8 @@ const apiOrders = demoOrders.map((order) => ({
   rider: { name: 'Rahul Das', phone: '+91 90000 12345', rating: 4.8, vehicle: 'WB 64 AB 1234' },
 }));
 
+const pause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
 const json = (route: import('playwright-core').Route, data: unknown): Promise<void> =>
   route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ success: true, data }) });
 
@@ -896,6 +898,153 @@ async function main(): Promise<void> {
     probes: ['#white-cart-root', '.u99-card-host'],
     note: 'no items in cart',
   });
+
+  // ── "What's on your mind?" filters Home in place (Item 19 part 3) ───
+  // The app keeps Home mounted in a route layer, so a click has to be aimed at
+  // the visible copy rather than at the first match in the document.
+  const originalCards = (expected: number) =>
+    home.original.waitForFunction(
+      (n) => document.querySelectorAll('#restaurant-list .u99-card-host').length === n,
+      expected,
+      { timeout: 15000 },
+    );
+
+  // The category captures compare the feed, not the cart bar an earlier step
+  // left behind (the seeded session carries 3 items): a cart-less context shows
+  // the same demo feed with nothing floating over the section crop.
+  const categoryContext = await makeContext('emptycart');
+  const categoryApp = await categoryContext.newPage();
+  await categoryApp.goto(`http://127.0.0.1:${appPort}/#/`, { waitUntil: 'domcontentloaded' });
+  await categoryApp.waitForFunction(
+    () => {
+      const layer =
+        [...document.querySelectorAll('.route-layer')].find(
+          (candidate) => candidate.querySelector('.home-screen') && getComputedStyle(candidate).visibility !== 'hidden',
+        ) ?? document;
+      return layer.querySelectorAll('#restaurant-list .u99-card-host:not(.rs-skeleton)').length === 8;
+    },
+    null,
+    { timeout: 20000 },
+  );
+  await categoryApp.evaluate(() => document.fonts.ready);
+  await stripChrome(categoryApp);
+  await categoryApp.waitForTimeout(400);
+
+  // Selected + filtered: "Momos" is sold by two restaurants, and the ring's
+  // label is also a substring of those dish names, so both search terms (the
+  // original sends the label, this app sends the ring's `query`) agree here.
+  await home.original.click('[data-category-name="Momos"]');
+  await categoryApp.locator('[data-category-name="Momos"]:visible').first().click();
+  await originalCards(2);
+  await categoryApp.waitForFunction(
+    () => {
+      const layer =
+        [...document.querySelectorAll('.route-layer')].find(
+          (candidate) => candidate.querySelector('.home-screen') && getComputedStyle(candidate).visibility !== 'hidden',
+        ) ?? document;
+      return layer.querySelectorAll('#restaurant-list .u99-card-host:not(.rs-skeleton)').length === 2;
+    },
+    null,
+    { timeout: 15000 },
+  );
+  console.log(
+    '[parity] category: original and app both list 2 restaurants for "Momos" in place (hash unchanged)',
+  );
+  await home.original.waitForTimeout(400);
+  await categoryApp.waitForTimeout(400);
+  await capture('home-category-selected', home.original, categoryApp, {
+    element: '#mind-section',
+    probes: ['.cat-item.is-selected', '.cat-item.is-selected .cat-name', '.cat-name'],
+    note: 'the tapped category is marked selected in place, no navigation',
+  });
+  // The section box is the comparison: it drops the hero (a deliberate header
+  // difference) and the floating nav (chrome the original does not have), so
+  // what is left is the title, the chips and the cards the category changed.
+  await capture('home-category-filtered', home.original, categoryApp, {
+    element: '#restaurants-section',
+    probes: ['#restaurants-title', '.u99-card-host', '.u99-restaurant-name'],
+    note: 'the Home feed filtered in place by the selected category',
+  });
+
+  // Empty: a category nobody sells. The original is told the same thing the
+  // demo search answers, so both sides receive "no dishes".
+  await home.original.route(/\/restaurants\/search/, (route) => json(route, { menuItems: [] }));
+  await home.original.click('[data-category-name="Puchka"]');
+  await categoryApp.locator('[data-category-name="Puchka"]:visible').first().click();
+  await home.original.waitForSelector('#restaurant-list .state-block', { timeout: 15000 });
+  await categoryApp.waitForFunction(
+    () => {
+      const layer =
+        [...document.querySelectorAll('.route-layer')].find(
+          (candidate) => candidate.querySelector('.home-screen') && getComputedStyle(candidate).visibility !== 'hidden',
+        ) ?? document;
+      return Boolean(layer.querySelector('#restaurant-list.state-block'));
+    },
+    null,
+    { timeout: 15000 },
+  );
+  await home.original.waitForTimeout(300);
+  await categoryApp.waitForTimeout(300);
+  // The section frame keeps the app's floating nav at its bottom edge: that is
+  // chrome the original does not have, and it is listed as intentional.
+  await capture('home-category-empty', home.original, categoryApp, {
+    element: '#restaurants-section',
+    probes: ['.state-block', '.state-title', '.state-sub', '.state-btn'],
+    note: 'a category with no dishes shows the same empty block on both sides',
+  });
+  await home.original.unroute(/\/restaurants\/search/);
+  await categoryContext.close();
+
+  // Skeleton: both sides given the same delay, so the loading state is the
+  // thing on screen. The app is in api mode for this one, because that is where
+  // its loading state is real; the fixtures are the same ones the original got.
+  {
+    const context = await makeContext('emptycart');
+    const slowSearch = async (route: import('playwright-core').Route): Promise<void> => {
+      if (/\/restaurants\/search/.test(route.request().url())) await pause(1400);
+      return mockApi(route);
+    };
+    const original = await context.newPage();
+    await original.route(originalApiRoute, slowSearch);
+    await original.goto(`http://127.0.0.1:${originalPort}/index.html`, { waitUntil: 'domcontentloaded' });
+    await original.waitForSelector('#restaurant-list .u99-card-host', { timeout: 20000 });
+    await stripChrome(original);
+    await freezeText(original);
+    await original.evaluate(() => document.fonts.ready);
+    const app = await context.newPage();
+    await app.addInitScript(() => localStorage.setItem('navereat_data_source', 'api'));
+    await app.route('https://api.eatswada.com/api/**', slowSearch);
+    await app.goto(`http://127.0.0.1:${appPort}/#/`, { waitUntil: 'domcontentloaded' });
+    await app.waitForFunction(
+      () => document.querySelectorAll('#restaurant-list .u99-card-host:not(.rs-skeleton)').length > 0,
+      null,
+      { timeout: 30000 },
+    );
+    await app.evaluate(() => document.fonts.ready);
+    await stripChrome(app);
+    await original.waitForTimeout(600);
+    await app.waitForTimeout(600);
+    // The original's free-delivery popup fires on its own schedule; strip again
+    // so it cannot swallow the tap.
+    await stripChrome(original);
+    await original.click('[data-category-name="Momos"]');
+    await app.locator('[data-category-name="Momos"]:visible').first().click();
+    await original.waitForSelector('#restaurant-list .rs-skeleton, #restaurant-list .u99-card-host.rs-skeleton', {
+      timeout: 8000,
+    });
+    await app.waitForFunction(
+      () => document.querySelectorAll('#restaurant-list .rs-skeleton').length === 2,
+      null,
+      { timeout: 8000 },
+    );
+    await pause(250);
+    await capture('home-category-skeleton', original, app, {
+      element: '#restaurants-section',
+      probes: ['.rs-skeleton', '.u99-restaurant-card'],
+      note: 'the same card-shaped skeleton while the category search runs (app in api mode)',
+    });
+    await context.close();
+  }
 
   // ── Search overlay ──────────────────────────────────────────────────
   {

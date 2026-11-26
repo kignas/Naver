@@ -1,6 +1,7 @@
 import { lazy, memo, Suspense, useCallback, useMemo, type RefObject } from 'react';
 import { restaurants, type MenuItem, type Restaurant } from '../../data/demo';
 import { useHomeFeed } from '../../data';
+import { clearCategory, retryCategory } from '../../lib/categoryMode';
 import { useAppNav } from '../../lib/navigation';
 import { useCustomize } from '../../lib/customizeContext';
 import { useAppStore } from '../../store/appStore';
@@ -87,6 +88,11 @@ export const RestaurantFeed = memo(function RestaurantFeed({ ready, scrollerRef 
   const under30 = useUiStore((state) => state.home.under30);
   const under100 = useUiStore((state) => state.home.under100);
   const sortBy = useUiStore((state) => state.home.sortBy);
+  const activeCategory = useUiStore((state) => state.home.activeCategory);
+  const categoryStatus = useUiStore((state) => state.home.categoryStatus);
+  const categoryIds = useUiStore((state) => state.home.categoryIds);
+  const categoryError = useUiStore((state) => state.home.categoryError);
+  const resetHomeFilters = useUiStore((state) => state.resetHomeFilters);
   const cart = useAppStore((state) => state.cart);
   const addItem = useAppStore((state) => state.addItem);
   const decrementItem = useAppStore((state) => state.decrementItem);
@@ -103,8 +109,17 @@ export const RestaurantFeed = memo(function RestaurantFeed({ ready, scrollerRef 
   );
   const feedReady = ready && (feedState.mode !== 'api' || (!feedState.loading && !feedState.error));
 
+  /* The category narrows the feed before the pills do: the original intersects
+     `categoryMode.restaurantIds` with the active filters, so a category plus a
+     pill can only ever be emptier than either alone. */
+  const categorySet = useMemo(
+    () => (activeCategory && categoryStatus === 'ready' ? new Set(categoryIds) : null),
+    [activeCategory, categoryIds, categoryStatus],
+  );
+
   const filteredRestaurants = useMemo(() => {
     const list = feed.filter((restaurant) => {
+      if (categorySet && !categorySet.has(restaurant.id)) return false;
       if (vegOnly && !(restaurant.pureVeg ?? restaurant.menu.every((item) => item.isVeg))) return false;
       if (nearFast && (restaurant.deliveryMax ?? 999) > 30) return false;
       if (rating4 && Number(restaurant.rating) < 4) return false;
@@ -116,7 +131,7 @@ export const RestaurantFeed = memo(function RestaurantFeed({ ready, scrollerRef 
     if (sortBy === 'delivery') list.sort((a, b) => (a.deliveryMax ?? 999) - (b.deliveryMax ?? 999));
     if (sortBy === 'distance') list.sort((a, b) => (a.distanceKm ?? 999) - (b.distanceKm ?? 999));
     return list;
-  }, [feed, vegOnly, nearFast, rating4, under30, under100, sortBy]);
+  }, [feed, categorySet, vegOnly, nearFast, rating4, under30, under100, sortBy]);
 
   const openRestaurant = useCallback(
     (restaurant: Restaurant) => {
@@ -143,6 +158,11 @@ export const RestaurantFeed = memo(function RestaurantFeed({ ready, scrollerRef 
   );
 
   const shouldVirtualize = filteredRestaurants.length > VIRTUALIZE_THRESHOLD;
+  const categoryLoading = categoryStatus === 'loading';
+  const categoryFailed = categoryStatus === 'error';
+  // `empty` is the dish search finding no restaurant at all; an empty filtered
+  // list after a non-empty search is the filters' fault and says so.
+  const categoryEmpty = categoryStatus === 'empty';
 
   const renderCard = useCallback(
     (restaurant: Restaurant, animate: boolean) => (
@@ -166,23 +186,42 @@ export const RestaurantFeed = memo(function RestaurantFeed({ ready, scrollerRef 
     <section className="section" id="restaurants-section">
       <div className="sec-head">
         <h2 className="sec-title" id="restaurants-title">
-          Restaurants near you
+          {activeCategory ? `${activeCategory} near you` : 'Restaurants near you'}
         </h2>
       </div>
-      {!feedReady ? (
+      {!feedReady || categoryLoading ? (
         <div id="restaurant-list">
           <RestaurantSkeleton />
           <RestaurantSkeleton />
         </div>
-      ) : feedState.mode === 'api' && feedState.error ? (
+      ) : (feedState.mode === 'api' && feedState.error) || categoryFailed ? (
         <div className="state-block" id="restaurant-list">
           <span className="state-icon" aria-hidden="true">
             <Icon name="solid:circle-exclamation" size={40} />
           </span>
           <p className="state-title">Couldn&apos;t load restaurants</p>
-          <p className="state-sub">{feedState.error}</p>
-          <button type="button" className="state-btn" id="home-retry-btn" onClick={feedState.reload}>
+          <p className="state-sub">{(feedState.mode === 'api' && feedState.error) || categoryError}</p>
+          <button
+            type="button"
+            className="state-btn"
+            id="home-retry-btn"
+            onClick={() => {
+              clearCategory();
+              feedState.reload();
+            }}
+          >
             Try Again
+          </button>
+        </div>
+      ) : categoryEmpty ? (
+        <div className="state-block" id="restaurant-list">
+          <span className="state-icon" aria-hidden="true">
+            <Icon name="solid:store" size={40} />
+          </span>
+          <p className="state-title">No restaurants available yet</p>
+          <p className="state-sub">We&apos;re not delivering here right now. Please check back soon.</p>
+          <button type="button" className="state-btn" id="home-retry-btn" onClick={() => void retryCategory()}>
+            Refresh
           </button>
         </div>
       ) : filteredRestaurants.length ? (
@@ -200,7 +239,16 @@ export const RestaurantFeed = memo(function RestaurantFeed({ ready, scrollerRef 
           </div>
         )
       ) : (
-        <div className="home-empty">No restaurants match these filters. Try clearing a filter.</div>
+        <div className="state-block" id="restaurant-list">
+          <span className="state-icon" aria-hidden="true">
+            <Icon name="solid:filter-circle-xmark" size={40} />
+          </span>
+          <p className="state-title">No restaurants match your filters</p>
+          <p className="state-sub">Try changing or clearing your filters.</p>
+          <button type="button" className="state-btn" id="home-clear-filters" onClick={resetHomeFilters}>
+            Clear filters
+          </button>
+        </div>
       )}
     </section>
   );
