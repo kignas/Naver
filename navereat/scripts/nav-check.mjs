@@ -657,7 +657,428 @@ try {
   );
   await dbgContext.close();
 
-  // ---- 12. Side-by-side against the spec reference. ----------------------
+  // ---- 12. Scroll hide/show (Item 19, part 2) ----------------------------
+  // Real touch scrolls through CDP on both tab scrollers, with the cart bar on
+  // screen. Every assertion reads the DOM after the gesture has settled, plus
+  // the composited transform of both bars.
+  const ORDER_SEED = Array.from({ length: 6 }, (_, index) => ({
+    id: `NAV-1900${index}`,
+    restaurantId: 2,
+    restaurantName: index % 2 ? 'Biryani Bhavan' : 'Pizza Palace',
+    lines: [{ name: index % 2 ? 'Hyderabadi Chicken Biryani' : 'Margherita Pizza', qty: 1, price: 249 }],
+    subtotal: 249,
+    platformFee: 5,
+    discount: 0,
+    total: 254,
+    status: index === 0 ? 'on_the_way' : 'delivered',
+    placedAt: `2026-11-1${index}T12:24:00+05:30`,
+    eta: '12 mins',
+    paymentMethod: 'UPI · demo@upi',
+    address: '12, 4th Cross, Indiranagar, Bengaluru',
+  }));
+
+  const scrollContext = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+  await seed(scrollContext);
+  await scrollContext.addInitScript((orders) => {
+    localStorage.setItem(
+      'nearbite_cart',
+      JSON.stringify({
+        'Filter Coffee': {
+          quantity: 1,
+          price: 49,
+          originalPrice: 70,
+          resId: 1,
+          resName: 'Foodie Dosa Restaurant',
+          restaurantName: 'Foodie Dosa Restaurant',
+          menuItem: 'fd9',
+          name: 'Filter Coffee',
+          isVeg: true,
+        },
+      }),
+    );
+    localStorage.setItem('nearbite_orders', JSON.stringify(orders));
+  }, ORDER_SEED);
+
+  const scrollPage = await scrollContext.newPage();
+  const cdp = await scrollContext.newCDPSession(scrollPage);
+  await cdp.send('Page.enable');
+  const screencast = [];
+  cdp.on('Page.screencastFrame', (event) => {
+    screencast.push({ data: event.data, ts: Date.now() });
+    void cdp.send('Page.screencastFrameAck', { sessionId: event.sessionId }).catch(() => undefined);
+  });
+
+  const installMeters = () =>
+    scrollPage.evaluate(() => {
+      const meter = (window.__scrollMeter = { frames: [], on: false, cls: 0, clsEntries: 0 });
+      try {
+        new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            if (!entry.hadRecentInput) {
+              meter.cls += entry.value;
+              meter.clsEntries += 1;
+            }
+          }
+        }).observe({ type: 'layout-shift', buffered: false });
+      } catch {
+        /* layout-shift unsupported */
+      }
+      window.__scrollFpsStart = () => {
+        meter.frames = [];
+        meter.on = true;
+        const loop = (time) => {
+          if (!meter.on) return;
+          meter.frames.push(time);
+          requestAnimationFrame(loop);
+        };
+        requestAnimationFrame(loop);
+      };
+      window.__scrollFpsStop = () => {
+        meter.on = false;
+        const frames = meter.frames;
+        const span = frames.length > 1 ? frames[frames.length - 1] - frames[0] : 0;
+        const gaps = frames.slice(1).map((time, index) => time - frames[index]);
+        return {
+          frames: frames.length,
+          fps: span > 0 ? Number((((frames.length - 1) * 1000) / span).toFixed(1)) : 0,
+          maxGapMs: gaps.length ? Number(Math.max(...gaps).toFixed(1)) : 0,
+          longFrames: gaps.filter((gap) => gap > 25).length,
+        };
+      };
+      window.__scrollCls = () => Number(meter.cls.toFixed(4));
+      window.__scrollClsReset = () => {
+        meter.cls = 0;
+        meter.clsEntries = 0;
+      };
+    });
+
+  const readBars = (scrollerSelector = '.home-scroll') =>
+    scrollPage.evaluate((selector) => {
+      const nav = document.querySelector('.bottom-nav');
+      const cart = document.querySelector('#white-cart-root');
+      const scroller = document.querySelector(selector);
+      const homeScroller = document.querySelector('.home-scroll');
+      const navStyle = nav ? getComputedStyle(nav) : null;
+      const cartStyle = cart ? getComputedStyle(cart) : null;
+      const navRect = nav?.getBoundingClientRect();
+      const cartRect = cart?.getBoundingClientRect();
+      return {
+        hash: location.hash,
+        scrollHidden: document.body.classList.contains('nav-scroll-hidden'),
+        resetting: document.body.classList.contains('nav-scroll-reset'),
+        navClass: nav?.className ?? '',
+        navTransform: navStyle?.transform ?? '',
+        navOpacity: Number(navStyle?.opacity ?? -1),
+        navBottom: navRect ? Math.round(innerHeight - navRect.bottom) : -1,
+        navHeight: navRect ? Math.round(navRect.height) : -1,
+        cartPresent: Boolean(cart),
+        cartClass: cart?.className ?? '',
+        cartTranslate: cartStyle?.translate ?? 'none',
+        cartBottom: cartRect ? Math.round(innerHeight - cartRect.bottom) : -1,
+        cartVisible: cartStyle ? cartStyle.display !== 'none' : false,
+        scroller: selector,
+        scrollTop: scroller ? Math.round(scroller.scrollTop) : -1,
+        homeScrollTop: homeScroller ? Math.round(homeScroller.scrollTop) : -1,
+        paddingBottom: scroller ? getComputedStyle(scroller).paddingBottom : '',
+        contentHeight: scroller ? scroller.scrollHeight : -1,
+        bodyHeight: document.body.scrollHeight,
+      };
+    }, scrollerSelector);
+
+  const translateY = (value) => {
+    if (!value || value === 'none') return 0;
+    const parts = value.replace(/matrix3d\(|matrix\(|translate3d\(|translate\(|\)/g, '').split(',').map((part) => Number(part.trim()));
+    // computed transform is a matrix: ty is element 5 (2d) or 13 (3d)
+    if (value.startsWith('matrix3d')) return parts[13] ?? 0;
+    if (value.startsWith('matrix')) return parts[5] ?? 0;
+    return Number(parts[1] ?? 0);
+  };
+
+  /** The cart bar's `translate` is two values; the second one is the lift. */
+  const cartLift = (value) => {
+    if (!value || value === 'none') return 0;
+    const parts = value.split(' ').map((part) => parseFloat(part));
+    return parts.length > 1 ? parts[1] : 0;
+  };
+
+  /**
+    * A real finger drag: touchStart, stepped touchMove, touchEnd. Positive
+    * distance drags the finger up (the page scrolls down). Chromium scrolls the
+    * route scroller natively, so this exercises the same path as a phone.
+    */
+  const drag = async (distance) => {
+    const view = scrollPage.viewportSize();
+    const x = Math.round(view.width / 2);
+    // Start clear of both bars: the cart bar covers the bottom ~150px on Home
+    // and the tab bar the last ~76px.
+    const startY = Math.round(view.height * (distance >= 0 ? 0.72 : 0.28));
+    const room = distance >= 0 ? startY - 100 : view.height - 100 - startY;
+    const travel = Math.min(distance, room);
+    const steps = 12;
+    const step = travel / steps;
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: startY }] });
+    for (let index = 1; index <= steps; index += 1) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: Math.round(startY - step * index) }] });
+      await sleep(14);
+    }
+    // Creep the last pixels so the release velocity is near zero: the gesture
+    // lands where the finger stopped instead of flinging past it.
+    let y = Math.round(startY - travel);
+    for (let index = 0; index < 3; index += 1) {
+      y -= 1;
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y }] });
+      await sleep(35);
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await sleep(460);
+  };
+  const scrollDown = (px) => drag(px);
+  const scrollUp = (px) => drag(-px);
+
+  /**
+   * Six real screenshots across the slide, taken in slow motion: a 240ms move
+   * is over before six screenshots can land (~50ms each), so the capture runs
+   * with the same transition stretched to 2.4s linear. Geometry, easing shape
+   * and the compositor path are unchanged; only the clock is stretched, and the
+   * settled states are captured separately at the real duration.
+   */
+  const SLOW_CSS = 'body.nav-slow-capture .bottom-nav.nav-float, body.nav-slow-capture #white-cart-root { transition-duration: 2.4s !important; transition-timing-function: linear !important; }';
+  const recordFrames = async (name, scrollerSelector, top) => {
+    const clip = { x: 0, y: 844 - 260, width: 390, height: 260 };
+    const frames = [];
+    await scrollPage.evaluate((css) => {
+      if (!document.getElementById('nav-slow-capture')) {
+        const style = document.createElement('style');
+        style.id = 'nav-slow-capture';
+        style.textContent = css;
+        document.head.appendChild(style);
+      }
+      document.body.classList.add('nav-slow-capture');
+    }, SLOW_CSS);
+    await scrollPage.evaluate(([selector, y]) => document.querySelector(selector).scrollTo({ top: y, behavior: 'instant' }), [scrollerSelector, top]);
+    for (let index = 0; index < 6; index += 1) {
+      const state = await scrollPage.evaluate(() => {
+        const nav = document.querySelector('.bottom-nav');
+        const cart = document.querySelector('#white-cart-root');
+        const style = getComputedStyle(nav);
+        return {
+          nav: style.transform,
+          opacity: Number(style.opacity),
+          cart: cart ? getComputedStyle(cart).translate : 'none',
+          hidden: document.body.classList.contains('nav-scroll-hidden'),
+        };
+      });
+      frames.push({ state, png: PNG.sync.read(await scrollPage.screenshot({ clip })) });
+      await sleep(330);
+    }
+    await scrollPage.evaluate(() => {
+      document.body.classList.remove('nav-slow-capture');
+      document.getElementById('nav-slow-capture')?.remove();
+    });
+    await sleep(400);
+    await writeFile(path.join(outDir, `nav-${name}-strip.png`), PNG.sync.write(stack(frames.map((frame) => frame.png), 4)));
+    return { name, frames: frames.length, states: frames.map((frame) => frame.state) };
+  };
+  const scrollReport = {};
+  const runScroller = async (label, route, scrollerSelector) => {
+    await scrollPage.goto(`${base}/#${route}`, { waitUntil: 'networkidle' });
+    await scrollPage.waitForSelector('.bottom-nav');
+    await scrollPage.waitForFunction((selector) => document.querySelector(selector)?.scrollHeight > 0, scrollerSelector, { timeout: 8000 });
+    await sleep(700);
+    await scrollPage.evaluate((selector) => document.querySelector(selector).scrollTo(0, 0), scrollerSelector);
+    await sleep(260);
+    await installMeters();
+
+    const read = () => readBars(scrollerSelector);
+    const top = await read();
+    // The cart bar only exists on the Home family of routes.
+    const hasCart = top.cartPresent && top.cartVisible;
+    check(`${label}: bar visible at the top`, !top.scrollHidden && top.navOpacity === 1 && Math.abs(translateY(top.navTransform)) < 0.5, `${top.navTransform} ${top.navOpacity}`);
+    if (hasCart) check(`${label}: cart bar is docked above the nav`, top.cartBottom > 60, `bottom=${top.cartBottom} translate=${top.cartTranslate}`);
+
+    // Down: the bar and the cart bar leave together.
+    await scrollPage.evaluate(() => window.__scrollClsReset());
+    await scrollPage.evaluate(() => window.__scrollFpsStart());
+    await scrollDown(700);
+    await scrollPage.evaluate(() => window.__scrollFpsStop());
+    const hidden = await read();
+    const hideFps = await scrollPage.evaluate(() => window.__scrollFpsStop());
+    check(`${label}: scrolling down hides the bar`, hidden.scrollHidden && hidden.navOpacity < 0.05, `${hidden.navTransform} ${hidden.navOpacity}`);
+    check(
+      `${label}: bar is a full footprint below the edge`,
+      Math.abs(translateY(hidden.navTransform) - (top.navHeight + top.navBottom + 16)) <= 1.5,
+      `ty=${translateY(hidden.navTransform)} expected=${top.navHeight + top.navBottom + 16}`,
+    );
+    if (hasCart) {
+      check(`${label}: cart bar follows it down`, Math.abs(cartLift(hidden.cartTranslate) - (top.cartBottom - 12)) <= 1.5, `translate=${hidden.cartTranslate} lift=${cartLift(hidden.cartTranslate)}`);
+    }
+    check(`${label}: the scroll actually moved`, hidden.scrollTop > 300, String(hidden.scrollTop));
+    check(`${label}: reserved bottom padding is unchanged`, hidden.paddingBottom === top.paddingBottom && hidden.contentHeight === top.contentHeight, `${top.paddingBottom} → ${hidden.paddingBottom}`);
+
+    // Up: both come back.
+    await scrollUp(320);
+    const shown = await read();
+    check(`${label}: scrolling up shows the bar`, !shown.scrollHidden && shown.navOpacity === 1 && Math.abs(translateY(shown.navTransform)) < 0.5, `${shown.navTransform} ${shown.navOpacity}`);
+    if (hasCart) check(`${label}: cart bar returns with it`, Math.abs(cartLift(shown.cartTranslate)) < 0.5, `translate=${shown.cartTranslate}`);
+    const cls = await scrollPage.evaluate(() => window.__scrollCls());
+    check(`${label}: no layout shift while the bars move`, cls <= 0.01, `cls=${cls}`);
+    check(`${label}: scroll runs at 60fps`, hideFps.fps >= 55, `${hideFps.fps}fps, ${hideFps.longFrames} long frames`);
+
+    // Evidence strips: from the top, jump down 760px (hides), then back up to
+    // 260px (shows), capturing six frames of each slide.
+    await scrollPage.evaluate((selector) => document.querySelector(selector).scrollTo({ top: 0, behavior: 'instant' }), scrollerSelector);
+    await sleep(420);
+    const stillClip = { x: 0, y: 844 - 260, width: 390, height: 260 };
+    await writeFile(path.join(outDir, `nav-${label}-visible.png`), PNG.sync.write(PNG.sync.read(await scrollPage.screenshot({ clip: stillClip }))));
+    const hideStrip = await recordFrames(`${label}-hide`, scrollerSelector, 760);
+    await writeFile(path.join(outDir, `nav-${label}-hidden.png`), PNG.sync.write(PNG.sync.read(await scrollPage.screenshot({ clip: stillClip }))));
+    const showStrip = await recordFrames(`${label}-show`, scrollerSelector, 260);
+    await sleep(200);
+
+    // A tiny jitter must not move the bar.
+    await scrollDown(6);
+    const jitter = await read();
+    check(`${label}: a 6px jitter does not hide the bar`, !jitter.scrollHidden, `scrollTop=${jitter.scrollTop}`);
+
+    // Back to the top: always visible, whatever the direction.
+    await scrollPage.evaluate((selector) => document.querySelector(selector).scrollTo(0, 0), scrollerSelector);
+    await sleep(300);
+    const backTop = await read();
+    check(`${label}: visible again at the top`, !backTop.scrollHidden && backTop.scrollTop < 40, `scrollTop=${backTop.scrollTop}`);
+
+    scrollReport[label] = { top, hidden, shown, jitter, backTop, cls, hideFps, hideStrip, showStrip };
+  };
+
+  await runScroller('home', '/', '.home-scroll');
+  await runScroller('history', '/orders', '.orders-page');
+
+  // ---- 12b. The bar comes back instantly on a route change. --------------
+  await scrollPage.goto(`${base}/#/`, { waitUntil: 'networkidle' });
+  await sleep(900);
+  await installMeters();
+  await scrollDown(700);
+  const beforePush = await readBars('.home-scroll');
+  check('route: hidden before the push', beforePush.scrollHidden);
+  await scrollPage.evaluate(() => {
+    window.__navMotion = [];
+    window.__navMotionFrom = Number.MAX_SAFE_INTEGER;
+    // The app dispatches this synchronously at the start of the push, before
+    // anything moves: frames before it are the bar's deliberate off-screen
+    // parking, not motion during the slide.
+    window.addEventListener('navereat:before-navigate', () => {
+      window.__navMotionFrom = performance.now();
+    }, { once: true });
+    const nav = document.querySelector('.bottom-nav');
+    const sample = () => {
+      if (!window.__navMotion) return;
+      const style = getComputedStyle(nav);
+      window.__navMotion.push({ t: Math.round(performance.now()), transform: style.transform, opacity: style.opacity, cls: document.body.className });
+      requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+    window.addEventListener('navereat:transition-end', () => {
+      window.__navMotionStop = true;
+      window.__navMotion = window.__navMotion.slice();
+      window.__navMotionDone = true;
+    });
+  });
+  // The feed is scrolled down, so tap a real card that is on screen (a
+  // synthetic event would bypass the app's navigation wrapper).
+  const cardPoint = await scrollPage.evaluate(() => {
+    for (const head of document.querySelectorAll('#restaurant-list .u99-restaurant-head')) {
+      const rect = head.getBoundingClientRect();
+      if (rect.top > 140 && rect.bottom < innerHeight - 160) {
+        return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + Math.min(40, rect.height / 2)) };
+      }
+    }
+    return null;
+  });
+  if (!cardPoint) throw new Error('route: no restaurant card on screen to tap');
+  await scrollPage.mouse.click(cardPoint.x, cardPoint.y);
+  await scrollPage.waitForFunction(() => location.hash.startsWith('#/restaurant/'), { timeout: 6000 });
+  await sleep(1200);
+  const onDetail = await readBars('.home-scroll');
+  check('route: detail page has no scroll-hidden state', !onDetail.scrollHidden && !onDetail.navClass.includes('is-visible'), `${onDetail.hash} ${onDetail.navClass}`);
+  await scrollPage.evaluate(() => history.back());
+  await scrollPage.waitForFunction(() => location.hash === '#/', { timeout: 6000 });
+  await sleep(1400);
+  const afterBack = await readBars('.home-scroll');
+  const motion = await scrollPage.evaluate(() => {
+    const frames = (window.__navMotion ?? []).filter((frame) => frame.t >= (window.__navMotionFrom ?? 0));
+    const moving = frames.filter((frame) => {
+      const ty = Number((frame.transform.match(/matrix(?:3d)?\(([^)]+)\)/)?.[1] ?? '0,0').split(',')[5] ?? 0);
+      return Math.abs(ty) > 0.5;
+    });
+    return { frames: frames.length, moving: moving.slice(0, 4), done: Boolean(window.__navMotionDone) };
+  });
+  check('route: bar is back and in place after the pop', !afterBack.scrollHidden && afterBack.navOpacity === 1 && Math.abs(translateY(afterBack.navTransform)) < 0.5, `${afterBack.navTransform} ${afterBack.navOpacity}`);
+  check('route: bar never slid during push/pop', motion.moving.length === 0, `${motion.frames} frames sampled, ${motion.moving.length} moved`);
+
+  // ---- 12c. Search overlay, sheet and tab change reset the state. --------
+  await scrollDown(700);
+  const beforeOverlay = await readBars('.home-scroll');
+  check('search: hidden before opening', beforeOverlay.scrollHidden);
+  await scrollPage.locator('.search-box').first().click();
+  await sleep(700);
+  await scrollPage.keyboard.press('Escape');
+  await sleep(800);
+  const afterOverlay = await readBars('.home-scroll');
+  check('search: closing the overlay shows the bar again', !afterOverlay.scrollHidden && afterOverlay.navOpacity === 1, `${afterOverlay.navClass} ${afterOverlay.navOpacity}`);
+
+  await scrollDown(700);
+  const beforeTab = await readBars('.home-scroll');
+  check('tab: hidden before the switch', beforeTab.scrollHidden);
+  const ghost = await scrollPage.evaluate(() => {
+    const nav = document.querySelector('.bottom-nav');
+    const rect = nav.getBoundingClientRect();
+    const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    return {
+      offscreen: rect.top >= innerHeight - 1,
+      inert: getComputedStyle(nav).pointerEvents === 'none',
+      hitsNav: Boolean(hit && nav.contains(hit)),
+    };
+  });
+  check('tab: hidden bar is off-screen and inert', ghost.offscreen && ghost.inert && !ghost.hitsNav, JSON.stringify(ghost));
+  // The real user path: scroll up a little, the bar returns, then tap a tab.
+  await scrollUp(60);
+  const revealed = await readBars('.home-scroll');
+  check('tab: scrolling up brings the bar back', !revealed.scrollHidden && revealed.navOpacity === 1, `${revealed.navOpacity}`);
+  await scrollPage.click('[data-nav-item="/orders"]');
+  await sleep(1200);
+  const afterTab = await readBars('.orders-page');
+  check('tab: switching tabs shows the bar', !afterTab.scrollHidden && afterTab.navOpacity === 1 && afterTab.hash === '#/orders', `${afterTab.hash} ${afterTab.navOpacity}`);
+  check('tab: the new tab starts at the top', afterTab.scrollTop < 40, String(afterTab.scrollTop));
+
+  // ---- 12d. 6× CPU throttle: the hide/show costs nothing measurable. ----
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 6 });
+  await sleep(300);
+  await installMeters();
+  // Both windows are a fixed 1 s around a drag, so the two numbers are
+  // measured under identical conditions; only the toggle differs.
+  const measureThrottled = async (dragPx) => {
+    await scrollPage.evaluate(() => window.__scrollFpsStart());
+    await sleep(250);
+    if (dragPx) await scrollDown(dragPx);
+    await sleep(650);
+    return scrollPage.evaluate(() => window.__scrollFpsStop());
+  };
+  await scrollPage.evaluate(() => document.querySelector('.orders-page').scrollTo(0, 0));
+  await sleep(400);
+  const throttleToggle = await measureThrottled(700);
+  await sleep(500);
+  const throttleQuiet = await measureThrottled(400);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+  check(
+    '6x cpu: toggling the bar costs no more than a plain scroll',
+    throttleToggle.fps >= throttleQuiet.fps - 3 && throttleToggle.longFrames <= throttleQuiet.longFrames + 3,
+    `toggle ${throttleToggle.fps}fps/${throttleToggle.longFrames} long vs quiet ${throttleQuiet.fps}fps/${throttleQuiet.longFrames} long`,
+  );
+  check('6x cpu: still above 30fps', throttleToggle.fps >= 30, `${throttleToggle.fps}fps`);
+
+  report.scroll = { ...scrollReport, throttleToggle, throttleQuiet, motion };
+  await scrollContext.close();
+
+  // ---- 13. Side-by-side against the spec reference. ----------------------
   const appNav = PNG.sync.read(await page.screenshot({ clip: navClip }));
   await writeFile(path.join(outDir, 'nav-home-crop.png'), PNG.sync.write(appNav));
   await writeFile(path.join(outDir, 'nav-vs-spec.png'), PNG.sync.write(stack([crop(appNav, 0, 0, 390, navClip.height), crop(specShot, 0, 0, 390, navClip.height)], 10)));

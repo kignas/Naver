@@ -10,3 +10,20 @@
 #white-cart-root.wc-covered {
   pointer-events: none;
 }
+
+/* Item 19 part 2: when the tab bar is scrolled away the cart bar follows it
+   down to the bottom edge (safe-area aware, since the layout box already sits
+   on --nb-cart-bottom). `translate` is a separate property from `transform`, so
+   the bar's own bump/enter/exit keyframes are not overwritten. */
+#white-cart-root {
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), translate 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+body.nav-scroll-hidden #white-cart-root {
+  translate: 0 var(--wc-lift, 0px);
+}
+
+/* A route change puts both bars back without animating. */
+body.nav-scroll-reset #white-cart-root {
+  transition: none;
+}

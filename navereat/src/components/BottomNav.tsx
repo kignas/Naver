@@ -3,6 +3,8 @@ import { useLocation } from 'react-router-dom';
 import { isTabPath, useAppNav } from '../lib/navigation';
 import { useSearchStore } from '../store/searchStore';
 import { lightImpact } from '../lib/haptics';
+import { navScrollHide } from '../lib/navScrollHide';
+import { sheetCount, subscribeSheetCount } from '../lib/sheetStack';
 import { NavGlyph, type NavGlyphName } from './NavGlyph';
 import '../styles/bottom-nav.css';
 
@@ -95,6 +97,49 @@ export function BottomNav() {
     document.body.classList.toggle('has-bottom-nav', visible);
     return () => document.body.classList.remove('has-bottom-nav');
   }, [visible]);
+
+  // ---- Scroll hide/show (Item 19, part 2) ---------------------------------
+  // Only the two tab routes have a bar that can be scrolled away, and each has
+  // its own scroller. Anything else (a push starting, a sheet, the search
+  // overlay, a tab change) puts the bar back instantly, so the pop slide always
+  // reveals it in place.
+  useEffect(() => {
+    if (!onTabRoute) {
+      navScrollHide.detach();
+      navScrollHide.reset(true);
+      return undefined;
+    }
+    const scroller = document.querySelector<HTMLElement>(pathname === '/orders' ? '.orders-page' : '.home-scroll');
+    navScrollHide.attach(scroller);
+    navScrollHide.reset(true);
+    return () => navScrollHide.detach();
+  }, [onTabRoute, pathname]);
+
+  useEffect(() => {
+    const onBeforeNavigate = () => navScrollHide.reset(true);
+    window.addEventListener('navereat:before-navigate', onBeforeNavigate);
+    const onPainted = () => navScrollHide.measure();
+    window.addEventListener('navereat:home-painted', onPainted);
+    return () => {
+      window.removeEventListener('navereat:before-navigate', onBeforeNavigate);
+      window.removeEventListener('navereat:home-painted', onPainted);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (searchOpen) navScrollHide.reset(true);
+  }, [searchOpen]);
+
+  useEffect(() => {
+    let count = sheetCount();
+    return subscribeSheetCount(() => {
+      const next = sheetCount();
+      if (next === count) return;
+      count = next;
+      navScrollHide.reset(true);
+    });
+  }, []);
+
   const [metrics, setMetrics] = useState({ x: 0, width: 0 });
 
   const measure = useCallback(() => {
@@ -148,6 +193,7 @@ export function BottomNav() {
       moved: false,
       captured: false,
     };
+    navScrollHide.suspend('drag', true);
     setDragging(true);
   };
 
@@ -171,6 +217,7 @@ export function BottomNav() {
     if (!drag || drag.pointerId !== event.pointerId) return;
     dragRef.current = null;
     setDragging(false);
+    navScrollHide.suspend('drag', false);
     if (!drag.moved) return;
 
     suppressClickRef.current = true;
@@ -201,6 +248,7 @@ export function BottomNav() {
   const cancelDrag = () => {
     dragRef.current = null;
     setDragging(false);
+    navScrollHide.suspend('drag', false);
     measure();
   };
 

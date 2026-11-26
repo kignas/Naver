@@ -327,7 +327,8 @@ Floating bottom nav (hence the cart bar sitting 74 px higher), brand rename
 amounts, restaurant sections), header collapse/pinned search row (the original
 scrolls its header away, so `home-header-collapsed` = 90 % is expected), the
 search-row 0.94 compaction (18 % element diff), the 5th filter rail label, the
-royal-blue Home header, the animated hero banner, and the two-tab nav.
+oxblood Home header, the animated hero banner, and the two-tab nav (with its
+scroll hide/show).
 
 ### The tab bar (Item 19)
 
@@ -337,6 +338,45 @@ measured geometry, its original SVG glyphs and its haptics are described in the
 README (“Tab bar: the measured look, the glyphs, the haptics”). `nav-check`
 asserts the ratios, the two-tone icon states, the haptic call counts and the
 reduced-motion behaviour, and writes its evidence to `verify/item19/`.
+
+#### The bar hides on scroll down and returns on scroll up (part 2)
+
+The tab bar is chrome the original does not have, so this is a modelled
+behaviour (Zomato's floating bar) rather than a port, and it is listed as an
+intentional difference.
+
+* **One controller**, `src/lib/navScrollHide.ts`: one passive `scroll` listener
+  on the tab's own scroller (`.home-scroll` on Home, `.orders-page` on History),
+  one `requestAnimationFrame` per frame. The handler reads `scrollTop` and
+  toggles a class on `<body>`; nothing re-renders React.
+* **No layout reads in the handler.** The scrollable range is measured when the
+  scroller is attached, on `resize`, 160 ms after the scroll settles and on
+  `navereat:home-painted`. Rubber-band positions are clamped to the range before
+  the delta is taken, so iOS bounce never reads as travel.
+* **Direction from accumulated deltas**, 12 px threshold, reset on every flip and
+  whenever the bar is forced visible, so jitter cannot flip it.
+* **Always visible**: `scrollTop < 40`, when the content is not scrollable,
+  during a pill drag (`suspend('drag')`), while the search overlay is open, when
+  a sheet opens or closes, and after any route change.
+* **The move**: `body.nav-scroll-hidden` translates the bar by
+  `nav height + bottom offset + 16 px` (92 px at 390×844) and fades it to 0 in
+  240 ms ease-out; `pointer-events: none` while it is away. The bar's layout box
+  never moves, so the reserved padding below the feed is constant (192 px on
+  Home, 112 px on History, before and after).
+* **The cart bar follows** through its own `translate` property
+  (`--wc-lift`, 76 px on Home), so the bar's bump/enter/exit keyframes (which
+  animate `transform`) are untouched.
+* **Route changes reset it instantly**, without a transition, on
+  `navereat:before-navigate` — so a push starts from a bar that is already in
+  place and a pop reveals it in place. `nav-check` samples every frame of a
+  Home → Restaurant → back cycle and needs zero moved frames (160 sampled).
+
+`nav-check` performs real CDP touch drags on both tab scrollers and records, per
+step: the body class, the bar's computed `transform`/`opacity`, the cart bar's
+`translate`, the scroll offset, the reserved padding, FPS and CLS. Evidence in
+`verify/item19/nav-{home,history}-{hide,show}-strip.png` (six frames each, the
+same transition captured at 2.4 s so six screenshots can land on it),
+`nav-{home,history}-{visible,hidden}.png` and `nav-report.json`.
 
 ### The status bar follows the header
 

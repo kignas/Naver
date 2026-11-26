@@ -35,7 +35,8 @@
   box-shadow: var(--nav-shadow);
   opacity: 1;
   transform: translate3d(0, 0, 0);
-  transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease;
+  /* 240ms ease-out: shared by the scroll hide/show and the route show. */
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.24s ease-out;
   touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
@@ -56,6 +57,21 @@
    with the page it belongs to, but no longer a tap target. */
 .bottom-nav.nav-float.is-covered {
   pointer-events: none;
+}
+
+/* Scrolled away (Item 19, part 2): down by its own footprint — height, bottom
+   offset and a 16px margin — so the shadow clears the edge too. Compositor
+   only: the layout box stays put, so the page never reflows. */
+body.nav-scroll-hidden .bottom-nav.nav-float.is-visible {
+  transform: translate3d(0, calc(var(--nav-h) + var(--nav-bottom) + 16px), 0);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* A route change resets the state without animating: the bar must be in place
+   before the push slide starts and before the pop slide reveals it. */
+body.nav-scroll-reset .bottom-nav.nav-float {
+  transition: none;
 }
 
 /* The active pill: charcoal with a subtle vertical gradient and a 1px inner
