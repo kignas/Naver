@@ -84,14 +84,20 @@ export function BottomNav() {
 
   // ---- Pill geometry ------------------------------------------------------
   // The pill is one tab wide and absolutely positioned; its travel is a single
-  // translateX in px, measured from the active tab's offsetLeft. `animate`
-  // is false for the first placement and for resizes, so neither animates.
+  // translateX in px, measured from the active tab's left edge. The nav is
+  // sized in fractional k units, so offsetLeft (rounded to whole px) would put
+  // the pill up to 1px off the tab it belongs to; the rects keep the sub-pixel
+  // position. `animate` is false for the first placement and for resizes, so
+  // neither animates.
   const placePill = useCallback((index: number, animate: boolean) => {
     const bar = navRef.current;
     const tab = tabRefs.current[index];
     if (!bar || !tab) return;
     if (!animate) bar.classList.add('nav-no-motion');
-    bar.style.setProperty('--pill-x', `${tab.offsetLeft}px`);
+    const barRect = bar.getBoundingClientRect();
+    const tabRect = tab.getBoundingClientRect();
+    const border = Number.parseFloat(getComputedStyle(bar).borderLeftWidth) || 0;
+    bar.style.setProperty('--pill-x', `${tabRect.left - barRect.left - border}px`);
     if (!animate) {
       // Flush the new value while the transition is off, then hand the pill
       // back to the animated path on the next frame.

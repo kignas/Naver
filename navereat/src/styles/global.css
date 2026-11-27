@@ -284,7 +284,8 @@ ol {
 }
 
 .cart-bar--above-nav {
-  bottom: calc(var(--nav-h) + 16px + var(--sab));
+  /* --nav-reserve already carries the capsule's own bottom gap (54k). */
+  bottom: var(--nav-reserve);
 }
 
 .cart-bar-left {
@@ -914,7 +915,6 @@ a,
   border-radius: inherit;
 }
 
-.bottom-nav,
 #cart-bar,
 .ct-footer,
 .cart-bottom-bar,
@@ -923,7 +923,8 @@ a,
 }
 
 #cart-bar {
-  bottom: calc(var(--nav-h, 64px) + max(12px, env(safe-area-inset-bottom, 0px)) + 12px) !important;
+  /* Same reserve as .cart-bar--above-nav: nav height + its bottom gap + 12. */
+  bottom: var(--nav-reserve) !important;
 }
 
 .cat-result-img-wrap,

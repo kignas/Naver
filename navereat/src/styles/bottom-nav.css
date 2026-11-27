@@ -1,10 +1,11 @@
 /* Floating primary navigation: two tabs, one sliding capsule, rendered once in
    App outside the route transition layers.
 
-   Geometry (Zomato mobile): a 252x46 white capsule, fully rounded, pinned
-   `20px + safe-area` above the bottom edge and centred with
+   Geometry (Zomato, in k = 1px on a 1080px screenshot, see tokens.css): a
+   690k x 128k white capsule, fully rounded, pinned `54k + safe-area` above the
+   bottom edge and centred with
    `left: 50%` + `translateX(-50%)`. Inside it a two-column grid gives Home and
-   History an equal half each, and a 39px dark pill (one tab wide, inset 3px)
+   History an equal half each, and a 334k x 107k dark pill (one tab wide)
    slides between them with `translateX` only.
 
    The pill is also the clip window for a duplicate white label/icon track: the
@@ -19,7 +20,7 @@
   --nav-pill-from: #1c1c1e;
   --nav-pill-to: #2a2a2d;
   --nav-idle-fg: #1e1e24;
-  --nav-shadow: 0 4px 14px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.06);
+  --nav-shadow: 0 calc(4 * var(--k)) calc(14 * var(--k)) rgba(0, 0, 0, 0.1), 0 calc(1 * var(--k)) calc(3 * var(--k)) rgba(0, 0, 0, 0.06);
   /* 100ms of outline fade, then 260ms of pill travel with a ~4px overshoot. */
   --nav-slide-dur: 260ms;
   --nav-slide-delay: 100ms;
@@ -30,9 +31,11 @@
 
   position: fixed;
   left: 50%;
+  /* 54k + safe area above the bottom of the visible screen. */
   bottom: var(--nav-bottom);
-  /* 252px on a 393px phone; 32px of side air on anything narrower. */
-  width: min(252px, calc(100% - 32px));
+  right: auto;
+  /* 690k wide: 0.639 of the screen width at every width up to 480px. */
+  width: var(--nav-w);
   height: var(--nav-h);
   box-sizing: border-box;
   padding: 0;
@@ -75,7 +78,7 @@
    offset and a 16px margin — so the shadow clears the edge too. Compositor
    only: the layout box stays put, so the page never reflows. */
 body.nav-scroll-hidden .bottom-nav.nav-float.is-visible {
-  transform: translate3d(-50%, calc(var(--nav-h) + var(--nav-bottom) + 16px), 0);
+  transform: translate3d(-50%, calc(var(--nav-h) + var(--nav-bottom) + calc(16 * var(--k))), 0);
   opacity: 0;
   pointer-events: none;
 }
@@ -86,16 +89,16 @@ body.nav-scroll-reset .bottom-nav.nav-float {
   transition: none;
 }
 
-/* The moving pill: one tab wide (3px inside each tab edge) and 39px tall.
-   A 46px capsule leaves 3.5px above and below it; the spec's 46/39 pair cannot
-   also give 3px on both of those axes. Its own overflow clips the white track
+/* The moving pill: 334k x 107k, one tab wide and vertically centred in the
+   128k capsule. Its own overflow clips the white track
    below to the pill's rounded shape. */
 .nav-pill {
   position: absolute;
-  top: 2.5px;
+  top: 50%;
+  margin-top: calc(var(--nav-pill-h) / -2);
   left: var(--nav-pad);
-  width: calc(50% - var(--nav-pad) * 2);
-  height: 39px;
+  width: var(--nav-pill-w);
+  height: var(--nav-pill-h);
   z-index: 1;
   border-radius: 999px;
   background: linear-gradient(90deg, var(--nav-pill-from), var(--nav-pill-to));
@@ -113,9 +116,9 @@ body.nav-scroll-reset .bottom-nav.nav-float {
   position: absolute;
   top: 0;
   left: calc(-1 * var(--nav-pad));
-  /* 2 * pill width + 2 * pad * 2: exactly the capsule's content width. */
-  width: calc(200% + var(--nav-pad) * 4);
-  height: 39px;
+  /* Exactly the capsule's content width (two tabs). */
+  width: calc(var(--nav-pill-w) * 2 + var(--nav-pad) * 4);
+  height: var(--nav-pill-h);
   display: grid;
   grid-template-columns: 1fr 1fr;
   align-items: center;
@@ -129,7 +132,7 @@ body.nav-scroll-reset .bottom-nav.nav-float {
   align-items: center;
   justify-content: center;
   gap: var(--nav-icon-label-gap);
-  height: 39px;
+  height: var(--nav-pill-h);
   min-width: 0;
   color: #ffffff;
 }
@@ -156,7 +159,7 @@ body.nav-scroll-reset .bottom-nav.nav-float {
   position: relative;
   z-index: auto;
   width: 100%;
-  height: 39px;
+  height: var(--nav-pill-h);
   display: inline-flex;
   align-items: center;
   justify-content: center;
