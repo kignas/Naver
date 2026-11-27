@@ -13,8 +13,6 @@ import { useRestaurantData } from '../data';
 import type { MenuItem } from '../data/demo';
 import { useCachedReady } from '../hooks/useCachedReady';
 import { createRouteStyleSheet } from '../lib/routeStyles';
-import { Flip, gsap, PAGE_POP_DURATION, prefersReducedMotion } from '../lib/gsap';
-import { isFlipFresh, restaurantHeroId, takeFlip } from '../lib/sharedElement';
 import { useAppNav } from '../lib/navigation';
 import { useAppStore } from '../store/appStore';
 import { useNavStore } from '../store/navStore';
@@ -94,88 +92,6 @@ export function Restaurant() {
   const [menuSearchOpen, setMenuSearchOpen] = useState(cachedRestaurant?.menuSearchOpen ?? false);
   const [saved, setSaved] = useState(cachedRestaurant?.saved ?? false);
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  // Shared element: the state captured on the Home card when it was tapped.
-  const [sharedHero] = useState(() => takeFlip(restaurantHeroId(routeId)));
-  const sharedHeroRef = useRef(sharedHero);
-  const heroRef = useRef<HTMLDivElement | null>(null);
-  const heroAnimatedRef = useRef<HTMLDivElement | null>(null);
-  const heroTimelineRef = useRef<gsap.core.Timeline | null>(null);
-
-  /**
-   * The header grows out of the tapped card while the menu rises underneath.
-   * A callback ref (not an effect) because the route shell paints a skeleton
-   * first and swaps the real page in a frame later, which replaces this node —
-   * the hand-off restarts on the new node while it is still fresh.
-   */
-  const attachHero = useCallback((element: HTMLDivElement | null) => {
-    heroRef.current = element;
-    const taken = sharedHeroRef.current;
-    if (!element || !taken || prefersReducedMotion()) return;
-    if (heroAnimatedRef.current === element || !isFlipFresh(taken.at)) return;
-    heroAnimatedRef.current = element;
-    heroTimelineRef.current?.kill();
-
-    // The header is a big card with images and shadows: without its own layer
-    // every frame of the morph repaints the whole subtree.
-    gsap.set(element, { willChange: 'transform' });
-    const timeline = gsap.timeline({
-      onComplete: () => {
-        gsap.set(element, { willChange: 'auto' });
-      },
-    });
-    timeline.add(
-      Flip.from(taken.state, {
-        targets: element,
-        duration: 0.42,
-        ease: 'power3.out',
-        scale: true,
-        simple: true,
-      }),
-      0,
-    );
-    const menu = element.parentElement?.querySelector<HTMLElement>('.res-pane');
-    if (menu) {
-      timeline.fromTo(
-        menu,
-        { y: 26, opacity: 0 },
-        { y: 0, opacity: 1, duration: 0.36, ease: 'power2.out' },
-        0.04,
-      );
-    }
-    heroTimelineRef.current = timeline;
-  }, []);
-
-  useEffect(
-    () => () => {
-      heroTimelineRef.current?.kill();
-    },
-    [],
-  );
-
-  // Reverse: the header flies back into the card it came from while the page
-  // slides away, so closing reads as the same motion played backwards.
-  useEffect(() => {
-    const onTransitionStart = (event: Event) => {
-      const direction = (event as CustomEvent<{ direction?: string }>).detail?.direction;
-      if (direction !== 'pop' || prefersReducedMotion()) return;
-      const hero = heroRef.current;
-      if (!hero) return;
-      // The header collapses toward the card it came from while the page
-      // slides away. It stays inside the leaving layer: a fixed-position copy
-      // would be dragged along by that layer's own transform.
-      gsap.to(hero, {
-        scale: 0.92,
-        y: 26,
-        opacity: 0.85,
-        duration: PAGE_POP_DURATION,
-        ease: 'power2.in',
-        overwrite: 'auto',
-      });
-    };
-    window.addEventListener('navereat:transition-start', onTransitionStart);
-    return () => window.removeEventListener('navereat:transition-start', onTransitionStart);
-  }, [routeId]);
 
   useLayoutEffect(() => {
     const detach = restaurantStyle.attach();
@@ -320,7 +236,7 @@ export function Restaurant() {
 
         {menuSearchOpen && <MenuSearchRow preparing={preparing} onClose={closeSearch} />}
 
-        <div className="res-card" ref={attachHero} data-flip-id={restaurantHeroId(routeId)}>
+        <div className="res-card">
           <div className="res-card-body">
             <div className="ew-res-head">
               <div className="ew-res-head-main">

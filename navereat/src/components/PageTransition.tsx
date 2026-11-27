@@ -11,18 +11,17 @@ import { useNavDirection, useNavStore, type NavDirection } from '../store/navSto
 import {
   gsap,
   PAGE_EASE,
+  PAGE_OFFSET_PX,
   PAGE_POP_DURATION,
   PAGE_PUSH_DURATION,
-  PARALLAX_PERCENT,
   prefersReducedMotion,
 } from '../lib/gsap';
 
-const PUSH_DURATION = 260;
+const PUSH_DURATION = 280;
 const POP_DURATION = 220;
 // Safety net only: the slide normally starts as soon as the incoming page has
 // painted its real content (see settleIncoming).
 const PUSH_READY_TIMEOUT = 600;
-const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
 const SWIPE_THRESHOLD = 0.35;
 // Cap the freeze snapshot: the visible top of the page is what can shift during
 // a slide, and every captured node costs 50 pinned properties on apply.
@@ -151,6 +150,8 @@ export function PageTransition({ location: incoming, swipeBack = false, render }
       element.style.transform = '';
       element.style.transition = '';
       element.style.visibility = '';
+      element.style.opacity = '';
+      element.style.willChange = '';
     });
     if (backRef.current) {
       backRef.current.style.transform = '';
@@ -253,10 +254,11 @@ export function PageTransition({ location: incoming, swipeBack = false, render }
   }, [activeTab, layers, resetInlineStyles]);
 
   /**
-   * The slide itself. One timeline moves both pages in parallel: the incoming
-   * page travels in from the right while the page it covers drifts left by
-   * PARALLAX_PERCENT and dims under the scrim. Pop is the same timeline played
-   * the other way, which is what makes the hardware back button feel native.
+   * One tween, one page: the page that arrives fades in while it settles 24 px
+   * to the right of nothing, and pop plays the same tween the other way on the
+   * page that leaves. The page underneath is never touched — it stays fully
+   * opaque at its final position, so the compositor has one moving layer and
+   * nothing behind it to re-raster.
    *
    * Declared after the reset effect so it runs after the inline styles from the
    * previous transition are cleared.
@@ -267,41 +269,41 @@ export function PageTransition({ location: incoming, swipeBack = false, render }
     const leave = layers.find((layer) => layer.phase === 'leave');
     const enterElement = enter ? layerRefs.current.get(enter.key) : null;
     const leaveElement = leave ? layerRefs.current.get(leave.key) : null;
-    const stack = tabLayersRef.current.length ? tabStackRef.current : null;
-    // Push covers whatever was underneath: a previous detail page, or the tab
-    // stack. Pop uncovers the same element.
-    const covered =
-      stage.direction === 'pop' ? enterElement ?? stack : leaveElement ?? stack;
-    const duration = stage.direction === 'pop' ? PAGE_POP_DURATION : PAGE_PUSH_DURATION;
+    const pop = stage.direction === 'pop';
+    const target = pop ? leaveElement : enterElement;
 
-    // Park the incoming page off-screen the moment it mounts: the layer is
-    // hidden until the readiness gate opens, and it must not flash at its final
-    // position while it waits.
-    if (enterElement && stage.direction !== 'pop') gsap.set(enterElement, { xPercent: 100 });
+    // Park the arriving page at its start state while the readiness gate is
+    // still closed: the layer is hidden, and it must not flash in place.
+    if (!pop && enterElement) gsap.set(enterElement, { opacity: 0, x: PAGE_OFFSET_PX });
     if (preparing) return;
 
+    if (!target) return;
     if (prefersReducedMotion()) {
-      if (enterElement) gsap.set(enterElement, { xPercent: 0 });
-      if (leaveElement) gsap.set(leaveElement, { xPercent: 100 });
-      if (covered) gsap.set(covered, { xPercent: 0 });
+      gsap.set(target, { opacity: 1, x: 0, willChange: 'auto' });
       return;
     }
 
-    const timeline = gsap.timeline({ defaults: { duration, ease: PAGE_EASE, overwrite: 'auto' } });
-    if (stage.direction === 'pop') {
-      if (leaveElement) timeline.to(leaveElement, { xPercent: 100 }, 0);
-      if (covered) timeline.to(covered, { xPercent: 0 }, 0);
-    } else {
-      // fromTo: a push always starts the incoming page off-screen, even when it
-      // is the first frame after a cancelled swipe.
-      if (enterElement) timeline.fromTo(enterElement, { xPercent: 100 }, { xPercent: 0 }, 0);
-      if (covered) timeline.to(covered, { xPercent: PARALLAX_PERCENT }, 0);
-    }
-    if (covered) gsap.set(covered, { willChange: 'transform' });
+    const tween = pop
+      ? gsap.fromTo(
+          target,
+          { opacity: 1, x: 0 },
+          { opacity: 0, x: PAGE_OFFSET_PX, duration: PAGE_POP_DURATION, ease: 'power2.in', overwrite: 'auto' },
+        )
+      : gsap.fromTo(
+          target,
+          { opacity: 0, x: PAGE_OFFSET_PX },
+          { opacity: 1, x: 0, duration: PAGE_PUSH_DURATION, ease: PAGE_EASE, overwrite: 'auto' },
+        );
+
+    // The layer is promoted for the duration of the tween only: a permanent
+    // will-change keeps a full-screen layer alive for nothing.
+    gsap.set(target, { willChange: 'transform, opacity' });
+    const release = () => gsap.set(target, { willChange: 'auto' });
+    tween.eventCallback('onComplete', release);
 
     return () => {
-      timeline.kill();
-      if (covered) gsap.set(covered, { willChange: 'auto' });
+      tween.kill();
+      release();
     };
   }, [layers, preparing, stage.animating, stage.direction]);
 
@@ -595,8 +597,15 @@ export function PageTransition({ location: incoming, swipeBack = false, render }
 
     if (complete) {
       setStage((value) => ({ ...value, animating: true }));
-      top.style.transition = `transform ${POP_DURATION}ms ${EASE}`;
-      top.style.transform = 'translate3d(100%, 0, 0)';
+      // Same tween as the back button, continued from wherever the finger left
+      // the page: it fades out and keeps travelling right.
+      gsap.to(top, {
+        x: window.innerWidth,
+        opacity: 0,
+        duration: POP_DURATION / 1000,
+        ease: 'power2.in',
+        overwrite: 'auto',
+      });
       skipNextPopRef.current = true;
       swipeTimerRef.current = window.setTimeout(() => {
         setSwiping(false);
@@ -605,8 +614,12 @@ export function PageTransition({ location: incoming, swipeBack = false, render }
       return;
     }
 
-    top.style.transition = `transform ${PUSH_DURATION}ms ${EASE}`;
-    top.style.transform = 'translate3d(0, 0, 0)';
+    gsap.to(top, {
+      x: 0,
+      duration: PUSH_DURATION / 1000,
+      ease: PAGE_EASE,
+      overwrite: 'auto',
+    });
     swipeTimerRef.current = window.setTimeout(() => {
       setSwiping(false);
       setSwipeBackLocation(null);

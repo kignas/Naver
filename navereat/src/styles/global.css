@@ -630,15 +630,16 @@ ol {
   overflow: hidden;
   background: #fff;
   transform: translate3d(0, 0, 0);
-  opacity: 1 !important;
+  /* Pages are opaque by default; the transition writes opacity inline on the
+     one page that moves, so this must not be !important. */
+  opacity: 1;
   will-change: auto;
   backface-visibility: hidden;
   contain: layout paint;
 }
 
-.route-stage.is-animating .route-layer,
-.route-stage.is-animating .tab-stack {
-  will-change: transform;
+.route-stage.is-animating .route-layer {
+  will-change: transform, opacity;
 }
 
 .route-layer.is-idle {
@@ -733,8 +734,8 @@ ol {
   transform: none;
 }
 
-/* The slide itself is one GSAP timeline in PageTransition (enter travels in
-   from the right while the page underneath drifts left and dims). No CSS
+/* The transition itself is one GSAP tween in PageTransition (the arriving page
+   fades in over 24 px, the leaving page fades out the same way). No CSS
    animation here: two drivers on the same transform stutter. */
 
 /* Soft leading-edge shadow on the page that slides. It is painted outside the

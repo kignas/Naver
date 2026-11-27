@@ -11,12 +11,12 @@ export function prefersReducedMotion(): boolean {
 }
 
 /** Page motion: quick out of the gate, long soft landing. */
-export const PAGE_EASE = 'power3.out';
-export const PAGE_PUSH_DURATION = 0.3;
-export const PAGE_POP_DURATION = 0.26;
+export const PAGE_EASE = 'power2.out';
+export const PAGE_PUSH_DURATION = 0.28;
+export const PAGE_POP_DURATION = 0.22;
 
-/** How far the page underneath travels while a detail page slides over it. */
-export const PARALLAX_PERCENT = -25;
+/** How far the arriving page is offset on x when it starts. */
+export const PAGE_OFFSET_PX = 24;
 
 /** Sheets drop in from below and leave the way they came. */
 export const SHEET_EASE = 'power3.out';

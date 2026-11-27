@@ -115,15 +115,6 @@ const initScript = () => {
   // the Home render counter so a re-render under the moving page fails the gate.
   perf.outgoing = { push: null, pop: null };
   const IDENTITY = (transform, opacity) => (transform === 'none' || transform === 'matrix(1, 0, 0, 1, 0, 0)') && opacity === '1';
-  // The covered page may drift horizontally (Zomato/Swiggy parallax) but must
-  // never scale, rotate or fade: that is what costs the covered layer a repaint.
-  const parallaxOnly = (transform, opacity, width) => {
-    if (opacity !== '1') return false;
-    if (transform === 'none') return true;
-    const match = /^matrix\(1, 0, 0, 1, (-?[\d.]+), 0\)$/.exec(transform);
-    if (!match) return false;
-    return Math.abs(Number(match[1])) <= Math.max(width, 1) * 0.27;
-  };
   window.addEventListener('navereat:transition-start', (event) => {
     const direction = event.detail?.direction ?? 'push';
     const stage = document.querySelector('.route-stage');
@@ -139,12 +130,9 @@ const initScript = () => {
       for (const element of candidates) {
         if (!element.isConnected || moving(element)) continue;
         const style = getComputedStyle(element);
-        if (IDENTITY(style.transform, style.opacity)) continue;
-        if (parallaxOnly(style.transform, style.opacity, element.getBoundingClientRect().width)) {
-          record.parallax = (record.parallax ?? 0) + 1;
-          continue;
+        if (!IDENTITY(style.transform, style.opacity)) {
+          record.offenders.push({ cls: element.className, transform: style.transform, opacity: style.opacity });
         }
-        record.offenders.push({ cls: element.className, transform: style.transform, opacity: style.opacity });
       }
       requestAnimationFrame(tick);
     };
@@ -1087,8 +1075,6 @@ try {
   // must never happen is the covered page moving or re-rendering on every frame.
   const outgoingPass =
     outgoingPush.identity === true && outgoingPop.identity === true && (outgoingPush.homeRendersDuring ?? 0) <= 1;
-  // `identity` here means "no offender beyond the parallax drift"; the drift
-  // itself is asserted by route-motion-check.
   const navCovered = result.navCovered;
   const navPass =
     navCovered.push.navMovedDuringSlide === false &&
