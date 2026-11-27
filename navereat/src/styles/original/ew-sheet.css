@@ -110,7 +110,7 @@
 .ewcs-foot,
 .filter-sheet-footer,
 .ds-foot {
-  padding: 12px 18px calc(12px + env(safe-area-inset-bottom, 0px));
+  padding: 12px 18px calc(12px + var(--sab));
   background: #fff;
   border-top: 1px solid var(--ews-line);
 }
@@ -271,7 +271,7 @@
 
 /* footer */
 .ewcs-foot {
-  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  padding: 12px 16px calc(12px + var(--sab));
   background: #fff;
   border-top: 1px solid var(--ews-line);
   box-shadow: 0 -6px 18px rgba(16, 24, 40, .05);

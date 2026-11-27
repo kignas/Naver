@@ -55,7 +55,7 @@
 /* The sheet portals to <body>, outside .cart-page, so these ids are global. */
 #ct-pay-confirm {
   margin-top: 16px;
-  padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(6px + var(--sab));
 }
 
 #ct-pay-confirm-btn {
@@ -180,7 +180,7 @@ body.ct-page .nb-veg-mark.veg > span {
   right: 0;
   bottom: 0;
   background: #fff;
-  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  padding: 12px 16px calc(12px + var(--sab));
   box-shadow: 0 -6px 24px rgba(20, 25, 45, 0.08);
 }
 

@@ -2,7 +2,7 @@
    layout box stays on `--nb-cart-bottom`. Expressed as a lift so the mode change
    is compositor-only. */
 #white-cart-root.wc-above-nav {
-  --wc-lift: calc(var(--nav-reserve) - var(--nb-cart-bottom, calc(12px + env(safe-area-inset-bottom, 0px))));
+  --wc-lift: calc(var(--nav-reserve) - var(--nb-cart-bottom, calc(12px + var(--sab))));
 }
 
 /* Painted under the incoming page during a push: it must stay still and keep
