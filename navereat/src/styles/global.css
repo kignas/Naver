@@ -183,12 +183,9 @@ ol {
   transition: background 0.14s ease, transform 90ms ease-out;
 }
 
-.filter-pill:active,
-.nb-qty-btn:active,
-.nb-custom-remove:active,
-.add-btn-wrap button:active,
-.ct-btn:active,
-.u99-restaurant-card:active {
+/* Cards, chips and ADD buttons are pressed through GSAP (lib/gsap.ts) so the
+   scale is the same 0.97 everywhere and respects reduced motion. */
+.nb-custom-remove:active {
   transform: scale(0.975);
 }
 
@@ -639,7 +636,8 @@ ol {
   contain: layout paint;
 }
 
-.route-stage.is-animating .route-layer {
+.route-stage.is-animating .route-layer,
+.route-stage.is-animating .tab-stack {
   will-change: transform;
 }
 
@@ -735,26 +733,9 @@ ol {
   transform: none;
 }
 
-/* Only the incoming page moves. The page it covers keeps its identity
-   transform and full opacity for the whole push, and on pop only the page being
-   dismissed slides away while the one underneath stays put. */
-@keyframes routePushIn {
-  from { transform: translate3d(100%, 0, 0); }
-  to { transform: translate3d(0, 0, 0); }
-}
-
-@keyframes routePopOut {
-  from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(100%, 0, 0); }
-}
-
-.route-stage.direction-push .route-layer.is-enter {
-  animation: routePushIn var(--dur-push) var(--ease-route) both;
-}
-
-.route-stage.direction-pop .route-layer.is-leave {
-  animation: routePopOut var(--dur-pop) var(--ease-route) both;
-}
+/* The slide itself is one GSAP timeline in PageTransition (enter travels in
+   from the right while the page underneath drifts left and dims). No CSS
+   animation here: two drivers on the same transform stutter. */
 
 /* Soft leading-edge shadow on the page that slides. It is painted outside the
    layer, so it falls on the page underneath while the layer is off-centre and
@@ -965,6 +946,18 @@ a,
   .skeleton::after {
     animation-duration: 0.12s !important;
   }
+}
+
+/* GSAP owns the sheet panels (Sheet.tsx animates yPercent). A CSS transition
+   on the same transform would smooth every frame GSAP writes, which reads as
+   lag, so the panels are taken off the CSS transition path entirely. */
+.ewcs-sheet,
+.ewcs-sheet.show,
+.ct-sheet,
+.ct-sheet-root.is-open .ct-sheet,
+.filter-sheet .sheet-panel,
+.filter-sheet.open .sheet-panel {
+  transition: none !important;
 }
 
 /* Opaque shell used while a lazy route chunk is still mounting. */

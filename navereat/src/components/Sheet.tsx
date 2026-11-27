@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
@@ -12,6 +13,7 @@ import {
 import { Icon } from './Icon';
 import { registerSheet } from '../lib/sheetStack';
 import { lockPageScroll } from '../lib/scrollLock';
+import { gsap, prefersReducedMotion, SHEET_EASE, SHEET_IN_DURATION, SHEET_OUT_DURATION } from '../lib/gsap';
 
 export interface SheetHandle {
   close: () => void;
@@ -71,9 +73,10 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
   ref,
 ) {
   const [visible, setVisible] = useState(false);
-  const [dragY, setDragY] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const sheetRef = useRef<HTMLDivElement>(null);
+  const sheetRef = useRef<HTMLDivElement | null>(null);
+  // The element GSAP slides. For the filter variant sheetRef is the backdrop
+  // root, so the panel is tracked separately.
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const startY = useRef<number | null>(null);
   const dragYRef = useRef(0);
   const closingRef = useRef(false);
@@ -88,10 +91,23 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
     if (closingRef.current) return;
     closingRef.current = true;
     setVisible(false);
-    setDragY(0);
+    const reduced = prefersReducedMotion();
+    const panel = panelRef.current;
+    if (panel && !reduced) {
+      // From wherever the drag left it, so a flick closes without snapping.
+      gsap.to(panel, {
+        y: window.innerHeight || 800,
+        yPercent: 0,
+        duration: SHEET_OUT_DURATION,
+        ease: 'power3.in',
+        overwrite: 'auto',
+      });
+    }
     dragYRef.current = 0;
-    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    closeTimer.current = window.setTimeout(() => onCloseRef.current(), reduced ? 0 : 260);
+    closeTimer.current = window.setTimeout(
+      () => onCloseRef.current(),
+      reduced ? 0 : SHEET_OUT_DURATION * 1000,
+    );
   }, []);
 
   useImperativeHandle(ref, () => ({ close: requestClose }), [requestClose]);
@@ -99,6 +115,17 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => setVisible(true));
     return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  // Sheets rise from below the screen and settle with power3.out.
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    if (!panel || prefersReducedMotion()) return;
+    gsap.fromTo(
+      panel,
+      { yPercent: 100, y: 0 },
+      { yPercent: 0, duration: SHEET_IN_DURATION, ease: SHEET_EASE, overwrite: 'auto' },
+    );
   }, []);
 
   useEffect(() => {
@@ -177,7 +204,8 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
     if (closingRef.current) return;
     if ((event.target as HTMLElement).closest('button, a, input, textarea, select')) return;
     startY.current = event.clientY;
-    setDragging(true);
+    const panel = panelRef.current;
+    if (panel) gsap.killTweensOf(panel);
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
@@ -185,24 +213,26 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
     if (startY.current === null) return;
     const distance = Math.max(0, event.clientY - startY.current);
     dragYRef.current = distance;
-    setDragY(distance);
+    const panel = panelRef.current;
+    if (panel) gsap.set(panel, { y: distance });
   };
 
   const endDrag = (event: ReactPointerEvent<HTMLElement>) => {
     if (startY.current === null) return;
     const shouldClose = dragYRef.current > 110;
     startY.current = null;
-    setDragging(false);
     try {
       event.currentTarget.releasePointerCapture(event.pointerId);
     } catch {
       /* pointer capture may already be released */
     }
-    if (shouldClose) requestClose();
-    else {
-      dragYRef.current = 0;
-      setDragY(0);
+    if (shouldClose) {
+      requestClose();
+      return;
     }
+    dragYRef.current = 0;
+    const panel = panelRef.current;
+    if (panel) gsap.to(panel, { y: 0, duration: 0.22, ease: 'power2.out', overwrite: 'auto' });
   };
 
   const dragProps = {
@@ -212,25 +242,19 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
     onPointerCancel: endDrag,
   };
 
-  const panelStyle =
-    dragY > 0
-      ? {
-          transform: variant === 'customize' ? `translate(-50%, ${dragY}px)` : `translateY(${dragY}px)`,
-          transition: dragging ? 'none' : undefined,
-        }
-      : undefined;
-
   const content = variant === 'customize' ? (
     <>
       <div className={`ewcs-backdrop${visible ? ' show' : ''}`} onClick={requestClose} />
       <div
         id={id}
         className={`ewcs-sheet${visible ? ' show' : ''}${sheetClassName ? ` ${sheetClassName}` : ''}`}
-        style={panelStyle}
+        ref={(element) => {
+          sheetRef.current = element;
+          panelRef.current = element;
+        }}
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel ?? title}
-        ref={sheetRef}
       >
         <div className="ewcs-handle sheet-drag-handle" aria-hidden="true" {...dragProps} />
         <div className="ewcs-head sheet-drag-handle" {...dragProps}>
@@ -254,7 +278,7 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
       ref={sheetRef}
     >
         <div className="sheet-backdrop" onClick={requestClose} />
-        <div className="sheet-panel" style={panelStyle}>
+        <div className="sheet-panel" ref={panelRef}>
           <div className="sheet-grabber sheet-drag-handle" aria-hidden="true" {...dragProps} />
           <div className="sheet-head sheet-drag-handle" {...dragProps}>
             <h3 className="sheet-title" id={titleId}>{title}</h3>
@@ -283,7 +307,16 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
           <Icon name="solid:xmark" size={17} />
         </button>
       )}
-      <div className={`ct-sheet ${sheetClassName}`.trim()} style={panelStyle} role="dialog" aria-modal="true" aria-label={ariaLabel ?? title} ref={sheetRef}>
+      <div
+        className={`ct-sheet ${sheetClassName}`.trim()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={ariaLabel ?? title}
+        ref={(element) => {
+          sheetRef.current = element;
+          panelRef.current = element;
+        }}
+      >
         {!hideHeader && (
           <>
             <div className="ct-sheet-grab sheet-drag-handle" aria-hidden="true" {...dragProps} />

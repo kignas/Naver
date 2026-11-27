@@ -8,6 +8,14 @@ import { routeKeyFor } from '../lib/routeLoaders';
 import { fontsReady } from '../lib/fonts';
 import { syncRouteStyleSheets } from '../lib/routeStyles';
 import { useNavDirection, useNavStore, type NavDirection } from '../store/navStore';
+import {
+  gsap,
+  PAGE_EASE,
+  PAGE_POP_DURATION,
+  PAGE_PUSH_DURATION,
+  PARALLAX_PERCENT,
+  prefersReducedMotion,
+} from '../lib/gsap';
 
 const PUSH_DURATION = 260;
 const POP_DURATION = 220;
@@ -243,6 +251,59 @@ export function PageTransition({ location: incoming, swipeBack = false, render }
   useLayoutEffect(() => {
     resetInlineStyles();
   }, [activeTab, layers, resetInlineStyles]);
+
+  /**
+   * The slide itself. One timeline moves both pages in parallel: the incoming
+   * page travels in from the right while the page it covers drifts left by
+   * PARALLAX_PERCENT and dims under the scrim. Pop is the same timeline played
+   * the other way, which is what makes the hardware back button feel native.
+   *
+   * Declared after the reset effect so it runs after the inline styles from the
+   * previous transition are cleared.
+   */
+  useLayoutEffect(() => {
+    if (!stage.animating) return;
+    const enter = layers.find((layer) => layer.phase === 'enter');
+    const leave = layers.find((layer) => layer.phase === 'leave');
+    const enterElement = enter ? layerRefs.current.get(enter.key) : null;
+    const leaveElement = leave ? layerRefs.current.get(leave.key) : null;
+    const stack = tabLayersRef.current.length ? tabStackRef.current : null;
+    // Push covers whatever was underneath: a previous detail page, or the tab
+    // stack. Pop uncovers the same element.
+    const covered =
+      stage.direction === 'pop' ? enterElement ?? stack : leaveElement ?? stack;
+    const duration = stage.direction === 'pop' ? PAGE_POP_DURATION : PAGE_PUSH_DURATION;
+
+    // Park the incoming page off-screen the moment it mounts: the layer is
+    // hidden until the readiness gate opens, and it must not flash at its final
+    // position while it waits.
+    if (enterElement && stage.direction !== 'pop') gsap.set(enterElement, { xPercent: 100 });
+    if (preparing) return;
+
+    if (prefersReducedMotion()) {
+      if (enterElement) gsap.set(enterElement, { xPercent: 0 });
+      if (leaveElement) gsap.set(leaveElement, { xPercent: 100 });
+      if (covered) gsap.set(covered, { xPercent: 0 });
+      return;
+    }
+
+    const timeline = gsap.timeline({ defaults: { duration, ease: PAGE_EASE, overwrite: 'auto' } });
+    if (stage.direction === 'pop') {
+      if (leaveElement) timeline.to(leaveElement, { xPercent: 100 }, 0);
+      if (covered) timeline.to(covered, { xPercent: 0 }, 0);
+    } else {
+      // fromTo: a push always starts the incoming page off-screen, even when it
+      // is the first frame after a cancelled swipe.
+      if (enterElement) timeline.fromTo(enterElement, { xPercent: 100 }, { xPercent: 0 }, 0);
+      if (covered) timeline.to(covered, { xPercent: PARALLAX_PERCENT }, 0);
+    }
+    if (covered) gsap.set(covered, { willChange: 'transform' });
+
+    return () => {
+      timeline.kill();
+      if (covered) gsap.set(covered, { willChange: 'auto' });
+    };
+  }, [layers, preparing, stage.animating, stage.direction]);
 
   useLayoutEffect(() => {
     const current = layersRef.current;

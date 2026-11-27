@@ -1,8 +1,9 @@
-import { memo, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { memo, useCallback, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import type { MenuItem, Restaurant } from '../data/demo';
 import type { Cart } from '../lib/cart';
 import { customizedQtyFor, isCustomisable } from '../lib/customization';
 import { useUiStore } from '../store/uiStore';
+import { captureFlip, restaurantHeroId } from '../lib/sharedElement';
 
 interface HomeRestaurantCardProps {
   restaurant: Restaurant;
@@ -149,23 +150,37 @@ function HomeRestaurantCardView({
       }
     : undefined;
 
+  const cardRef = useRef<HTMLElement>(null);
+
+  // The box is captured on pointerdown (lib/sharedElement.ts); keyboard
+  // activation has no press, so it captures here instead.
+  const openWithOrigin = useCallback(() => {
+    captureFlip(restaurantHeroId(restaurant.id), cardRef.current);
+    onOpen(restaurant);
+  }, [onOpen, restaurant]);
+
   const openOnKey = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      onOpen(restaurant);
+      openWithOrigin();
     }
   };
 
   return (
     <div className="u99-card-host" data-home99-restaurant={restaurant.id} style={style}>
-      <article className="u99-restaurant-card">
+      <article
+        className="u99-restaurant-card"
+        ref={cardRef}
+        data-flip-id={restaurantHeroId(restaurant.id)}
+        data-flip-origin={restaurantHeroId(restaurant.id)}
+      >
         <div
           className="u99-restaurant-head"
           role="button"
           tabIndex={0}
           aria-label={`Open ${restaurant.name}`}
           data-preload-route={`/restaurant/${restaurant.id}`}
-          onClick={() => onOpen(restaurant)}
+          onClick={() => openWithOrigin()}
           onKeyDown={openOnKey}
         >
           <div className="u99-card-copy">
@@ -299,7 +314,7 @@ function HomeRestaurantCardView({
             })}
             {menu.length > 0 && (
               <div className="u99-more-tile">
-                <button type="button" className="u99-more-box" data-preload-route={`/restaurant/${restaurant.id}`} onClick={() => onOpen(restaurant)} aria-label="View full menu">
+                <button type="button" className="u99-more-box" data-preload-route={`/restaurant/${restaurant.id}`} onClick={() => openWithOrigin()} aria-label="View full menu">
                   <span className="u99-more-arrow" aria-hidden="true">
                     →
                   </span>

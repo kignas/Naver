@@ -23,7 +23,6 @@
   box-shadow: 0 2px 7px rgba(0, 0, 0, 0.025);
   transition: all 0.15s ease;
 }
-.cat-page .cat-filterbar .filter-pill:active{ transform: scale(0.97); }
 .cat-page .cat-filterbar .filter-pill.active{
   border-color: #1F2933; background: #1F2933; color: #fff;
   box-shadow: 0 5px 14px rgba(31, 41, 51, 0.16);

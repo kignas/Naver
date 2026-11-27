@@ -1,10 +1,12 @@
-import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { restaurants, type Category, type MenuItem, type Restaurant } from '../data/demo';
 import { loadDataSource, useDataSourceMode } from '../data';
 import { useAppNav } from '../lib/navigation';
 import { registerSheet } from '../lib/sheetStack';
 import { lockPageScroll } from '../lib/scrollLock';
+import { Flip, gsap, prefersReducedMotion } from '../lib/gsap';
+import { SEARCH_FLIP_ID, takeFlip } from '../lib/sharedElement';
 import { useAppStore } from '../store/appStore';
 import { useSearchStore, type SearchContext } from '../store/searchStore';
 import '../styles/search-overlay.css';
@@ -258,6 +260,7 @@ export function SearchOverlay() {
 
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const inputWrapRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<number | null>(null);
   const searchRef = useRef<number | null>(null);
   const closeTimerRef = useRef<number | null>(null);
@@ -415,6 +418,27 @@ export function SearchOverlay() {
     return registerSheet(() => closeSearch());
   }, [closeSearch, isOpen]);
 
+  // Shared element: the pill that was tapped becomes this input box, and the
+  // suggestions fade in underneath while it travels.
+  useLayoutEffect(() => {
+    if (!isOpen || prefersReducedMotion()) return;
+    const taken = takeFlip(SEARCH_FLIP_ID);
+    const wrap = inputWrapRef.current;
+    if (!taken || !wrap) return;
+    const timeline = gsap.timeline();
+    timeline.add(
+      Flip.from(taken.state, { targets: wrap, duration: 0.34, ease: 'power3.out', scale: true, simple: true }),
+      0,
+    );
+    const body = wrap.closest('.ew-search-root')?.querySelector<HTMLElement>('.ew-search-body');
+    if (body) {
+      timeline.fromTo(body, { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.3, ease: 'power2.out' }, 0.05);
+    }
+    return () => {
+      timeline.kill();
+    };
+  }, [isOpen]);
+
   useEffect(() => {
     if (!isOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -485,7 +509,7 @@ export function SearchOverlay() {
           <button className="ew-search-back" type="button" onClick={() => closeSearch()} aria-label="Close search">
             <SearchIcon name="back" size={24} />
           </button>
-          <div className="ew-search-input-wrap">
+          <div className="ew-search-input-wrap" ref={inputWrapRef} data-flip-id={SEARCH_FLIP_ID}>
             <span className="ew-search-icon">
               <SearchIcon name="search" size={20} />
             </span>

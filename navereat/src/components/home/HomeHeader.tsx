@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { DEMO_ADDRESS_LINE } from '../../data/demo';
 import type { LocationLabel } from '../../data/locationLabel';
 import { Icon } from '../Icon';
+import { captureFlip, SEARCH_FLIP_ID } from '../../lib/sharedElement';
 import { ProfileButton } from './ProfileButton';
 import { SearchPlaceholderText } from './SearchPlaceholderText';
 import { VegToggle } from './VegToggle';
@@ -71,7 +72,16 @@ export const HomeHeader = memo(
         </div>
 
         <div className="search-row es-header-item">
-          <button type="button" className="search-box tap" onClick={onOpenSearch} aria-haspopup="dialog">
+          <button
+            type="button"
+            className="search-box tap"
+            data-flip-id={SEARCH_FLIP_ID}
+            onClick={(event) => {
+              captureFlip(SEARCH_FLIP_ID, event.currentTarget);
+              onOpenSearch();
+            }}
+            aria-haspopup="dialog"
+          >
             <Icon name="solid:magnifying-glass" size={18} className="search-icon" />
             <SearchPlaceholderText scrollerRef={scrollerRef} />
             <span

@@ -14,6 +14,8 @@ import { RouteShell } from './components/RouteShell';
 import { SearchOverlay } from './components/SearchOverlay';
 import { ToastHost } from './components/ToastHost';
 import { useBackButton } from './hooks/useBackButton';
+import { installTapFeedback } from './lib/gsap';
+import { installFlipOriginCapture } from './lib/sharedElement';
 import { useChromePathname } from './lib/chromeRoute';
 import { isTabPath, NavBridge } from './lib/navigation';
 import { useAppStore } from './store/appStore';
@@ -70,6 +72,9 @@ function AppRoutes() {
   }, [token]);
 
   useEffect(() => installPreloadOnIntent(), []);
+
+  useEffect(() => installTapFeedback(), []);
+  useEffect(() => installFlipOriginCapture(), []);
 
   useEffect(() => {
     const run = () => void primeFonts();

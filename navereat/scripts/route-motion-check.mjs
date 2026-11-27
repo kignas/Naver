@@ -75,6 +75,18 @@ const initScript = () => {
   );
   const IDENTITY = (transform, opacity) =>
     (transform === 'none' || transform === 'matrix(1, 0, 0, 1, 0, 0)') && opacity === '1';
+  // The page underneath is allowed exactly one degree of freedom: a horizontal
+  // drift of at most PARALLAX_MAX of its own width. Any scale, rotation or
+  // fade is still a failure.
+  const PARALLAX_MAX = 0.27;
+  const parallaxShift = (transform, opacity, width) => {
+    if (opacity !== '1') return null;
+    if (transform === 'none') return 0;
+    const match = /^matrix\(1, 0, 0, 1, (-?[\d.]+), 0\)$/.exec(transform);
+    if (!match) return null;
+    const shift = Math.abs(Number(match[1]));
+    return shift <= Math.max(width, 1) * PARALLAX_MAX ? shift : null;
+  };
   window.addEventListener('navereat:transition-start', (event) => {
     const direction = event.detail?.direction ?? 'push';
     const stage = document.querySelector('.route-stage');
@@ -93,7 +105,7 @@ const initScript = () => {
         }
       : null;
     probe.frames = [];
-    probe.identity = { direction, samples: 0, offenders: [] };
+    probe.identity = { direction, samples: 0, offenders: [], maxShift: 0, shifted: 0 };
     let on = true;
     const tick = () => {
       if (!on) return;
@@ -101,9 +113,14 @@ const initScript = () => {
       for (const element of candidates) {
         if (!element.isConnected || moving(element)) continue;
         const style = getComputedStyle(element);
-        if (!IDENTITY(style.transform, style.opacity)) {
-          probe.identity.offenders.push({ cls: element.className, transform: style.transform, opacity: style.opacity });
+        if (IDENTITY(style.transform, style.opacity)) continue;
+        const shift = parallaxShift(style.transform, style.opacity, element.getBoundingClientRect().width);
+        if (shift != null) {
+          probe.identity.shifted += 1;
+          probe.identity.maxShift = Math.max(probe.identity.maxShift, shift);
+          continue;
         }
+        probe.identity.offenders.push({ cls: element.className, transform: style.transform, opacity: style.opacity });
       }
       if (incoming) {
         const style = getComputedStyle(incoming);
@@ -262,7 +279,14 @@ try {
   // PUSH_DURATION is 260 ms since e7cd885 retuned the slide to read as native;
   // the 420 ms bound predated that.
   check('push: slide duration ≈ 260 ms', p.end - p.start > 220 && p.end - p.start < 400, `${Math.round(p.end - p.start)} ms (start ${Math.round(p.start)} ms)`);
-  check('push: covered page keeps identity transform + full opacity', p.identity?.identity === true, `${p.identity?.samples} samples, ${p.identity?.offenders?.length ?? '?'} offenders`);
+  // Zomato/Swiggy parallax: the covered page drifts left while the incoming
+  // page slides over it. It must stay fully opaque and unscaled, and it must
+  // actually drift.
+  check(
+    'push: covered page only drifts (opaque, no scale)',
+    p.identity?.identity === true && (p.identity?.maxShift ?? 0) > 20,
+    `${p.identity?.samples} samples, ${p.identity?.shifted ?? 0} drifting, max ${Math.round(p.identity?.maxShift ?? 0)} px, ${p.identity?.offenders?.length ?? '?'} offenders`,
+  );
   check('push: incoming page stays fully opaque', (p.incomingFaded ?? 0) === 0, `${p.frames.length} frames, ${p.incomingFaded ?? 0} faded`);
   const translateOf = (transform) => {
     const match = /matrix\(1, 0, 0, 1, (-?[\d.]+), 0\)/.exec(transform ?? '');
@@ -285,7 +309,11 @@ try {
   const popResult = await pop.stop();
   results.push(popResult);
   const q = popResult.probe;
-  check('pop: page underneath stays still', q.identity?.identity === true, `${q.identity?.samples} samples`);
+  check(
+    'pop: page underneath returns from the parallax to identity',
+    q.identity?.identity === true && (q.identity?.shifted ?? 0) > 0,
+    `${q.identity?.samples} samples, ${q.identity?.shifted ?? 0} drifting, max ${Math.round(q.identity?.maxShift ?? 0)} px`,
+  );
   // POP_DURATION is 220 ms since e7cd885 (was 360 ms).
   check('pop: slide duration ≈ 220 ms', q.end - q.start > 180 && q.end - q.start < 360, `${Math.round(q.end - q.start)} ms`);
   check('pop: tap → first frame within budget', q.firstFrameMs != null && q.firstFrameMs <= maxLatency, `${q.firstFrameMs?.toFixed(1)} ms`);
