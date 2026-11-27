@@ -17,10 +17,12 @@
   .hero-header .store-top{color:#64748B !important;}
   .hero-header .loc-pin-wrap i,.hero-header .loc-pin-icon{color:var(--hd-primary,#E9546B) !important;}
 
-  /* ===== Premium oxblood + gold theme ===== */
+  /* ===== Home hero theme: header and banner are one blue =====
+     --hd-primary paints .hero-header::before, so the header backdrop and the
+     banner base resolve to the same colour and meet without a seam. */
   html .hero-header,.hero-header,.hero-sheet{
-    --hd-primary:#5D0D18 !important;--hd-ink:#fff !important;--hd-muted:rgba(255,255,255,.72) !important;
-    --hd-accent:#EBCB8B !important;--hd-accent-ink:#5D0D18 !important;--hd-on-light:#5D0D18 !important;
+    --hd-primary:var(--home-hero-blue) !important;--hd-ink:#fff !important;--hd-muted:rgba(255,255,255,.92) !important;
+    --hd-accent:#EBCB8B !important;--hd-accent-ink:var(--home-hero-blue) !important;--hd-on-light:var(--home-hero-blue) !important;
     --hd-cta-bg:#EBCB8B !important;--hd-cta-ink:#3E0710 !important;
   }
   .hero-header .loc-pin-wrap{background:#fff !important;box-shadow:none !important;}

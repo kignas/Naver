@@ -80,7 +80,7 @@ try {
       const box = (node) => (node ? node.getBoundingClientRect() : null);
       const named = (a) => typeof a.animationName === 'string' && a.animationName.length > 0;
       const running = document.getAnimations().filter((a) => a.playState === 'running' && named(a));
-      const lines = ['.hb-copy__line--a', '.hb-copy__line--b', '.hb-strip__text', '.hb-strip__cta'].map((selector) => {
+      const lines = ['.hb-line--with', '.hb-line--free', '.hb-line--delivery', '.hb-cta', '.hb-strip__text'].map((selector) => {
         const node = document.querySelector(selector);
         return {
           selector,
@@ -170,10 +170,11 @@ try {
     check(`${label}: copy is not clipped`, audit.lines.every((line) => line.present && !line.clipped), audit.lines.filter((line) => !line.present || line.clipped).map((line) => line.selector).join(', ') || 'every line fits');
     check(
       `${label}: copy matches the banner`,
-      flat(copy['.hb-copy__line--a']) === 'withFREEDelivery' &&
-        flat(copy['.hb-copy__line--b']) === 'BreakfastStaples-Startingat₹49' &&
-        flat(copy['.hb-strip__text']) === 'Breakfaststaples·servedfresh' &&
-        flat(copy['.hb-strip__cta']) === 'Order',
+      flat(copy['.hb-line--with']) === 'with' &&
+        flat(copy['.hb-line--free']) === 'FREE' &&
+        flat(copy['.hb-line--delivery']) === 'Delivery' &&
+        flat(copy['.hb-cta']) === 'ORDERNOW' &&
+        flat(copy['.hb-strip__text']) === 'Breakfaststaples·servedfresh',
       JSON.stringify(copy),
     );
     check(`${label}: no page errors`, errors.length === 0, errors.join(' | '));

@@ -202,7 +202,7 @@ try {
   await page.screenshot({ path: path.join(outDir, '01-home.png') });
 
   // --- Hero CTA opens the deals route (the original's /deals) ------------
-  await tap('#hero-banner-region .hb-strip__cta');
+  await tap('#hero-banner-region .hb-cta');
   await waitFor(() => page.locator('.u99-page').count().then((n) => n > 0), 'hero CTA → /under99');
   await sleep(320);
   check('hero CTA: opens /under99', page.url().endsWith('#/under99'), page.url());

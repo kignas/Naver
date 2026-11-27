@@ -13,6 +13,10 @@
   --brand-100: #ffedd5;
   --brand-50: #fff7ed;
 
+  /* Home header + hero banner share this one blue: the header backdrop
+     (home-final.css) and the banner base (HeroBanner.css) both read it. */
+  --home-hero-blue: #0a3fa8;
+
   /* Burgundy / gold header theme (Home) */
   --theme-burgundy: #5d0d18;
   --theme-gold: #ebcb8b;

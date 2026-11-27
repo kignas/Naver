@@ -1,17 +1,18 @@
-/* Three-layer "sandwich" hero: static blue base, animated stage, static strip. */
+/* Three-layer "sandwich" hero: static blue base, animated stage, static strip.
+   Everything is sized in `cqw` (1% of the banner width), so the whole
+   composition scales as one drawing instead of drifting apart at each width. */
 .hb {
-  --hb-blue: #0a3fa8;
+  --hb-blue: var(--home-hero-blue, #0a3fa8);
   --hb-blue-deep: #06296e;
-  --hb-yellow: #f6cd4c;
-  --hb-yellow-soft: #ffdf8a;
-  --hb-strip-h: 36px;
+  --hb-yellow: #ffd000;
+  --hb-yellow-deep: #e5bb00;
+  --hb-strip-h: 7cqw;
 
   position: relative;
   isolation: isolate;
+  container-type: inline-size;
   width: 100%;
-  aspect-ratio: 1.5 / 1;
-  min-height: 208px;
-  max-height: 268px;
+  aspect-ratio: 2 / 1;
   overflow: hidden;
   /* Paints inside their own layer: a per-frame transform on a photo never
      invalidates the feed below, and the slide over it repaints just this box. */
@@ -36,110 +37,183 @@
   z-index: 1;
 }
 
+/* Arches: 19cqw wide, rounded top, standing on the stage floor. */
 .hb-arch {
   position: absolute;
-  bottom: 0;
-  z-index: 0;
-  border-radius: 999px 999px 0 0;
+  width: 19cqw;
+  z-index: 1;
+  border-radius: 9.5cqw 9.5cqw 0 0;
   background: var(--hb-yellow);
   pointer-events: none;
 }
 
-.hb-arch--lg {
-  left: 46%;
-  right: -8%;
-  height: 88%;
+.hb-arch--cup {
+  left: 46cqw;
+  bottom: 12cqw;
+  height: 26cqw;
 }
 
-.hb-arch--sm {
-  left: 50%;
-  right: 6%;
-  height: 62%;
-  background: var(--hb-yellow-soft);
-  opacity: 0.9;
+.hb-arch--mug {
+  left: 67cqw;
+  bottom: 9cqw;
+  height: 30cqw;
 }
 
+/* Light beams: a soft shaft pinned at the arch base, fading as it swings down-left. */
+.hb-beam {
+  position: absolute;
+  z-index: 0;
+  height: 6cqw;
+  background: var(--hb-yellow-deep);
+  /* Alpha-mask the tip instead of fading the fill, so the beam keeps its hue
+     over the blue instead of turning grey. */
+  -webkit-mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0) 0%, #000 45%, #000 100%);
+  mask-image: linear-gradient(90deg, rgba(0, 0, 0, 0) 0%, #000 45%, #000 100%);
+  transform-origin: 100% 50%;
+  pointer-events: none;
+}
+
+.hb-beam--cup {
+  right: calc(100% - 55.5cqw);
+  bottom: 8cqw;
+  width: 26cqw;
+  transform: rotate(-20deg);
+}
+
+.hb-beam--mug {
+  right: calc(100% - 76.5cqw);
+  bottom: 5cqw;
+  width: 26cqw;
+  transform: rotate(-16deg);
+}
+
+/* Left column: about 46% wide, centred vertically in the stage. */
 .hb-copy {
   position: absolute;
-  left: 14px;
+  left: 5cqw;
   top: 0;
-  bottom: 0;
-  width: 47%;
-  display: grid;
-  /* minmax(0, 1fr) keeps the lines wrapping inside the column instead of
-     letting the auto-sized track grow to max-content. */
-  grid-template-columns: minmax(0, 1fr);
-  align-content: center;
+  width: 46cqw;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
   z-index: 3;
   pointer-events: none;
 }
 
-/* Both lines share one grid cell so the crossfade swaps them in place. */
-.hb-copy__line {
-  grid-area: 1 / 1;
+/* Both scenes share one box so the crossfade swaps the headline in place. */
+.hb-copy__stack {
+  position: relative;
+  width: 100%;
+}
+
+.hb-copy__scene {
+  display: flex;
+  flex-direction: column;
+}
+
+.hb-copy__scene--b {
+  position: absolute;
+  inset: 0;
+}
+
+.hb-copy__scene--b .hb-line {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.hb-line {
   margin: 0;
 }
 
-.hb-copy__line--a {
-  font-size: clamp(19px, 5.6vw, 25px);
-  line-height: 1.08;
+.hb-line--with {
+  font-size: 3.9cqw;
+  line-height: 1;
   font-weight: 800;
-  letter-spacing: -0.3px;
+  letter-spacing: 0.02em;
 }
 
-.hb-copy__line--a strong {
+.hb-line--free {
+  font-size: 11.6cqw;
+  line-height: 0.95;
+  font-weight: 900;
+  letter-spacing: -0.02em;
   color: var(--hb-yellow);
 }
 
-.hb-copy__line--b {
-  font-size: clamp(15px, 4.4vw, 19px);
-  line-height: 1.16;
-  font-weight: 800;
-  letter-spacing: -0.2px;
-  opacity: 0;
+.hb-line--delivery {
+  font-size: 6.6cqw;
+  line-height: 1.06;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  color: transparent;
+  -webkit-text-stroke: max(1px, 0.34cqw) var(--hb-yellow);
 }
 
-.hb-price {
-  color: var(--hb-yellow);
-  white-space: nowrap;
+.hb-cta {
+  margin-top: 3.2cqw;
+  height: 8.4cqw;
+  padding: 0 5.4cqw;
+  border: 0;
+  border-radius: 999px;
+  background: var(--hb-yellow);
+  color: var(--hb-blue-deep);
+  font: inherit;
+  font-size: 3.5cqw;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  pointer-events: auto;
 }
 
+.hb-cta:active {
+  transform: scale(0.97);
+}
+
+/* Dishes. Sizes and offsets are % of the banner width, per the layout spec:
+   cup 20, mug 22, poha 34, idli tray 38. Slot z-index keeps the tall pieces in
+   front of the plates they overlap. */
 .hb-dishes {
   position: absolute;
-  right: 2%;
-  top: 8%;
-  width: 54%;
-  height: 86%;
+  inset: 0;
   z-index: 2;
 }
 
 .hb-slot {
   position: absolute;
-  width: 52%;
-  height: 48%;
 }
 
-.hb-slot:nth-child(1) {
-  left: 0;
-  top: 4%;
+.hb-slot--cup {
+  left: 47cqw;
+  top: 5cqw;
+  width: 20cqw;
+  height: 20.5cqw;
+  z-index: 3;
 }
 
-.hb-slot:nth-child(2) {
-  right: 0;
-  top: 0;
-  width: 54%;
-  height: 52%;
+.hb-slot--mug {
+  left: 66cqw;
+  top: 6cqw;
+  width: 22cqw;
+  height: 16.4cqw;
+  z-index: 4;
 }
 
-.hb-slot:nth-child(3) {
-  left: 4%;
-  bottom: 2%;
+.hb-slot--poha {
+  left: 48cqw;
+  top: 11cqw;
+  width: 34cqw;
+  height: 25.4cqw;
+  z-index: 1;
 }
 
-.hb-slot:nth-child(4) {
-  right: -2%;
-  bottom: 0;
-  width: 50%;
+.hb-slot--tray {
+  left: 70cqw;
+  top: 8cqw;
+  width: 38cqw;
+  height: 28.4cqw;
+  z-index: 2;
 }
 
 /* Soft elliptical contact shadow — a painted gradient, never a filter. */
@@ -147,8 +221,8 @@
   position: absolute;
   left: 8%;
   right: 8%;
-  bottom: 3%;
-  height: 14%;
+  bottom: 0;
+  height: 2.6cqw;
   border-radius: 50%;
   background: radial-gradient(
     50% 50% at 50% 50%,
@@ -165,13 +239,9 @@
 .hb-dish {
   position: absolute;
   left: 0;
-  right: 0;
-  bottom: 8%;
-  margin: 0 auto;
+  bottom: 0;
   width: 100%;
-  max-width: 600px;
   height: auto;
-  object-fit: contain;
   pointer-events: none;
   user-select: none;
   -webkit-user-drag: none;
@@ -182,7 +252,7 @@
   visibility: hidden;
 }
 
-/* 3. Static bottom strip */
+/* 3. Static bottom strip: bright yellow, offer text between two thin rules. */
 .hb-strip {
   position: absolute;
   left: 0;
@@ -191,81 +261,33 @@
   z-index: 4;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 3.4cqw;
   height: var(--hb-strip-h);
-  padding: 0 12px;
-  background: var(--hb-blue-deep);
+  padding: 0 4.5cqw;
+  background: var(--hb-yellow);
+}
+
+.hb-strip__rule {
+  flex: 1 1 0;
+  height: 1px;
+  background: rgba(6, 41, 110, 0.4);
 }
 
 .hb-strip__text {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   margin: 0;
   overflow: hidden;
-  font-size: 11.5px;
-  font-weight: 700;
+  font-size: 3.1cqw;
+  font-weight: 800;
   letter-spacing: 0.01em;
-  color: #e8f0ff;
+  color: var(--hb-blue-deep);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.hb-strip__cta {
-  flex: 0 0 auto;
-  height: 24px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--hb-yellow);
-  color: var(--hb-blue-deep);
-  font: inherit;
-  font-size: 11.5px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.hb-strip__cta:active {
-  transform: scale(0.96);
-}
-
-/* ~360-430px phones */
-@media (max-width: 360px) {
-  .hb {
-    --hb-strip-h: 32px;
-    aspect-ratio: 1.44 / 1;
-  }
-
-  .hb-copy {
-    left: 12px;
-    width: 48%;
-  }
-
-  .hb-dishes {
-    width: 55%;
-  }
-
-  .hb-strip {
-    padding: 0 10px;
-  }
-
-  .hb-strip__text {
-    font-size: 11px;
-  }
-}
-
-@media (min-width: 400px) {
-  .hb {
-    aspect-ratio: 1.55 / 1;
-  }
-
-  .hb-copy {
-    left: 18px;
-    width: 45%;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .hb-strip__cta:active {
+  .hb-cta:active {
     transform: none;
   }
 }

@@ -5,17 +5,20 @@ import { HERO_DISHES, type HeroDishId } from './heroAssets';
 import './HeroBanner.css';
 
 export interface HeroBannerProps {
-  /** Lowest breakfast price printed by scene B. */
+  /** Kept for callers; the pass-1 layout prints no price. */
   price?: number;
   /** Text of the static bottom strip. */
   stripText?: string;
-  /** Fired by the strip CTA. */
+  /** Fired by the ORDER NOW pill. */
   onOrder?: () => void;
 }
 
-/** Four dish slots, left to right / top to bottom. */
+/** Four dish slots, in slot order: cup, mug, poha, idli tray. */
 const SCENE_A: readonly HeroDishId[] = ['paperCup', 'chaiMug', 'pohaPlate', 'idliTray'];
 const SCENE_B: readonly HeroDishId[] = ['brassTumbler', 'chaiMug', 'paperCup', 'idliTray'];
+
+/** Slot names drive the layout classes, so art and position stay in one order. */
+const SLOTS = ['cup', 'mug', 'poha', 'tray'] as const;
 
 const DEFAULT_STRIP_TEXT = 'Breakfast staples · served fresh';
 
@@ -25,7 +28,7 @@ const ENTER_STAGGER = 0.12;
 const EXIT = 0.45;
 const EXIT_STAGGER = 0.06;
 
-export function HeroBanner({ price = 49, stripText = DEFAULT_STRIP_TEXT, onOrder }: HeroBannerProps) {
+export function HeroBanner({ stripText = DEFAULT_STRIP_TEXT, onOrder }: HeroBannerProps) {
   const rootRef = useRef<HTMLDivElement>(null);
 
   useGSAP(
@@ -35,8 +38,9 @@ export function HeroBanner({ price = 49, stripText = DEFAULT_STRIP_TEXT, onOrder
 
       const dishesA = Array.from(root.querySelectorAll<HTMLElement>('.hb-dish--a'));
       const dishesB = Array.from(root.querySelectorAll<HTMLElement>('.hb-dish--b'));
-      const copyA = Array.from(root.querySelectorAll<HTMLElement>('.hb-copy__line--a'));
-      const copyB = Array.from(root.querySelectorAll<HTMLElement>('.hb-copy__line--b'));
+      const copyA = Array.from(root.querySelectorAll<HTMLElement>('.hb-copy__scene--a .hb-line'));
+      const copyB = Array.from(root.querySelectorAll<HTMLElement>('.hb-copy__scene--b .hb-line'));
+      const cta = root.querySelector<HTMLElement>('.hb-cta');
 
       const mm = gsap.matchMedia();
 
@@ -84,24 +88,25 @@ export function HeroBanner({ price = 49, stripText = DEFAULT_STRIP_TEXT, onOrder
         const loop = gsap.timeline({ repeat: -1, paused: true });
 
         float(loop, dishesA, 0, 1.2);
-        loop.to(copyA, { opacity: 0, y: -8, duration: 0.35, ease: 'power2.in' }, 2.4);
+        loop.to(copyA, { autoAlpha: 0, y: -8, duration: 0.35, ease: 'power2.in' }, 2.4);
         exit(loop, dishesA, 2.4, 4);
 
         // B starts while A is still fading out, so the swap reads as a crossfade.
         enter(loop, dishesB, 2.6);
-        loop.fromTo(copyB, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out' }, 2.6);
+        loop.fromTo(copyB, { autoAlpha: 0, y: 8 }, { autoAlpha: 1, y: 0, duration: 0.5, ease: 'power2.out' }, 2.6);
         float(loop, dishesB, 3.9, 1.1);
 
-        loop.to(copyB, { opacity: 0, y: -8, duration: 0.35, ease: 'power2.in' }, 6.2);
+        loop.to(copyB, { autoAlpha: 0, y: -8, duration: 0.35, ease: 'power2.in' }, 6.2);
         exit(loop, dishesB, 6.2, -4);
 
         enter(loop, dishesA, 6.4);
-        loop.fromTo(copyA, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out' }, 6.4);
+        loop.fromTo(copyA, { autoAlpha: 0, y: 8 }, { autoAlpha: 1, y: 0, duration: 0.5, ease: 'power2.out' }, 6.4);
         float(loop, dishesA, 7.56, 0.42);
 
         const entrance = gsap.timeline({ onComplete: () => loop.play(0) });
         enter(entrance, dishesA, 0);
-        entrance.fromTo(copyA, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out' }, 0.1);
+        entrance.fromTo(copyA, { autoAlpha: 0, y: 10 }, { autoAlpha: 1, y: 0, duration: 0.5, ease: 'power2.out' }, 0.1);
+        if (cta) entrance.fromTo(cta, { autoAlpha: 0, y: 10 }, { autoAlpha: 1, y: 0, duration: 0.5, ease: 'power2.out' }, 0.25);
 
         // A looping hero must cost nothing while it is off screen, covered by a
         // pushed route, or competing with a route transition. Everything here is
@@ -152,18 +157,30 @@ export function HeroBanner({ price = 49, stripText = DEFAULT_STRIP_TEXT, onOrder
       {/* 1. Static base */}
       <div className="hb-base" aria-hidden="true" />
 
-      {/* 2. Animated middle: arches, copy, dishes */}
+      {/* 2. Animated middle: arches, beams, copy, dishes */}
       <div className="hb-stage">
-        <span className="hb-arch hb-arch--lg" aria-hidden="true" />
-        <span className="hb-arch hb-arch--sm" aria-hidden="true" />
+        <span className="hb-arch hb-arch--cup" aria-hidden="true" />
+        <span className="hb-arch hb-arch--mug" aria-hidden="true" />
+        <span className="hb-beam hb-beam--cup" aria-hidden="true" />
+        <span className="hb-beam hb-beam--mug" aria-hidden="true" />
 
         <div className="hb-copy">
-          <p className="hb-copy__line hb-copy__line--a">
-            with <strong>FREE</strong> Delivery
-          </p>
-          <p className="hb-copy__line hb-copy__line--b">
-            Breakfast Staples - Starting at <span className="hb-price">₹{price}</span>
-          </p>
+          <div className="hb-copy__stack">
+            <div className="hb-copy__scene hb-copy__scene--a">
+              <p className="hb-line hb-line--with">with</p>
+              <p className="hb-line hb-line--free">FREE</p>
+              <p className="hb-line hb-line--delivery">Delivery</p>
+            </div>
+            {/* Scene B repeats the headline so the swap keeps its copy beat. */}
+            <div className="hb-copy__scene hb-copy__scene--b" aria-hidden="true">
+              <p className="hb-line hb-line--with">with</p>
+              <p className="hb-line hb-line--free">FREE</p>
+              <p className="hb-line hb-line--delivery">Delivery</p>
+            </div>
+          </div>
+          <button type="button" className="hb-cta" onClick={onOrder}>
+            ORDER NOW
+          </button>
         </div>
 
         <div className="hb-dishes">
@@ -171,7 +188,7 @@ export function HeroBanner({ price = 49, stripText = DEFAULT_STRIP_TEXT, onOrder
             const dishA = HERO_DISHES[id];
             const dishB = HERO_DISHES[SCENE_B[index]];
             return (
-              <div className="hb-slot" key={`${id}-${index}`}>
+              <div className={`hb-slot hb-slot--${SLOTS[index]}`} key={`${id}-${index}`}>
                 <span className="hb-shadow" aria-hidden="true" />
                 <img
                   className="hb-dish hb-dish--a"
@@ -200,10 +217,9 @@ export function HeroBanner({ price = 49, stripText = DEFAULT_STRIP_TEXT, onOrder
 
       {/* 3. Static bottom strip */}
       <div className="hb-strip">
+        <span className="hb-strip__rule" aria-hidden="true" />
         <p className="hb-strip__text">{stripText}</p>
-        <button type="button" className="hb-strip__cta" onClick={onOrder}>
-          Order
-        </button>
+        <span className="hb-strip__rule" aria-hidden="true" />
       </div>
     </section>
   );

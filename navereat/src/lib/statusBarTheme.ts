@@ -1,7 +1,6 @@
-// Home's tactile header is the oxblood theme (home-final.css --hd-primary),
-// so the non-overlay status bar has to use that colour, not the oxblood it had
-// before the header was restyled.
-export const HEADER_HOME = '#5D0D18';
+// Home's header backdrop is --home-hero-blue (home-final.css --hd-primary), the
+// same blue as the hero banner, so the non-overlay status bar has to match it.
+export const HEADER_HOME = '#0A3FA8';
 export const HEADER_LOGIN_YELLOW = '#FFD92F';
 export const HEADER_WHITE = '#FFFFFF';
 // Rendered top-left of the 99 Store hero gradient (hd-primary -> hd-active at
