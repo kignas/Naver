@@ -103,7 +103,12 @@ export function HeroBanner({ stripText = DEFAULT_STRIP_TEXT, onOrder }: HeroBann
         loop.fromTo(copyA, { autoAlpha: 0, y: 8 }, { autoAlpha: 1, y: 0, duration: 0.5, ease: 'power2.out' }, 6.4);
         float(loop, dishesA, 7.56, 0.42);
 
-        const entrance = gsap.timeline({ onComplete: () => loop.play(0) });
+        const entrance = gsap.timeline({
+          onComplete: () => {
+            loop.play(0);
+            sync();
+          },
+        });
         enter(entrance, dishesA, 0);
         entrance.fromTo(copyA, { autoAlpha: 0, y: 10 }, { autoAlpha: 1, y: 0, duration: 0.5, ease: 'power2.out' }, 0.1);
         if (cta) entrance.fromTo(cta, { autoAlpha: 0, y: 10 }, { autoAlpha: 1, y: 0, duration: 0.5, ease: 'power2.out' }, 0.25);
@@ -117,14 +122,18 @@ export function HeroBanner({ stripText = DEFAULT_STRIP_TEXT, onOrder }: HeroBann
         const isCovered = () =>
           Boolean(stage?.classList.contains('has-detail')) || Boolean(layer && !layer.classList.contains('is-active'));
         const isTransitioning = () => Boolean(stage?.classList.contains('is-animating'));
+        // A sheet or overlay locks the page scroller; the hero is behind it and
+        // must not keep animating while the user is in the sheet.
+        const isOverlayOpen = () => document.body.classList.contains('nb-scroll-lock');
         let intersecting = true;
-        const sync = () => {
-          const play = intersecting && !document.hidden && !isTransitioning() && !isCovered();
+        function sync() {
+          const play =
+            intersecting && !document.hidden && !isTransitioning() && !isCovered() && !isOverlayOpen();
           for (const timeline of [entrance, loop]) {
             if (play) timeline.resume();
             else timeline.pause();
           }
-        };
+        }
         const viewportObserver = new IntersectionObserver(([entry]) => {
           intersecting = entry.isIntersecting;
           sync();
@@ -133,10 +142,11 @@ export function HeroBanner({ stripText = DEFAULT_STRIP_TEXT, onOrder }: HeroBann
         // Class only: the app writes inline styles on the stage every frame of a
         // slide, and watching those would run sync() on every one of them.
         const attributeObserver = new MutationObserver(sync);
-        for (const node of [stage, layer]) {
+        for (const node of [stage, layer, document.body]) {
           attributeObserver.observe(node as Element, { attributes: true, attributeFilter: ['class'] });
         }
         document.addEventListener('visibilitychange', sync);
+        sync();
 
         return () => {
           viewportObserver.disconnect();
