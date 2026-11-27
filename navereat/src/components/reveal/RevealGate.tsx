@@ -37,7 +37,6 @@ export function RevealGate({
   const [imagesReady, setImagesReady] = useState(false);
   const [forced, setForced] = useState(false);
   const [revealed, setRevealed] = useState(false);
-  const [skeletonGone, setSkeletonGone] = useState(false);
 
   useEffect(() => {
     const elapsed = performance.now() - startedAtRef.current;
@@ -75,12 +74,6 @@ export function RevealGate({
     setRevealed(true);
   }, [ready]);
 
-  useEffect(() => {
-    if (!revealed) return undefined;
-    const timer = window.setTimeout(() => setSkeletonGone(true), prefersReducedMotion() ? 0 : REVEAL_MS);
-    return () => window.clearTimeout(timer);
-  }, [revealed]);
-
   useLayoutEffect(() => {
     if (!revealed) return undefined;
     const root = contentRef.current;
@@ -112,11 +105,9 @@ export function RevealGate({
       >
         {children}
       </div>
-      {!skeletonGone && (
-        <div className={`reveal-gate__skeleton${revealed ? ' is-hidden' : ''}`} aria-hidden="true">
-          {skeleton}
-        </div>
-      )}
+      <div className={`reveal-gate__skeleton${revealed ? ' is-hidden' : ''}`} aria-hidden="true">
+        {skeleton}
+      </div>
     </div>
   );
 }

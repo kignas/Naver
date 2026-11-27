@@ -40,7 +40,7 @@ function RestaurantSkeletonList({ count, id }: { count: number; id?: string }) {
 
 function RestaurantSkeleton() {
   return (
-    <div className="u99-card-host rs-skeleton" aria-hidden="true">
+    <div className="rs-skeleton" aria-hidden="true">
       <article className="u99-restaurant-card">
         <div className="u99-restaurant-head">
           <div className="u99-card-copy">

@@ -43,7 +43,7 @@ export function CartSkeleton({ rows = 2 }: { rows?: number }) {
           <span className="rv-sk rv-cart-line" key={line} style={{ width: `${82 - line * 10}%` }} />
         ))}
       </div>
-      <div className="ct-oi-policy rv-cart-policy">
+      <div className="rv-cart-policy">
         <span className="rv-sk" style={{ height: 12, width: '32%' }} />
         <span className="rv-sk" style={{ height: 11, width: '92%', marginTop: 8 }} />
       </div>

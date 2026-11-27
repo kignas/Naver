@@ -572,6 +572,10 @@ body {
   flex-direction: column;
 }
 
+.rs-skeleton {
+  margin-bottom: 20px;
+}
+
 .rs-skeleton .u99-restaurant-name .rv-sk {
   height: 16px;
   border-radius: 6px;
