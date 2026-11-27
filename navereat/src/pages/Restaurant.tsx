@@ -7,7 +7,9 @@ import { MenuFiltersProvider } from '../components/menu/MenuFiltersProvider';
 import { MenuFreeDeliveryStrip } from '../components/menu/MenuFreeDeliveryStrip';
 import { MenuSearchRow } from '../components/menu/MenuSearchRow';
 import { MenuSection } from '../components/menu/MenuSection';
+import { MenuSkeleton } from '../components/menu/MenuSkeleton';
 import type { MenuGroup } from '../components/menu/menuTypes';
+import { useAfterSlide } from '../hooks/useAfterSlide';
 import { findRestaurant } from '../data/demo';
 import { useRestaurantData } from '../data';
 import type { MenuItem } from '../data/demo';
@@ -87,6 +89,7 @@ export function Restaurant() {
   const patchRestaurant = useUiStore((s) => s.patchRestaurant);
   const selectRestaurant = useAppStore((s) => s.selectRestaurant);
   const preparing = useNavStore((s) => s.preparing);
+  const afterSlide = useAfterSlide();
 
   const [tab, setTab] = useState<MenuTab>(cachedRestaurant?.tab ?? 'menu');
   const [menuSearchOpen, setMenuSearchOpen] = useState(cachedRestaurant?.menuSearchOpen ?? false);
@@ -236,6 +239,18 @@ export function Restaurant() {
 
         {menuSearchOpen && <MenuSearchRow preparing={preparing} onClose={closeSearch} />}
 
+        <div className="rest-hero" aria-hidden="true">
+          <img
+            className="rest-hero-img"
+            src={restaurant.image}
+            alt=""
+            width={600}
+            height={400}
+            loading="eager"
+            decoding="async"
+          />
+        </div>
+
         <div className="res-card">
           <div className="res-card-body">
             <div className="ew-res-head">
@@ -348,6 +363,8 @@ export function Restaurant() {
           </button>
         </div>
 
+        {afterSlide ? (
+          <>
         {tab === 'menu' && (
           <MenuCatNav scrollRef={scrollRef} routeId={routeId} initialActive={cachedRestaurant?.activeCategory ?? 0} />
         )}
@@ -472,6 +489,10 @@ export function Restaurant() {
             )}
           </div>
           </div>
+          </>
+        ) : (
+          <MenuSkeleton groups={groups} />
+        )}
         </MenuFiltersProvider>
       </div>
 

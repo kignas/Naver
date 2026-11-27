@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import type { Location } from 'react-router-dom';
 import { isTabPath, TAB_PATHS, useAppNav } from '../lib/navigation';
 import { applyLayout, captureLayout, refreshSnapshotScroll, type LayoutSnapshot } from '../lib/layoutSnapshot';
-import { RouteShell } from './RouteShell';
+import { announceSlideComplete, markSlideActive } from '../lib/slideGate';
 import { waitForRouteReady } from '../lib/routeReady';
 import { routeKeyFor } from '../lib/routeLoaders';
 import { fontsReady } from '../lib/fonts';
@@ -133,6 +133,25 @@ export function PageTransition({ location: incoming, swipeBack = false, render }
   const snapshotsRef = useRef(new Map<string, LayoutSnapshot>());
   const restoresRef = useRef<Array<{ scope: 'tab' | 'layer'; restore: () => void }>>([]);
   const previousLocationRef = useRef(location);
+  const slideTokenRef = useRef(0);
+  const slideAnnouncedRef = useRef(false);
+
+  const beginSlide = useCallback(() => {
+    slideTokenRef.current += 1;
+    slideAnnouncedRef.current = false;
+    markSlideActive(true);
+  }, []);
+
+  const finishSlide = useCallback(() => {
+    if (slideAnnouncedRef.current) return;
+    slideAnnouncedRef.current = true;
+    const token = slideTokenRef.current;
+    markSlideActive(false);
+    window.requestAnimationFrame(() => {
+      if (token !== slideTokenRef.current) return;
+      announceSlideComplete();
+    });
+  }, []);
 
   layersRef.current = layers;
   tabLayersRef.current = tabLayers;
@@ -280,6 +299,7 @@ export function PageTransition({ location: incoming, swipeBack = false, render }
     if (!target) return;
     if (prefersReducedMotion()) {
       gsap.set(target, { opacity: 1, x: 0, willChange: 'auto' });
+      finishSlide();
       return;
     }
 
@@ -295,17 +315,21 @@ export function PageTransition({ location: incoming, swipeBack = false, render }
           { opacity: 1, x: 0, duration: PAGE_PUSH_DURATION, ease: PAGE_EASE, overwrite: 'auto' },
         );
 
-    // The layer is promoted for the duration of the tween only: a permanent
-    // will-change keeps a full-screen layer alive for nothing.
-    gsap.set(target, { willChange: 'transform, opacity' });
+    // The layer is promoted for the duration of the tween only, and only for
+    // the property that moves it: a permanent will-change keeps a full-screen
+    // layer alive for nothing.
+    gsap.set(target, { willChange: 'transform' });
     const release = () => gsap.set(target, { willChange: 'auto' });
-    tween.eventCallback('onComplete', release);
+    tween.eventCallback('onComplete', () => {
+      release();
+      finishSlide();
+    });
 
     return () => {
       tween.kill();
       release();
     };
-  }, [layers, preparing, stage.animating, stage.direction]);
+  }, [finishSlide, layers, preparing, stage.animating, stage.direction]);
 
   useLayoutEffect(() => {
     const current = layersRef.current;
@@ -321,6 +345,7 @@ export function PageTransition({ location: incoming, swipeBack = false, render }
     if (skipNextPopRef.current) {
       skipNextPopRef.current = false;
       clearTimer();
+      finishSlide();
       runIdRef.current += 1;
       setSwipeBackLocation(null);
       setSwiping(false);
@@ -371,6 +396,7 @@ export function PageTransition({ location: incoming, swipeBack = false, render }
       // switches (no detail layer) still swap instantly.
       if ((direction === 'tab' && !top) || (!top && !stageRef.current.animating)) {
         clearTimer();
+        finishSlide();
         runIdRef.current += 1;
         setLayers([]);
         setStage({ direction: 'tab', animating: false });
@@ -396,6 +422,7 @@ export function PageTransition({ location: incoming, swipeBack = false, render }
         const targetLayer: Layer | null = targetIsTab
           ? null
           : { key: location.key, location, phase: 'enter' };
+        beginSlide();
         setLayers(targetLayer ? [targetLayer, { ...top, phase: 'leave' }] : [{ ...top, phase: 'leave' }]);
         setStage({ direction: 'pop', animating: true });
         setTabShift(false);
@@ -409,6 +436,7 @@ export function PageTransition({ location: incoming, swipeBack = false, render }
           if (targetLayer) setLayers([{ key: location.key, location, phase: 'idle' }]);
           else setLayers([]);
           setStage({ direction: 'pop', animating: false });
+          finishSlide();
           window.dispatchEvent(new CustomEvent('navereat:transition-end', { detail: { direction: 'pop' } }));
           timerRef.current = null;
         }, POP_DURATION);
@@ -416,6 +444,7 @@ export function PageTransition({ location: incoming, swipeBack = false, render }
       }
 
       clearTimer();
+      finishSlide();
       runIdRef.current += 1;
       setLayers([]);
       setStage({ direction: 'tab', animating: false });
@@ -453,9 +482,10 @@ export function PageTransition({ location: incoming, swipeBack = false, render }
     setSwipeBackLocation(null);
     setSwiping(false);
     setPreparing(true);
-    // Pages mounted for the slide must render their full state from the first
-    // render (no skeleton -> content swap inside the moving layer).
+    // Pages mounted for the slide render their light shell first and mount the
+    // heavy sections from useAfterSlide() once this tween has completed.
     useNavStore.getState().setPreparing(true);
+    beginSlide();
     setLayers(oldLayer ? [oldLayer, newLayer] : [newLayer]);
     setStage({ direction: move, animating: true });
 
@@ -472,11 +502,14 @@ export function PageTransition({ location: incoming, swipeBack = false, render }
       window.dispatchEvent(new CustomEvent('navereat:transition-start', { detail: { direction: move } }));
       timerRef.current = window.setTimeout(() => {
         if (runId !== runIdRef.current) return;
-        // The shell paid for the slide; the page can now render its full state
-        // immediately instead of swapping a skeleton after the transition.
+        // The shell paid for the slide; the page can now mount its heavy
+        // sections instead of swapping a skeleton after the transition.
         useNavStore.getState().setPreparing(true);
+        const settled = layerRefs.current.get(location.key);
+        if (settled) gsap.set(settled, { opacity: 1, x: 0, willChange: 'auto' });
         setLayers([{ key: location.key, location, phase: 'idle' }]);
         setStage({ direction: move, animating: false });
+        finishSlide();
         void waitForRouteReady(location.key, 1500).then(() => useNavStore.getState().setPreparing(false));
         window.dispatchEvent(new CustomEvent('navereat:transition-end', { detail: { direction: move } }));
         timerRef.current = null;
@@ -525,7 +558,7 @@ export function PageTransition({ location: incoming, swipeBack = false, render }
 
     startTimerRef.current = window.setTimeout(start, PUSH_READY_TIMEOUT);
     void settleIncoming().then(start);
-  }, [direction, location]);
+  }, [beginSlide, direction, finishSlide, location]);
 
   useEffect(() => () => {
     clearTimer();
@@ -710,10 +743,9 @@ export function PageTransition({ location: incoming, swipeBack = false, render }
             style={{ zIndex: layer.phase === 'idle' ? 1 : zIndex }}
             aria-hidden={!isTop}
           >
-            <RouteShell pathname={layer.location.pathname} />
-            {/* Mounted for every phase: the incoming page is laid out, its
-                images decoded and painted while the layer is still hidden, so
-                the slide never swaps a skeleton in behind the moving page. */}
+            {/* The route's own shell (LazyRoute) covers a chunk that is still
+                in flight; once the page is mounted this layer must not carry a
+                second, competing shell. */}
             <CachedRoute content={renderCached(layer.location)} />
           </div>
         );

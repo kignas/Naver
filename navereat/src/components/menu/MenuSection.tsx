@@ -32,6 +32,8 @@ export const MenuSection = memo(function MenuSection({
   // still on screen and a momentary miss (a store read keyed by the incoming
   // route) would collapse the menu, and the menu footer with it.
   const empty = ready && !preparing && visibleGroups.length === 0;
+  // First four dish images load eagerly: the reveal gate decodes them.
+  let imageIndex = 0;
 
   return (
     <div className="menu-section">
@@ -69,21 +71,26 @@ export const MenuSection = memo(function MenuSection({
                 <Icon name="solid:chevron-down" size={14} className="menu-cat-chevron" />
               </div>
               <div className={`menu-cat-items${groupCollapsed ? ' collapsed' : ''}`}>
-                {group.items.map((menuItem, itemIndex) => (
-                  <RestaurantMenuItem
-                    key={menuItem.id}
-                    menuItem={menuItem}
-                    resId={restaurantId}
-                    ratingKnown={ratingKnown}
-                    rating={rating}
-                    itemRating={itemRating}
-                    animationDelay={`${(groupIndex * 10 + itemIndex) * 0.04}s`}
-                    onAdd={addItem}
-                    onDecrement={decrementItem}
-                    onRemoveCustom={removeCustomizedUnit}
-                    onCustomize={openCustomize}
-                  />
-                ))}
+                {group.items.map((menuItem, itemIndex) => {
+                  const priority = imageIndex < 4;
+                  imageIndex += 1;
+                  return (
+                    <RestaurantMenuItem
+                      key={menuItem.id}
+                      menuItem={menuItem}
+                      resId={restaurantId}
+                      ratingKnown={ratingKnown}
+                      rating={rating}
+                      itemRating={itemRating}
+                      animationDelay={`${(groupIndex * 10 + itemIndex) * 0.04}s`}
+                      priority={priority}
+                      onAdd={addItem}
+                      onDecrement={decrementItem}
+                      onRemoveCustom={removeCustomizedUnit}
+                      onCustomize={openCustomize}
+                    />
+                  );
+                })}
               </div>
             </div>
           );

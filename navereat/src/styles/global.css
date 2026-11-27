@@ -639,7 +639,9 @@ ol {
 }
 
 .route-stage.is-animating .route-layer {
-  will-change: transform, opacity;
+  /* The moving layer is promoted for its transform only; opacity rides the
+     same compositor layer without a second hint. */
+  will-change: transform;
 }
 
 .route-layer.is-idle {
@@ -738,14 +740,8 @@ ol {
    fades in over 24 px, the leaving page fades out the same way). No CSS
    animation here: two drivers on the same transform stutter. */
 
-/* Soft leading-edge shadow on the page that slides. It is painted outside the
-   layer, so it falls on the page underneath while the layer is off-centre and
-   is clipped by the stage once the layer lands. Scoped to the animation so a
-   page at rest never carries the shadow's paint work. */
-.route-stage.is-animating .route-layer.is-enter,
-.route-stage.is-animating .route-layer.is-leave {
-  box-shadow: -18px 0 32px -10px rgba(15, 23, 42, 0.34);
-}
+/* No box-shadow or filter on the moving layer: both would force a second
+   paint pass on a full-screen surface for every frame of the slide. */
 
 /* Tabs never animate. Only the bottom-nav indicator moves. */
 .route-stage.direction-tab .route-layer.is-enter,
@@ -1054,3 +1050,38 @@ a,
 .header-slide.is-active .banner-subtitle { animation-delay: .07s; }
 .header-slide.is-active .banner-offer { animation-delay: .1s; }
 .header-slide.is-active .banner-cta { animation-delay: .14s; }
+
+/* Shared skeleton shimmer for the reveal gates. */
+.rv-sk {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  background: #f0f0f2;
+  border-radius: 8px;
+}
+
+.rv-sk::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.62) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: rv-shimmer 1.2s linear infinite;
+}
+
+@keyframes rv-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rv-sk::after {
+    animation: none;
+  }
+}

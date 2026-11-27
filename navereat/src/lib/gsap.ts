@@ -12,7 +12,7 @@ export function prefersReducedMotion(): boolean {
 
 /** Page motion: quick out of the gate, long soft landing. */
 export const PAGE_EASE = 'power2.out';
-export const PAGE_PUSH_DURATION = 0.28;
+export const PAGE_PUSH_DURATION = 0.26;
 export const PAGE_POP_DURATION = 0.22;
 
 /** How far the arriving page is offset on x when it starts. */

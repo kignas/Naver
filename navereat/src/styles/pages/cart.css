@@ -104,3 +104,94 @@ body.ct-page .nb-veg-mark.veg > span {
   width: 6px !important;
   height: 6px !important;
 }
+
+/* Cart placeholder: same top-level cards as the real page, with fixed boxes. */
+.cart-page .rv-cart-skeleton,
+.rv-cart-skeleton {
+  padding-top: 8px;
+}
+
+.rv-cart-card {
+  margin: 12px;
+  padding: 14px 16px;
+  background: #fff;
+  border-radius: 18px;
+}
+
+.rv-cart-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid #f0f1f3;
+}
+
+.rv-cart-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.rv-cart-stepper {
+  width: 92px;
+  height: 32px;
+  border-radius: 999px;
+}
+
+.rv-cart-strip {
+  margin: 12px;
+  height: 44px;
+  border-radius: 14px;
+}
+
+.rv-cart-upsell {
+  display: flex;
+  gap: 12px;
+  margin-top: 14px;
+  align-items: center;
+}
+
+.rv-cart-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  flex: 0 0 auto;
+}
+
+.rv-cart-upsell-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.rv-cart-line {
+  height: 12px;
+  margin-top: 10px;
+}
+
+.rv-cart-policy {
+  margin: 4px 16px 0;
+  padding: 12px 0 28px;
+}
+
+.rv-cart-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #fff;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -6px 24px rgba(20, 25, 45, 0.08);
+}
+
+.rv-cart-paybar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.rv-cart-cta {
+  flex: 1;
+  height: 54px;
+  border-radius: 999px;
+}

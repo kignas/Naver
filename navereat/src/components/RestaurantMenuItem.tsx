@@ -11,6 +11,8 @@ export interface RestaurantMenuItemProps {
   rating: number;
   itemRating: string;
   animationDelay: string;
+  /** The first four dish images load eagerly so the reveal can decode them. */
+  priority?: boolean;
   onAdd: (item: MenuItem, resId: number) => void;
   onDecrement: (name: string) => void;
   onRemoveCustom: (item: MenuItem) => void;
@@ -24,6 +26,7 @@ function RestaurantMenuItemView({
   rating,
   itemRating,
   animationDelay,
+  priority = false,
   onAdd,
   onDecrement,
   onRemoveCustom,
@@ -115,7 +118,7 @@ function RestaurantMenuItemView({
                 height="88"
                 src={menuItem.image}
                 alt={menuItem.name}
-                loading="lazy"
+                loading={priority ? 'eager' : 'lazy'}
                 decoding="async"
                 onLoad={(event) => {
                   event.currentTarget.classList.add('is-loaded');
