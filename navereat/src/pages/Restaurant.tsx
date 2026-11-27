@@ -9,7 +9,7 @@ import { MenuSearchRow } from '../components/menu/MenuSearchRow';
 import { MenuSection } from '../components/menu/MenuSection';
 import { MenuSkeleton } from '../components/menu/MenuSkeleton';
 import type { MenuGroup } from '../components/menu/menuTypes';
-import { useAfterSlide } from '../hooks/useAfterSlide';
+import { SlideReveal } from '../components/reveal/SlideReveal';
 import { findRestaurant } from '../data/demo';
 import { useRestaurantData } from '../data';
 import type { MenuItem } from '../data/demo';
@@ -89,12 +89,12 @@ export function Restaurant() {
   const patchRestaurant = useUiStore((s) => s.patchRestaurant);
   const selectRestaurant = useAppStore((s) => s.selectRestaurant);
   const preparing = useNavStore((s) => s.preparing);
-  const afterSlide = useAfterSlide();
 
   const [tab, setTab] = useState<MenuTab>(cachedRestaurant?.tab ?? 'menu');
   const [menuSearchOpen, setMenuSearchOpen] = useState(cachedRestaurant?.menuSearchOpen ?? false);
   const [saved, setSaved] = useState(cachedRestaurant?.saved ?? false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const mountedAtRef = useRef(performance.now());
 
   useLayoutEffect(() => {
     const detach = restaurantStyle.attach();
@@ -363,8 +363,7 @@ export function Restaurant() {
           </button>
         </div>
 
-        {afterSlide ? (
-          <>
+        <SlideReveal startedAt={mountedAtRef.current} dataReady={ready} skeleton={<MenuSkeleton groups={groups} />}>
         {tab === 'menu' && (
           <MenuCatNav scrollRef={scrollRef} routeId={routeId} initialActive={cachedRestaurant?.activeCategory ?? 0} />
         )}
@@ -489,10 +488,7 @@ export function Restaurant() {
             )}
           </div>
           </div>
-          </>
-        ) : (
-          <MenuSkeleton groups={groups} />
-        )}
+        </SlideReveal>
         </MenuFiltersProvider>
       </div>
 

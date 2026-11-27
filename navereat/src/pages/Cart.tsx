@@ -15,7 +15,7 @@ import { CartTotalsProvider } from '../components/cart/CartTotalsProvider';
 import { CartUpsell } from '../components/cart/CartUpsell';
 import { NOTE_MAX, TIP_PRESETS } from '../components/cart/cartConstants';
 import { Icon } from '../components/Icon';
-import { useAfterSlide } from '../hooks/useAfterSlide';
+import { SlideReveal } from '../components/reveal/SlideReveal';
 import { coupons, findRestaurant, type Coupon, type DemoOffer } from '../data/demo';
 import { cartRestaurantId } from '../lib/cart';
 import { tapHaptic } from '../lib/haptics';
@@ -88,7 +88,6 @@ export function Cart() {
   const empty = useAppStore((s) => Object.keys(s.cart).length === 0);
   const restaurantId = useAppStore((s) => cartRestaurantId(s.cart));
   const headline = useAppStore((s) => cartHeadline(s.cart));
-  const afterSlide = useAfterSlide();
 
   const [sheet, setSheet] = useState<SheetName>(null);
   const sheetRef = useRef<SheetHandle>(null);
@@ -101,6 +100,7 @@ export function Cart() {
   const savedExtrasRef = useRef<CartExtras | null>(null);
   savedExtrasRef.current ??= readCartExtras();
   const savedExtras = savedExtrasRef.current;
+  const mountedAtRef = useRef(performance.now());
 
   const [code, setCode] = useState('');
   const [couponError, setCouponError] = useState('');
@@ -321,8 +321,7 @@ export function Cart() {
             </div>
           </div>
 
-          {afterSlide ? (
-            <>
+          <SlideReveal startedAt={mountedAtRef.current} dataReady maxBlocks={1} skeleton={<CartSkeleton />}>
           <div className="ct-fees" role="note">
             <svg aria-hidden="true" className="ct-fees-ic" fill="none" height="14" viewBox="0 0 24 24" width="14">
               <path d="M19.5 4.5c.6 6.9-2.8 11.5-8.4 11.5H8.6C8.2 10.3 12.6 5.7 19.5 4.5Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.7" />
@@ -372,10 +371,7 @@ export function Cart() {
           />
 
           <CartOfferWatcher offerMode={offerMode} blocked={offerBlocked} onShow={setOfferPopup} />
-            </>
-          ) : (
-            <CartSkeleton />
-          )}
+          </SlideReveal>
         </div>
 
         {sheet === 'coupon' && (

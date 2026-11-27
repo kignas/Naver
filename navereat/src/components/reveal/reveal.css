@@ -1,0 +1,17 @@
+/* Skeleton overlay used by the reveal gate; the shared shimmer lives in global.css. */
+.reveal-gate {
+  position: relative;
+}
+
+.reveal-gate__content {
+  position: relative;
+}
+
+.reveal-gate__skeleton {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  background: var(--page, #fff);
+  pointer-events: none;
+}

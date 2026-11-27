@@ -1,4 +1,5 @@
-import { lazy, memo, Suspense, useCallback, useMemo, type RefObject } from 'react';
+import { lazy, memo, Suspense, useCallback, useMemo, useRef, type RefObject } from 'react';
+import { RevealGate } from '../reveal/RevealGate';
 import { restaurants, type MenuItem, type Restaurant } from '../../data/demo';
 import { useHomeFeed } from '../../data';
 import { clearCategory, retryCategory } from '../../lib/categoryMode';
@@ -27,6 +28,16 @@ const VirtualizedRestaurantList = lazy(() => import('./VirtualizedRestaurantList
  */
 const STAGGER_INDEX_BY_ID = new Map(restaurants.map((restaurant, index) => [restaurant.id, index]));
 
+function RestaurantSkeletonList({ count, id }: { count: number; id?: string }) {
+  return (
+    <div className="rv-feed-skeleton" id={id}>
+      {Array.from({ length: count }, (_, index) => (
+        <RestaurantSkeleton key={index} />
+      ))}
+    </div>
+  );
+}
+
 function RestaurantSkeleton() {
   return (
     <div className="u99-card-host rs-skeleton" aria-hidden="true">
@@ -34,18 +45,18 @@ function RestaurantSkeleton() {
         <div className="u99-restaurant-head">
           <div className="u99-card-copy">
             <div className="u99-discount-line">
-              <span className="sk rsk-line" style={{ width: '38%' }} />
+              <span className="rv-sk rsk-line" style={{ width: '38%' }} />
             </div>
             <h2 className="u99-restaurant-name">
-              <span className="sk rsk-line" style={{ width: '64%' }} />
+              <span className="rv-sk rsk-line" style={{ width: '64%' }} />
             </h2>
             <div className="u99-meta">
-              <span className="sk rsk-line" style={{ width: 52 }} />
-              <span className="sk rsk-line" style={{ width: 70 }} />
-              <span className="sk rsk-line" style={{ width: 88 }} />
+              <span className="rv-sk rsk-line" style={{ width: 52 }} />
+              <span className="rv-sk rsk-line" style={{ width: 70 }} />
+              <span className="rv-sk rsk-line" style={{ width: 88 }} />
             </div>
             <div className="u99-free-row">
-              <span className="sk rsk-line" style={{ width: '56%' }} />
+              <span className="rv-sk rsk-line" style={{ width: '56%' }} />
             </div>
           </div>
         </div>
@@ -54,14 +65,14 @@ function RestaurantSkeleton() {
             {[0, 1].map((index) => (
               <article className="u99-item" key={index}>
                 <div className="u99-item-image">
-                  <span className="sk rsk-fill" />
-                  <span className="sk rsk-add" />
+                  <span className="rv-sk rsk-fill" />
+                  <span className="rv-sk rsk-add" />
                 </div>
                 <div className="u99-item-name">
-                  <span className="sk rsk-line" style={{ width: '82%' }} />
+                  <span className="rv-sk rsk-line" style={{ width: '82%' }} />
                 </div>
                 <div className="u99-price-row">
-                  <span className="sk rsk-line" style={{ width: '44%' }} />
+                  <span className="rv-sk rsk-line" style={{ width: '44%' }} />
                 </div>
               </article>
             ))}
@@ -100,6 +111,7 @@ export const RestaurantFeed = memo(function RestaurantFeed({ ready, scrollerRef 
   const nav = useAppNav();
   const { openCustomize } = useCustomize();
   const feedState = useHomeFeed();
+  const mountedAtRef = useRef(performance.now());
   // Demo mode keeps the synchronous module data; api mode swaps in the live
   // feed once it lands and holds the card skeletons until then.
   const apiFeed = feedState.data?.restaurants;
@@ -185,6 +197,67 @@ export const RestaurantFeed = memo(function RestaurantFeed({ ready, scrollerRef 
     [addFromHome, addItem, cart, decrementItem, handleCustomize, openRestaurant],
   );
 
+  const hasFeedError = (feedState.mode === 'api' && feedState.error) || categoryFailed;
+  const skeletonCount =
+    hasFeedError || categoryEmpty ? 1 : Math.min(8, Math.max(2, filteredRestaurants.length || 2));
+
+  const listContent = hasFeedError ? (
+    <div className="state-block" id="restaurant-list">
+      <span className="state-icon" aria-hidden="true">
+        <Icon name="solid:circle-exclamation" size={40} />
+      </span>
+      <p className="state-title">Couldn&apos;t load restaurants</p>
+      <p className="state-sub">{(feedState.mode === 'api' && feedState.error) || categoryError}</p>
+      <button
+        type="button"
+        className="state-btn"
+        id="home-retry-btn"
+        onClick={() => {
+          clearCategory();
+          feedState.reload();
+        }}
+      >
+        Try Again
+      </button>
+    </div>
+  ) : categoryEmpty ? (
+    <div className="state-block" id="restaurant-list">
+      <span className="state-icon" aria-hidden="true">
+        <Icon name="solid:store" size={40} />
+      </span>
+      <p className="state-title">No restaurants available yet</p>
+      <p className="state-sub">We&apos;re not delivering here right now. Please check back soon.</p>
+      <button type="button" className="state-btn" id="home-retry-btn" onClick={() => void retryCategory()}>
+        Refresh
+      </button>
+    </div>
+  ) : filteredRestaurants.length ? (
+    shouldVirtualize ? (
+      <Suspense fallback={null}>
+        <VirtualizedRestaurantList
+          restaurants={filteredRestaurants}
+          scrollerRef={scrollerRef}
+          renderCard={renderCard}
+        />
+      </Suspense>
+    ) : (
+      <div id="restaurant-list">
+        {filteredRestaurants.map((restaurant) => renderCard(restaurant, true))}
+      </div>
+    )
+  ) : (
+    <div className="state-block" id="restaurant-list">
+      <span className="state-icon" aria-hidden="true">
+        <Icon name="solid:filter-circle-xmark" size={40} />
+      </span>
+      <p className="state-title">No restaurants match your filters</p>
+      <p className="state-sub">Try changing or clearing your filters.</p>
+      <button type="button" className="state-btn" id="home-clear-filters" onClick={resetHomeFilters}>
+        Clear filters
+      </button>
+    </div>
+  );
+
   return (
     <section className="section" id="restaurants-section">
       <div className="sec-head">
@@ -192,66 +265,16 @@ export const RestaurantFeed = memo(function RestaurantFeed({ ready, scrollerRef 
           {feedTitle}
         </h2>
       </div>
-      {!feedReady || categoryLoading ? (
-        <div id="restaurant-list">
-          <RestaurantSkeleton />
-          <RestaurantSkeleton />
-        </div>
-      ) : (feedState.mode === 'api' && feedState.error) || categoryFailed ? (
-        <div className="state-block" id="restaurant-list">
-          <span className="state-icon" aria-hidden="true">
-            <Icon name="solid:circle-exclamation" size={40} />
-          </span>
-          <p className="state-title">Couldn&apos;t load restaurants</p>
-          <p className="state-sub">{(feedState.mode === 'api' && feedState.error) || categoryError}</p>
-          <button
-            type="button"
-            className="state-btn"
-            id="home-retry-btn"
-            onClick={() => {
-              clearCategory();
-              feedState.reload();
-            }}
-          >
-            Try Again
-          </button>
-        </div>
-      ) : categoryEmpty ? (
-        <div className="state-block" id="restaurant-list">
-          <span className="state-icon" aria-hidden="true">
-            <Icon name="solid:store" size={40} />
-          </span>
-          <p className="state-title">No restaurants available yet</p>
-          <p className="state-sub">We&apos;re not delivering here right now. Please check back soon.</p>
-          <button type="button" className="state-btn" id="home-retry-btn" onClick={() => void retryCategory()}>
-            Refresh
-          </button>
-        </div>
-      ) : filteredRestaurants.length ? (
-        shouldVirtualize ? (
-          <Suspense fallback={null}>
-            <VirtualizedRestaurantList
-              restaurants={filteredRestaurants}
-              scrollerRef={scrollerRef}
-              renderCard={renderCard}
-            />
-          </Suspense>
-        ) : (
-          <div id="restaurant-list">
-            {filteredRestaurants.map((restaurant) => renderCard(restaurant, true))}
-          </div>
-        )
+      {!feedReady ? (
+        <RestaurantSkeletonList count={skeletonCount} id="restaurant-list" />
       ) : (
-        <div className="state-block" id="restaurant-list">
-          <span className="state-icon" aria-hidden="true">
-            <Icon name="solid:filter-circle-xmark" size={40} />
-          </span>
-          <p className="state-title">No restaurants match your filters</p>
-          <p className="state-sub">Try changing or clearing your filters.</p>
-          <button type="button" className="state-btn" id="home-clear-filters" onClick={resetHomeFilters}>
-            Clear filters
-          </button>
-        </div>
+        <RevealGate
+          startedAt={mountedAtRef.current}
+          dataReady={feedReady && !categoryLoading}
+          skeleton={<RestaurantSkeletonList count={skeletonCount} />}
+        >
+          {listContent}
+        </RevealGate>
       )}
     </section>
   );

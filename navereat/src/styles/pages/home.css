@@ -564,3 +564,24 @@ body {
     opacity: 0.7;
   }
 }
+
+/* Home feed skeleton: the list keeps the real cards' box model, the shimmer
+   lives on the reusable rv-sk layer so it can move by transform. */
+.rv-feed-skeleton {
+  display: flex;
+  flex-direction: column;
+}
+
+.rs-skeleton .u99-restaurant-name .rv-sk {
+  height: 16px;
+  border-radius: 6px;
+}
+
+.rs-skeleton .u99-meta .rv-sk {
+  height: 13px;
+  border-radius: 6px;
+}
+
+.rs-skeleton .u99-discount-line .rv-sk {
+  height: 10px;
+}
