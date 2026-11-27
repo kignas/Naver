@@ -471,9 +471,11 @@ async function main(): Promise<void> {
   await app.waitForTimeout(900);
   const order = await app.$$eval('#restaurant-list .u99-name-text', (nodes) => nodes.slice(0, 8).map((node) => node.textContent?.trim()));
   console.log(`App restaurant order: ${order.join(' | ')}`);
-  const boxes = async (page: typeof app) =>
-    page.evaluate(() => {
-      const selectors = ['.banner-title', '.cat-name', '.filter-pill', '.u99-restaurant-name', '.u99-meta', '.loc-sub', '#restaurants-title'];
+  // The hero copy is the one element the two pages do not share: the original
+  // keeps its `.banner-title` slide, the app renders the animated banner's line.
+  const boxes = async (page: typeof app, bannerSelector: string) =>
+    page.evaluate((banner) => {
+      const selectors = [banner, '.cat-name', '.filter-pill', '.u99-restaurant-name', '.u99-meta', '.loc-sub', '#restaurants-title'];
       return selectors.map((selector) => {
         const element = document.querySelector(selector);
         if (!element) return `${selector}:missing`;
@@ -481,9 +483,9 @@ async function main(): Promise<void> {
         const style = getComputedStyle(element);
         return `${selector}:${Math.round(rect.left)},${Math.round(rect.top)},${Math.round(rect.width)},${Math.round(rect.height)}:${style.fontFamily}:${style.fontSize}:${style.fontWeight}`;
       });
-    });
-  console.log('Original boxes:', (await boxes(original)).join(' | '));
-  console.log('App boxes:', (await boxes(app)).join(' | '));
+    }, bannerSelector);
+  console.log('Original boxes:', (await boxes(original, '.banner-title')).join(' | '));
+  console.log('App boxes:', (await boxes(app, '.hb-copy__line--a')).join(' | '));
   await app.screenshot({ path: path.join(verifyRoot, 'navereat/home.png') });
 
   await original.click('#filter-sheet-btn');

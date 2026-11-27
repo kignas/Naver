@@ -1,5 +1,5 @@
 /**
- * Home hero evidence: the original eatswada.com slide, rendered statically.
+ * Home hero evidence: the animated breakfast banner in `.hero-sheet`.
  *
  * Serves the production build and writes, for 390x844 and 360x800:
  *   - hero-<vp>.png        the banner as it paints,
@@ -8,8 +8,8 @@
  *                          not move, resize or parallax on its own),
  *   - report.json          geometry, overflow and the animation audit.
  *
- * The carousel that used to live here was removed: the hero must stay inert,
- * so the audit fails if any named animation starts on Home.
+ * The banner is driven by GSAP (transform/opacity on inline styles), not by CSS
+ * animations, so the audit still fails if a named CSS animation starts on Home.
  *
  * Usage: node scripts/hero-banner-evidence.mjs [--out verify/hero]
  */
@@ -76,11 +76,11 @@ try {
     const audit = await page.evaluate(() => {
       const banner = document.querySelector('#hero-banner-region');
       const sheet = document.querySelector('.hero-sheet');
-      const art = document.querySelector('.header-slide__art');
+      const art = document.querySelector('.hb-dish--a');
       const box = (node) => (node ? node.getBoundingClientRect() : null);
       const named = (a) => typeof a.animationName === 'string' && a.animationName.length > 0;
       const running = document.getAnimations().filter((a) => a.playState === 'running' && named(a));
-      const lines = ['.banner-title', '.banner-subtitle', '.banner-cta', '.banner-cta__chev', '.ew-strip'].map((selector) => {
+      const lines = ['.hb-copy__line--a', '.hb-copy__line--b', '.hb-strip__text', '.hb-strip__cta'].map((selector) => {
         const node = document.querySelector(selector);
         return {
           selector,
@@ -97,7 +97,7 @@ try {
         sheet: sheetBox && { y: Math.round(sheetBox.y), h: Math.round(sheetBox.height) },
         art: artBox && { x: Math.round(artBox.x), y: Math.round(artBox.y), w: Math.round(artBox.width), h: Math.round(artBox.height) },
         rules: getComputedStyle(banner).borderRadius,
-        slides: document.querySelectorAll('#hero-banner-region .header-slide').length,
+        banners: document.querySelectorAll('#hero-banner-region').length,
         dots: document.querySelectorAll('#hero-banner-region .banner-dot').length,
         runningAnimations: [...new Set(running.map((a) => a.animationName))],
         transitions: [...new Set(document.getAnimations().filter((a) => a.playState === 'running' && !named(a)).map((a) => a.transitionProperty || 'transition'))],
@@ -157,7 +157,7 @@ try {
     await context.close();
 
     const heights = new Set(scrollRows.map((row) => row.bannerHeight));
-    check(`${label}: one static slide`, audit.slides === 1 && audit.dots === 0, `slides=${audit.slides} dots=${audit.dots}`);
+    check(`${label}: one hero banner`, audit.banners === 1 && audit.dots === 0, `banners=${audit.banners} dots=${audit.dots}`);
     check(`${label}: no hero animation on open`, audit.runningAnimations.length === 0, audit.runningAnimations.join(', ') || 'none');
     check(`${label}: still inert after 5 s`, idle.running.length === 0 && idle.mutations === 0, `running=${idle.running.join(', ') || 'none'} mutations=${idle.mutations}`);
     check(`${label}: banner keeps its height while scrolling`, heights.size === 1, [...heights].join(', '));
@@ -169,11 +169,11 @@ try {
     const flat = (value) => (value || '').replace(/\s+/g, '');
     check(`${label}: copy is not clipped`, audit.lines.every((line) => line.present && !line.clipped), audit.lines.filter((line) => !line.present || line.clipped).map((line) => line.selector).join(', ') || 'every line fits');
     check(
-      `${label}: copy matches eatswada.com`,
-      flat(copy['.banner-title']) === 'GoodFoodClosertoHome.' &&
-        flat(copy['.banner-subtitle']) === 'TastyfoodHappieryou.♥' &&
-        flat(copy['.banner-cta']) === 'OrderNow' &&
-        flat(copy['.ew-strip']).startsWith('Nearbyrestaurants·'),
+      `${label}: copy matches the banner`,
+      flat(copy['.hb-copy__line--a']) === 'withFREEDelivery' &&
+        flat(copy['.hb-copy__line--b']) === 'BreakfastStaples-Startingat₹49' &&
+        flat(copy['.hb-strip__text']) === 'Breakfaststaples·servedfresh' &&
+        flat(copy['.hb-strip__cta']) === 'Order',
       JSON.stringify(copy),
     );
     check(`${label}: no page errors`, errors.length === 0, errors.join(' | '));
@@ -190,7 +190,7 @@ try {
       scrollStrip: path.relative(root, scrollStrip),
       errors,
     };
-    console.log(label, JSON.stringify({ banner: audit.banner, art: audit.art, slides: audit.slides, overflowX: audit.overflowX }));
+    console.log(label, JSON.stringify({ banner: audit.banner, art: audit.art, banners: audit.banners, overflowX: audit.overflowX }));
   }
   await writeFile(path.join(outDir, 'report.json'), `${JSON.stringify(report, null, 2)}\n`);
   console.log(`\nSaved ${path.relative(path.resolve(root, '..'), outDir)}`);

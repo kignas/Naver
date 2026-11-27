@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { CategoryStrip } from '../components/home/CategoryStrip';
-import { HeroBanner } from '../components/home/HeroBanner';
+import { HeroBanner as AnimatedHeroBanner } from '../components/hero/HeroBanner';
 import { HomeFilterBar } from '../components/home/HomeFilterBar';
 import { HomeFilterSheet } from '../components/home/HomeFilterSheet';
 import { HomeHeader } from '../components/home/HomeHeader';
@@ -101,7 +101,7 @@ export function Home() {
         />
 
         <div className="hero-sheet">
-          <HeroBanner onCtaClick={openUnder99} />
+          <AnimatedHeroBanner price={49} stripText="Breakfast staples · served fresh" onOrder={openUnder99} />
         </div>
 
         <main className="home-main">
