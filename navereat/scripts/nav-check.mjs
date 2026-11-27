@@ -9,30 +9,30 @@ const repoRoot = path.resolve(appRoot, '..');
 const outDir = path.join(repoRoot, 'verify', 'item19');
 const base = 'http://127.0.0.1:4177';
 /**
- * --nav-h (58) + --nav-bottom (12) + 12
+ * --nav-h (52) + --nav-bottom (6) + 12
  */
-const NAV_RESERVE = 82;
+const NAV_RESERVE = 70;
 /**
- * Floating capsule: 268x58 with a 5dp inset, split into two equal 128x48 slots.
+ * Floating capsule: 260x52 with a 4dp inset, split into two equal 125x44 slots.
  */
-const H = 58;
+const H = 52;
 const SPEC = {
   height: H,
-  pad: 5,
-  bottom: 12,
-  width: 268,
-  tabWidth: 128,
-  tabHeight: 48,
-  indicatorHeight: 48,
-  icon: 20,
-  iconLabelGap: 9,
-  label: 13.5,
-  side: 61,
-  shadowY: 8,
-  shadowBlur: 24,
+  pad: 4,
+  bottom: 6,
+  width: 260,
+  tabWidth: 125,
+  tabHeight: 44,
+  indicatorHeight: 44,
+  icon: 19,
+  iconLabelGap: 8,
+  label: 13,
+  side: 65,
+  shadowY: 6,
+  shadowBlur: 20,
 };
-const PILL = 'rgb(34, 34, 38)';
-const IDLE_LABEL = 'rgb(29, 30, 34)';
+const PILL = 'rgb(33, 33, 38)';
+const IDLE_LABEL = 'rgb(30, 30, 36)';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const failures = [];
 
@@ -217,6 +217,8 @@ async function navState(page) {
                 strokeWidth: Number(glyph.getAttribute('stroke-width') ?? 0),
                 paths: glyph.querySelectorAll('path').length,
                 iconClass: glyph.getAttribute('class'),
+                childFills: [...glyph.querySelectorAll('path[fill]')].map((path) => path.getAttribute('fill')),
+                childStrokes: [...glyph.querySelectorAll('path[stroke]')].map((path) => path.getAttribute('stroke')),
               }
             : null,
           iconGap: iconBox && labelBox ? Math.round((labelBox.left - iconBox.right) * 10) / 10 : null,
@@ -266,18 +268,17 @@ try {
       height:${SPEC.height}px;box-sizing:border-box;padding:${SPEC.pad}px;display:grid;
       grid-template-columns:1fr 1fr;align-items:center;background:#fff;
       border:1px solid rgba(0,0,0,0.06);border-radius:999px;
-      box-shadow:0 ${SPEC.shadowY}px ${SPEC.shadowBlur}px rgba(0,0,0,0.12),0 2px 6px rgba(0,0,0,0.06)}
+      box-shadow:0 ${SPEC.shadowY}px ${SPEC.shadowBlur}px rgba(0,0,0,0.12),0 2px 5px rgba(0,0,0,0.06)}
     .pill{position:absolute;top:calc(${SPEC.pad}px - 1px);left:${SPEC.pad}px;
-      width:calc(50% - ${SPEC.pad}px);height:${SPEC.indicatorHeight}px;border-radius:999px;background:#222226;
-      box-shadow:inset 0 0 0 1px rgba(255,255,255,0.12),0 4px 10px rgba(17,17,20,0.18)}
+      width:calc(50% - ${SPEC.pad}px);height:${SPEC.indicatorHeight}px;border-radius:999px;background:#212126}
     .slot{position:relative;z-index:1;height:${SPEC.tabHeight}px;display:inline-flex;align-items:center;
-      justify-content:center;gap:${SPEC.iconLabelGap}px;color:#1d1e22}
+      justify-content:center;gap:${SPEC.iconLabelGap}px;color:#1e1e24}
     .slot.on{color:#fff}
     .glyph{width:${SPEC.icon}px;height:${SPEC.icon}px;flex:0 0 auto;display:block}
     .lbl{font-size:${SPEC.label}px;font-weight:600;letter-spacing:-0.01em;line-height:1;white-space:nowrap}
   </style><div class="bar"><span class="pill"></span>
     <div class="slot on">
-      <svg class="glyph" width="20" height="20" viewBox="0 0 24 24" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 3.2c.35 0 .68.12.95.35l7.8 6.55c.56.47.23 1.38-.5 1.38H18.8v7.1c0 1.22-.98 2.2-2.2 2.2H7.4c-1.22 0-2.2-.98-2.2-2.2v-7.1H3.75c-.73 0-1.06-.91-.5-1.38l2.55-2.14V5.3c0-.5.4-.9.9-.9h1.4c.5 0 .9.4.9.9v.38l2.05-1.73c.27-.23.6-.35.95-.35ZM10 20.78v-4.38c0-1.1.9-2 2-2s2 .9 2 2v4.38h-4Z" fill="#F06464"/></svg>
+      <svg class="glyph" width="19" height="19" viewBox="0 0 24 24" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 3.2c.35 0 .68.12.95.35l7.8 6.55c.56.47.23 1.38-.5 1.38H18.8v7.1c0 1.22-.98 2.2-2.2 2.2H7.4c-1.22 0-2.2-.98-2.2-2.2v-7.1H3.75c-.73 0-1.06-.91-.5-1.38l2.55-2.14V5.3c0-.5.4-.9.9-.9h1.4c.5 0 .9.4.9.9v.38l2.05-1.73c.27-.23.6-.35.95-.35ZM10 20.78v-4.38c0-1.1.9-2 2-2s2 .9 2 2v4.38h-4Z" fill="#F15B64"/></svg>
       <span class="lbl">Home</span></div>
     <div class="slot">
       <svg class="glyph" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M7.2 4.2h9.6l1.2 3.3H6l1.2-3.3Z"/><path d="M6 7.5h12l.6 11.1c.06 1.15-.85 2.1-2 2.1H7.4c-1.15 0-2.06-.95-2-2.1L6 7.5Z"/><path d="M9 11.5h6"/><path d="M9 15h4.2"/></svg>
@@ -333,8 +334,8 @@ try {
   );
   check('home: full pill radius', home.navStyle?.radius === '999px', home.navStyle?.radius);
   check(
-    'home: elevation 0 8px 24px 12% + 0 2px 6px 6%',
-    ['0px 8px 24px', 'rgba(0, 0, 0, 0.12)', '0px 2px 6px', 'rgba(0, 0, 0, 0.06)'].every((part) =>
+    'home: elevation 0 6px 20px 12% + 0 2px 5px 6%',
+    ['0px 6px 20px', 'rgba(0, 0, 0, 0.12)', '0px 2px 5px', 'rgba(0, 0, 0, 0.06)'].every((part) =>
       (home.navStyle?.shadow ?? '').includes(part),
     ),
     home.navStyle?.shadow,
@@ -343,25 +344,25 @@ try {
   check(
     'home: colours are CSS variables',
     home.navStyle?.vars.surface === '#ffffff' &&
-      home.navStyle?.vars.pill === '#222226' &&
-      home.navStyle?.vars.idle === '#1d1e22',
+      home.navStyle?.vars.pill === '#212126' &&
+      home.navStyle?.vars.idle === '#1e1e24',
     JSON.stringify(home.navStyle?.vars),
   );
 
   // Measured geometry.
   check(
-    'home: capsule H=58, 268 wide, exactly centred, 12px off the bottom',
+    'home: capsule H=52, 260 wide, exactly centred, 6px off the bottom',
     home.navRect.height === SPEC.height &&
       home.navRect.bottom === SPEC.bottom &&
       near(home.navRect.width, SPEC.width, 1) &&
       Math.abs(home.navRect.x + home.navRect.width / 2 - 390 / 2) <= 0.5 &&
       home.navStyle?.position === 'fixed' &&
-      /matrix\(1, 0, 0, 1, -134, 0\)/.test(home.navStyle?.transform ?? ''),
+      /matrix\(1, 0, 0, 1, -130, 0\)/.test(home.navStyle?.transform ?? ''),
     JSON.stringify({ rect: home.navRect, position: home.navStyle?.position, transform: home.navStyle?.transform }),
   );
   check('home: nav above route/sheet layers', Number(home.navStyle.z) >= 2000, home.navStyle.z);
   check(
-    'home: tabs are an equal 128x48 split of the capsule',
+    'home: tabs are an equal 125x44 split of the capsule',
     home.tabs.every((tab) => near(tab.rect.height, SPEC.tabHeight, 0.5) && near(tab.rect.width, SPEC.tabWidth, 0.5)) &&
       near(home.tabs[0].rect.width, home.tabs[1].rect.width, 0.5),
     home.tabs.map((tab) => `${Math.round(tab.rect.width)}x${Math.round(tab.rect.height)}`).join('/'),
@@ -376,7 +377,7 @@ try {
 
   // Ratios of H.
   check(
-    'spec: 20px icons, 13.5px/600 labels, 9px icon→label gap, 5px capsule inset',
+    'spec: 19px icons, 13px/600 labels, 8px icon→label gap, 4px capsule inset',
     home.tabs.every((tab) => near(tab.iconSize.width, SPEC.icon, 0.5) && near(tab.iconSize.height, SPEC.icon, 0.5)) &&
       home.tabs.every((tab) => near(tab.labelStyle.size, SPEC.label, 0.5) && tab.labelStyle.weight === '600') &&
       home.tabs.every((tab) => near(tab.iconGap, SPEC.iconLabelGap, 0.8)) &&
@@ -389,15 +390,15 @@ try {
     }),
   );
 
-  // Pill: charcoal gradient, 1px inner highlight, inset by --nav-gap.
+  // Pill: flat charcoal, no highlight, no shadow, inset by --nav-pad.
   check(
-    'home: pill is flat charcoal #222226',
+    'home: pill is flat charcoal #212126',
     home.indicator?.background === PILL && home.indicator?.backgroundImage === 'none',
     `${home.indicator?.background} ${home.indicator?.backgroundImage}`,
   );
   check(
-    'home: pill has the 1px inner highlight',
-    /rgba\(255, 255, 255, 0\.12\) 0px 0px 0px 1px inset/.test(home.indicator?.boxShadow ?? ''),
+    'home: pill is flat (no inner highlight, no drop shadow)',
+    (home.indicator?.boxShadow ?? 'none') === 'none',
     home.indicator?.boxShadow,
   );
   check(
@@ -408,26 +409,26 @@ try {
     `${home.indicator.x - home.tabs[0].rect.x} / ${home.indicator.width}x${home.indicator.height} vs ${home.tabs[0].rect.width}x${home.tabs[0].rect.height}`,
   );
   check('home: active label is white', home.activeColor === 'rgb(255, 255, 255)', home.activeColor);
-  check('home: idle label is #1F2024', home.tabs[1].labelStyle.color === IDLE_LABEL, home.tabs[1].labelStyle.color);
+  check('home: idle label is #1E1E24', home.tabs[1].labelStyle.color === IDLE_LABEL, home.tabs[1].labelStyle.color);
 
   // Icons: crisp intrinsic 18px SVGs, no scaling box to fall back on.
   check(
-    'icons: both glyphs are 20x20 with intrinsic width/height',
+    'icons: both glyphs are 19x19 with intrinsic width/height',
     home.tabs.every(
       (tab) =>
-        tab.iconSize.width === 20 &&
-        tab.iconSize.height === 20 &&
-        tab.iconAttrs.width === '20' &&
-        tab.iconAttrs.height === '20',
+        tab.iconSize.width === 19 &&
+        tab.iconSize.height === 19 &&
+        tab.iconAttrs.width === '19' &&
+        tab.iconAttrs.height === '19',
     ),
     JSON.stringify(home.tabs.map((tab) => tab.iconAttrs)),
   );
   check(
-    'icons: single even-odd coral house and a 1.75px currentColor receipt',
-    home.tabs[0].glyphPaint.pathFill === '#F06464' &&
+    'icons: active Home is a filled #F15B64 even-odd house, idle History a 1.75px #1E1E24 outline',
+    home.tabs[0].glyphPaint.pathFill === '#F15B64' &&
       home.tabs[0].glyphPaint.evenOdd === true &&
       home.tabs[0].glyphPaint.paths === 1 &&
-      home.tabs[1].glyphPaint.stroke === 'currentColor' &&
+      home.tabs[1].glyphPaint.stroke === '#1E1E24' &&
       near(home.tabs[1].glyphPaint.strokeWidth, 1.75, 0.01) &&
       home.tabs[1].glyphPaint.fill === 'none' &&
       home.tabs[1].glyphPaint.paths === 4,
@@ -461,6 +462,24 @@ try {
     'history: label colours swap with the pill',
     history.activeColor === 'rgb(255, 255, 255)' && history.tabs[0].labelStyle.color === IDLE_LABEL,
     `${history.activeColor} / ${history.tabs[0].labelStyle.color}`,
+  );
+  check(
+    'history: active glyph is the amber bag with charcoal detail lines',
+    history.tabs[1].glyphPaint.childFills.length === 2 &&
+      history.tabs[1].glyphPaint.childFills.every((fill) => fill === '#F4C150') &&
+      history.tabs[1].glyphPaint.childStrokes.length === 2 &&
+      history.tabs[1].glyphPaint.childStrokes.every((stroke) => stroke === '#212126') &&
+      history.tabs[1].glyphPaint.paths === 4 &&
+      history.tabs[1].glyphPaint.fill === 'none',
+    JSON.stringify(history.tabs[1].glyphPaint),
+  );
+  check(
+    'history: idle Home swaps to the 1.75px #1E1E24 outline',
+    history.tabs[0].glyphPaint.stroke === '#1E1E24' &&
+      near(history.tabs[0].glyphPaint.strokeWidth, 1.75, 0.01) &&
+      history.tabs[0].glyphPaint.paths === 4 &&
+      history.tabs[0].glyphPaint.childFills.length === 0,
+    JSON.stringify(history.tabs[0].glyphPaint),
   );
   const vibAfterHistory = await vibrationCount(page);
   check('haptics: one light impact on the tab change', vibAfterHistory === 1, String(vibAfterHistory));
@@ -641,9 +660,9 @@ try {
       JSON.stringify(state.tabs.map((tab) => tab.iconSize.width + tab.iconGap + tab.labelWidth)),
     );
     check(
-      `fit ${size.width}: capsule is 268px, or the screen minus 112px`,
-      near(state.navRect.width, Math.min(268, size.width - 112), 1),
-      `${state.navRect.width} vs ${Math.min(268, size.width - 112)}`,
+      `fit ${size.width}: capsule is 260px, or the screen minus 124px`,
+      near(state.navRect.width, Math.min(260, size.width - 124), 1),
+      `${state.navRect.width} vs ${Math.min(260, size.width - 124)}`,
     );
     check(
       `fit ${size.width}: capsule stays centred`,
@@ -1165,7 +1184,7 @@ try {
     icon: SPEC.icon,
     iconLabelGap: SPEC.iconLabelGap,
     labelSize: SPEC.label,
-    shadow: `0 ${SPEC.shadowY}px ${SPEC.shadowBlur}px rgba(0,0,0,0.10)`,
+    shadow: `0 ${SPEC.shadowY}px ${SPEC.shadowBlur}px rgba(0,0,0,0.12)`,
   };
   report.screens = shots;
   report.failures = failures;

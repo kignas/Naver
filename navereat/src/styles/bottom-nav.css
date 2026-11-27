@@ -1,7 +1,7 @@
 /* Floating primary navigation: two tabs, one sliding capsule, rendered once in
    App outside the route transition layers.
 
-   A 268x58 white capsule pinned to the exact horizontal middle of the screen
+   A 260x52 white capsule pinned to the exact horizontal middle of the screen
    (`left: 50%` + `translate3d(-50%, …)`, so the show/hide transforms below
    must always carry that -50%). Inside it a 2-column grid gives Home and
    History an identical 50% each, and the charcoal capsule is a percentage
@@ -9,25 +9,27 @@
 .bottom-nav.nav-float {
   --nav-surface: #ffffff;
   --nav-hairline: rgba(0, 0, 0, 0.06);
-  --nav-pill: #222226;
-  --nav-pill-highlight: rgba(255, 255, 255, 0.12);
+  --nav-pill: #212126;
   --nav-pill-fg: #ffffff;
-  --nav-idle-fg: #1d1e22;
-  --nav-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+  --nav-idle-fg: #1e1e24;
+  --nav-shadow: 0 6px 20px rgba(0, 0, 0, 0.12), 0 2px 5px rgba(0, 0, 0, 0.06);
   --nav-spring: cubic-bezier(0.22, 1, 0.36, 1);
   --nav-glyph-dur: 420ms;
 
   position: fixed;
   left: 50%;
   bottom: var(--nav-bottom);
-  /* 268px on a 390px screen, 248px on a 360px one. */
-  width: min(268px, calc(100% - 112px));
+  /* 260px on a 390px screen, 236px on a 360px one. */
+  width: min(260px, calc(100% - 124px));
   height: var(--nav-h);
   /* Above route transition layers, sheets and the search scrim. */
   z-index: 2147483005;
   display: grid;
   grid-template-columns: 1fr 1fr;
   align-items: center;
+  /* The 44px tab row is 2px taller than the padding box, so centre it: the
+     tabs then start and end on the same lines as the indicator. */
+  align-content: center;
   justify-content: normal;
   padding: var(--nav-pad);
   /* The shorthand also overrides the legacy `border-top` in the orders bundle. */
@@ -76,22 +78,21 @@ body.nav-scroll-reset .bottom-nav.nav-float {
   transition: none;
 }
 
-/* The active capsule: 50% of the track minus the inset, 48px tall, flat
-   charcoal with a hairline inner highlight. `translate3d(100%)` moves it
-   exactly one slot, so Home/History slide on the compositor only.
-   `top` compensates the 1px border: the padding box starts 1px inside the
-   58px capsule, so 5px - 1px keeps a true 5px gap top and bottom. */
+/* The active capsule: half the track, 44px tall, flat charcoal #212126.
+   `translate3d(100%)` moves it exactly one slot, so Home/History glide on the
+   compositor only, in 200ms, with no layout read and no CLS.
+   `top` compensates the 1px border: the padding box starts 1px inside the 52px
+   capsule, so 4px - 1px keeps a true 4px gap top and bottom. */
 .nav-indicator {
   position: absolute;
   top: calc(var(--nav-pad) - 1px);
   left: var(--nav-pad);
   width: calc(50% - var(--nav-pad));
-  height: 48px;
+  height: 44px;
   border-radius: 999px;
   background: var(--nav-pill);
-  box-shadow: inset 0 0 0 1px var(--nav-pill-highlight), 0 4px 10px rgba(17, 17, 20, 0.18);
   transform: translate3d(0, 0, 0);
-  transition: transform 0.24s var(--nav-spring);
+  transition: transform 0.2s var(--nav-spring);
   will-change: transform;
 }
 
@@ -107,13 +108,13 @@ body.nav-scroll-reset .bottom-nav.nav-float {
 }
 
 /* Icon beside label, centred in its half of the grid; both are always painted.
-   The 48px height matches the indicator exactly, so the label sits optically
+   The 44px height matches the indicator exactly, so the label sits optically
    centred inside the dark capsule. */
 .nav-tab {
   position: relative;
   z-index: 1;
   width: 100%;
-  height: 48px;
+  height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -130,7 +131,15 @@ body.nav-scroll-reset .bottom-nav.nav-float {
   cursor: pointer;
   overflow: visible;
   -webkit-tap-highlight-color: transparent;
-  transition: color 0.24s ease;
+  transition: color 0.16s ease;
+}
+
+/* The Home and Orders bundles re-declare `transition` on every `.tap` target
+   (the tab carries that class for its press feedback), which would replace the
+   colour cross-fade. Same idea, one specificity step higher, and the 90 ms
+   press is kept. */
+.bottom-nav.nav-float .nav-tab {
+  transition: color 0.16s ease, transform 90ms ease-out;
 }
 
 .nav-tab:focus-visible {
@@ -151,11 +160,11 @@ body.nav-scroll-reset .bottom-nav.nav-float {
   height: var(--nav-icon-size);
 }
 
-/* Both glyphs are drawn at exactly 20x20: the attributes and this rule agree,
+/* Both glyphs are drawn at exactly 19x19: the attributes and this rule agree,
    so no generic `.bottom-nav svg` rule can shrink them. */
 svg.bnav-icon {
-  width: 20px;
-  height: 20px;
+  width: 19px;
+  height: 19px;
   flex-shrink: 0;
   display: block;
 }

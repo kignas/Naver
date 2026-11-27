@@ -212,40 +212,43 @@ page underneath exactly where it was. Tab switches stay instant.
 
 ### Tab bar: the measured look, the glyphs, the haptics (Item 19, part 1)
 
-The bar is a white floating pill, 14 px from the sides and floating above the
-bottom inset, with a 1 px grey-lilac hairline and a soft shadow. Its whole
-geometry is a ratio table of the container height `H = 64dp`
-(`--nav-h` in `src/styles/tokens.css`):
+The bar is a white floating capsule, 260 x 52 px, pinned to the exact horizontal
+middle of the screen (`left: 50%` + `translate3d(-50%, 0, 0)`) and sitting 6 px
+above the bottom safe area (`bottom: calc(6px + env(safe-area-inset-bottom, 0px))`).
+Its geometry is declared once, as custom properties in `src/styles/tokens.css`:
 
-| part | ratio | value |
-| --- | --- | --- |
-| container height | H | 64 dp |
-| side margin | — | 14 px |
-| shadow | 0.10·H offset, 0.35·H blur, 10 % black | `0 6.4px 22.4px rgba(0,0,0,.10)` |
-| active pill inset (top/bottom/sides) | 0.067·H | 4.3 px |
-| icon box | 0.34·H | 22 dp |
-| icon → label gap | 0.19·H | 12 dp |
-| label size / weight | 0.205·H | 13 sp / 500 |
+| part | value |
+| --- | --- |
+| capsule | `min(260px, calc(100% - 124px))` x 52 px (260 px at 390, 236 px at 360) |
+| capsule inset | 4 px, `1px solid rgba(0,0,0,.06)`, radius 999 px |
+| bottom offset | `6px + env(safe-area-inset-bottom)` |
+| shadow | `0 6px 20px rgba(0,0,0,.12), 0 2px 5px rgba(0,0,0,.06)` |
+| active pill | `calc(50% - 4px)` x 44 px, `#212126`, flat (no highlight, no shadow) |
+| tab slot | 125 x 44 at 390 px, 113 x 44 at 360 px |
+| icon box | 19 x 19 |
+| icon -> label gap | 8 px |
+| label | 13 px / 600, `-0.01em` |
 
-Both tabs always show an icon and a label, stacked and centred: the active one
-on the charcoal pill (`#2A2A2E → #1E1E22`, 1 px inner highlight
-`rgba(255,255,255,.18)`, white label), the idle one on white with a `#1C1C28`
-label. Every colour is a `--nav-*` custom property on `.bottom-nav.nav-float`;
-there is no backdrop filter.
+The active tab paints a white label on the pill, the idle one `#1E1E24` on
+white, cross-faded over 160 ms. The pill glides between the two slots with
+`transform: translate3d(0|100%, 0, 0)` over 200 ms on
+`cubic-bezier(.22, 1, .36, 1)` — compositor only, no measurement, no CLS.
+`--nav-reserve` (70 px) keeps the cart pill 12 px clear of the capsule.
 
 * The two glyphs are original SVGs (`src/components/NavGlyph.tsx`), not brand
-  assets: a house (coral→red gradient) and a bag/receipt (gold→amber with coral
-  lines). Each glyph stacks an outline layer and a gradient layer, so the state
-  change is an opacity cross-fade and nothing re-mounts.
-* On a tab change the entering glyph pops (scale 0.7 → 1.12 → 1), the house
-  roof lifts and settles, its door fades in, the bag body bounces and its handle
-  swings; the leaving glyph shrinks through 0.85 and settles while the cross-fade
-  turns it into its outline; the label fades and slides 6 px. All of it is
-  `transform`/`opacity` on `transform-box: fill-box` groups over 420 ms, and
-  `prefers-reduced-motion: reduce` drops every keyframe and transition, leaving
-  the instant state swap.
-* The sliding pill and drag-to-switch are unchanged: the indicator box is the
-  tab slot minus `--nav-gap`, measured from the nav's padding box.
+  assets, and every tab swaps between a filled active glyph and an outline idle
+  one. Home is a coral `#F15B64` house with a left chimney and an arched doorway
+  cut-out (one even-odd path, so the doorway is a real hole, not a second
+  colour); History is an amber `#F4C150` delivery bag whose two detail lines are
+  `#212126`, so they read inside the charcoal pill. Idle is a 1.75 px `#1E1E24`
+  outline of the same shapes, so the swap reads as the same icon filling in.
+* On a tab change the entering glyph pops (scale 0.7 -> 1.12 -> 1), the leaving
+  one shrinks through 0.85, and the label fades and slides 6 px, over 420 ms of
+  `transform`/`opacity`; `prefers-reduced-motion: reduce` drops every keyframe
+  and transition, leaving the instant state swap.
+* The sliding pill and drag-to-switch share one mechanism: the indicator box is
+  the tab slot, measured from the nav's padding box, and the percentage
+  translate needs no layout read.
 * `src/lib/haptics.ts` has one `HAPTICS_ENABLED` switch, a throttled (80 ms)
   `lightImpact()` that uses `@capacitor/haptics` natively and `navigator.vibrate`
   in a browser, and fails silently. It fires only on a user-initiated change to a
@@ -255,10 +258,11 @@ there is no backdrop filter.
 * `@capacitor/haptics` is the only new dependency. Its Android manifest declares
   the same `android.permission.VIBRATE` the app already had, so the built APK's
   permission set is unchanged.
-* `npm run nav-check` asserts the ratios above, the two-tone icon states, the
-  haptic call counts (with `navigator.vibrate` mocked), the reduced-motion
-  behaviour, and writes an 8-frame strip of each direction plus a side-by-side
-  against a reference drawn from the same ratios to `verify/item19/`.
+* `npm run nav-check` asserts the geometry above, both icon states (filled
+  active, outline idle), the haptic call counts (with `navigator.vibrate`
+  mocked), the reduced-motion behaviour, and writes an 8-frame strip of each
+  direction plus a side-by-side against a reference drawn from the same numbers
+  to `verify/item19/`.
 
 ### Route stylesheets stay inside their own page (Item 13, follow-up)
 

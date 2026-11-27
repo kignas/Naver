@@ -268,9 +268,11 @@ try {
   check('push: covered page keeps identity transform + full opacity', p.identity?.identity === true, `${p.identity?.samples} samples, ${p.identity?.offenders?.length ?? '?'} offenders`);
   // Step 1 replaced the full-width slide with a 24 px fade-in: the arriving page
   // must start transparent and end opaque instead of staying opaque throughout.
+  // The last rAF sample can land a fraction of a millisecond before the tween's
+  // final frame, so "opaque" is >= 0.999 rather than an exact '1'.
   check(
     'push: incoming page fades in from transparent',
-    (p.incomingFaded ?? 0) > 0 && p.incomingOpacity?.last === '1',
+    (p.incomingFaded ?? 0) > 0 && Number(p.incomingOpacity?.last) >= 0.999,
     `${p.frames.length} frames, ${p.incomingFaded ?? 0} faded, first ${p.incomingOpacity?.first ?? '?'}, last ${p.incomingOpacity?.last ?? '?'}`,
   );
   const translateOf = (transform) => {

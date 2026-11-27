@@ -270,7 +270,7 @@ export function BottomNav() {
             }}
           >
             <span className="nav-icon" aria-hidden="true">
-              <NavGlyph name={item.glyph} />
+              <NavGlyph name={item.glyph} active={active} />
             </span>
             <span className="nav-label">{item.label}</span>
           </button>
