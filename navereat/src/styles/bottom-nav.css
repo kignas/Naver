@@ -1,38 +1,46 @@
 /* Floating primary navigation: two tabs, one sliding capsule, rendered once in
    App outside the route transition layers.
 
-   A 260x52 white capsule pinned to the exact horizontal middle of the screen
-   (`left: 50%` + `translate3d(-50%, …)`, so the show/hide transforms below
-   must always carry that -50%). Inside it a 2-column grid gives Home and
-   History an identical 50% each, and the charcoal capsule is a percentage
-   translate of its own width — no measurement, no layout read, no CLS. */
+   Geometry (Zomato mobile): a 252x46 white capsule, fully rounded, pinned
+   `20px + safe-area` above the bottom edge and centred with
+   `left: 50%` + `translateX(-50%)`. Inside it a two-column grid gives Home and
+   History an equal half each, and a 39px dark pill (one tab wide, inset 3px)
+   slides between them with `translateX` only.
+
+   The pill is also the clip window for a duplicate white label/icon track: the
+   track is counter-translated by the same distance, so its labels stay glued
+   to the tabs while the window sweeps over them. Labels (and icons) therefore
+   turn white exactly where the pill covers them, progressively, instead of
+   swapping colour at the end of the slide. */
+
 .bottom-nav.nav-float {
   --nav-surface: #ffffff;
-  --nav-hairline: rgba(0, 0, 0, 0.06);
-  --nav-pill: #212126;
-  --nav-pill-fg: #ffffff;
+  --nav-hairline: #e8e8e8;
+  --nav-pill-from: #1c1c1e;
+  --nav-pill-to: #2a2a2d;
   --nav-idle-fg: #1e1e24;
-  --nav-shadow: 0 6px 20px rgba(0, 0, 0, 0.12), 0 2px 5px rgba(0, 0, 0, 0.06);
-  --nav-spring: cubic-bezier(0.22, 1, 0.36, 1);
-  --nav-glyph-dur: 420ms;
+  --nav-shadow: 0 4px 14px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.06);
+  /* 100ms of outline fade, then 260ms of pill travel with a ~4px overshoot. */
+  --nav-slide-dur: 260ms;
+  --nav-slide-delay: 100ms;
+  --nav-slide-ease: cubic-bezier(0.34, 1.35, 0.64, 1);
+  /* The pill's travel in px; written by BottomNav from the active tab's
+     offsetLeft (and by a drag). */
+  --pill-x: 0px;
 
   position: fixed;
   left: 50%;
   bottom: var(--nav-bottom);
-  /* 260px on a 390px screen, 236px on a 360px one. */
-  width: min(260px, calc(100% - 124px));
+  /* 252px on a 393px phone; 32px of side air on anything narrower. */
+  width: min(252px, calc(100% - 32px));
   height: var(--nav-h);
+  box-sizing: border-box;
+  padding: 0;
   /* Above route transition layers, sheets and the search scrim. */
   z-index: 2147483005;
   display: grid;
   grid-template-columns: 1fr 1fr;
   align-items: center;
-  /* The 44px tab row is 2px taller than the padding box, so centre it: the
-     tabs then start and end on the same lines as the indicator. */
-  align-content: center;
-  justify-content: normal;
-  padding: var(--nav-pad);
-  /* The shorthand also overrides the legacy `border-top` in the orders bundle. */
   border: 1px solid var(--nav-hairline);
   border-radius: 999px;
   background: var(--nav-surface);
@@ -78,43 +86,77 @@ body.nav-scroll-reset .bottom-nav.nav-float {
   transition: none;
 }
 
-/* The active capsule: half the track, 44px tall, flat charcoal #212126.
-   `translate3d(100%)` moves it exactly one slot, so Home/History glide on the
-   compositor only, in 200ms, with no layout read and no CLS.
-   `top` compensates the 1px border: the padding box starts 1px inside the 52px
-   capsule, so 4px - 1px keeps a true 4px gap top and bottom. */
-.nav-indicator {
+/* The moving pill: one tab wide (3px inside each tab edge) and 39px tall.
+   A 46px capsule leaves 3.5px above and below it; the spec's 46/39 pair cannot
+   also give 3px on both of those axes. Its own overflow clips the white track
+   below to the pill's rounded shape. */
+.nav-pill {
   position: absolute;
-  top: calc(var(--nav-pad) - 1px);
+  top: 2.5px;
   left: var(--nav-pad);
-  width: calc(50% - var(--nav-pad));
-  height: 44px;
+  width: calc(50% - var(--nav-pad) * 2);
+  height: 39px;
+  z-index: 1;
   border-radius: 999px;
-  background: var(--nav-pill);
-  transform: translate3d(0, 0, 0);
-  transition: transform 0.2s var(--nav-spring);
+  background: linear-gradient(90deg, var(--nav-pill-from), var(--nav-pill-to));
+  transform: translate3d(var(--pill-x), 0, 0);
+  transition: transform var(--nav-slide-dur) var(--nav-slide-ease) var(--nav-slide-delay);
   will-change: transform;
+  overflow: hidden;
+  pointer-events: none;
 }
 
-.bottom-nav.nav-float[data-active-index='1'] .nav-indicator {
-  transform: translate3d(100%, 0, 0);
+/* Duplicate of both tabs in white, laid out on the capsule's own grid and
+   counter-translated so it stays screen-fixed while the pill window moves.
+   Only the part inside the pill is visible. */
+.nav-pill-track {
+  position: absolute;
+  top: 0;
+  left: calc(-1 * var(--nav-pad));
+  /* 2 * pill width + 2 * pad * 2: exactly the capsule's content width. */
+  width: calc(200% + var(--nav-pad) * 4);
+  height: 39px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  transform: translate3d(calc(-1 * var(--pill-x)), 0, 0);
+  transition: transform var(--nav-slide-dur) var(--nav-slide-ease) var(--nav-slide-delay);
+  pointer-events: none;
 }
 
-/* Mid-drag the capsule follows the finger from its resting percentage. */
-.bottom-nav.nav-float.is-dragging .nav-indicator {
-  transform: translate3d(var(--nav-drag-x, 0px), 0, 0);
+.nav-pill-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--nav-icon-label-gap);
+  height: 39px;
+  min-width: 0;
+  color: #ffffff;
+}
+
+/* Mid-drag the pill follows the finger from its resting px; a resize or the
+   first placement must not animate at all. */
+.bottom-nav.nav-float.is-dragging .nav-pill,
+.bottom-nav.nav-float.is-dragging .nav-pill-track {
   transition: none;
   will-change: auto;
 }
 
-/* Icon beside label, centred in its half of the grid; both are always painted.
-   The 44px height matches the indicator exactly, so the label sits optically
-   centred inside the dark capsule. */
+.bottom-nav.nav-float.nav-no-motion .nav-pill,
+.bottom-nav.nav-float.nav-no-motion .nav-pill-track {
+  transition: none !important;
+}
+
+/* Icon beside label, centred in its half of the grid. Both are always painted:
+   where the pill covers the tab, its opaque background hides the ink copy and
+   the white track paints the same glyph in white. No stacking context here
+   (`z-index: auto`) so the active tab's filled glyph can paint above the pill
+   while everything else stays below it. */
 .nav-tab {
   position: relative;
-  z-index: 1;
+  z-index: auto;
   width: 100%;
-  height: 44px;
+  height: 39px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -125,31 +167,30 @@ body.nav-scroll-reset .bottom-nav.nav-float {
   color: var(--nav-idle-fg);
   font-family: var(--font);
   font-size: var(--nav-label-size);
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-weight: 500;
+  letter-spacing: 0;
   white-space: nowrap;
   cursor: pointer;
   overflow: visible;
   -webkit-tap-highlight-color: transparent;
-  transition: color 0.16s ease;
 }
 
 /* The Home and Orders bundles re-declare `transition` on every `.tap` target
-   (the tab carries that class for its press feedback), which would replace the
-   colour cross-fade. Same idea, one specificity step higher, and the 90 ms
-   press is kept. */
+   and scale it on press; the pill is the only thing that should move, and a
+   scaled tab would drag the filled glyph out of the pill. This one specificity
+   step higher keeps the colour fade and drops the press scale. */
 .bottom-nav.nav-float .nav-tab {
-  transition: color 0.16s ease, transform 90ms ease-out;
+  transition: color 0.16s ease;
+}
+
+.bottom-nav.nav-float .nav-tab:active {
+  transform: none;
 }
 
 .nav-tab:focus-visible {
-  outline: 2px solid var(--nav-pill);
+  outline: 2px solid var(--nav-pill-from);
   outline-offset: -2px;
   border-radius: 999px;
-}
-
-.nav-tab.is-active {
-  color: var(--nav-pill-fg);
 }
 
 .nav-icon {
@@ -160,69 +201,75 @@ body.nav-scroll-reset .bottom-nav.nav-float {
   height: var(--nav-icon-size);
 }
 
-/* Both glyphs are drawn at exactly 19x19: the attributes and this rule agree,
-   so no generic `.bottom-nav svg` rule can shrink them. */
-svg.bnav-icon {
-  width: 19px;
-  height: 19px;
-  flex-shrink: 0;
+.nav-glyph-stack {
+  position: relative;
   display: block;
+  flex: 0 0 auto;
+  width: var(--nav-icon-size);
+  height: var(--nav-icon-size);
 }
 
+/* Two stacked glyphs: the ink outline (idle) and the brand-filled one. The
+   filled copy is the only layer that paints above the pill. */
 .nav-glyph {
+  position: absolute;
+  inset: 0;
   display: block;
   width: var(--nav-icon-size);
   height: var(--nav-icon-size);
   overflow: visible;
 }
 
-@keyframes navGlyphPop {
-  0% {
-    transform: scale(0.7);
-  }
-  55% {
-    transform: scale(1.12);
-  }
-  100% {
-    transform: scale(1);
-  }
+.nav-glyph--outline {
+  stroke: var(--nav-idle-fg);
+  opacity: 1;
 }
 
-@keyframes navGlyphShrink {
+.nav-glyph--white {
+  position: static;
+  stroke: #ffffff;
+  opacity: 1;
+}
+
+.nav-glyph--filled {
+  opacity: 0;
+  z-index: 2;
+  transform-origin: 50% 50%;
+}
+
+.nav-tab.is-active .nav-glyph--filled {
+  opacity: 1;
+}
+
+/* Leaving tab: the filled glyph dissolves over 100ms, revealing the white
+   outline the pill is still covering. The pill then carries that outline away
+   and the ink outline underneath is uncovered. A transition (not an animation)
+   so a tab that never became visible cannot flash: it fades from whatever it
+   is showing, which is 0 for a tab a rapid retarget moved away from. */
+.nav-tab.is-leave .nav-glyph--filled {
+  opacity: 0;
+  transition: opacity 100ms linear;
+}
+
+/* Entering tab: white outline while the pill travels, then the brand-filled
+   glyph cross-fades in with a small pop once the pill has landed (360ms). */
+.nav-tab.is-enter .nav-glyph--filled {
+  animation: navGlyphFillIn 300ms cubic-bezier(0.22, 1, 0.36, 1) 360ms both;
+}
+
+@keyframes navGlyphFillIn {
   0% {
-    transform: scale(1);
-  }
-  50% {
+    opacity: 0;
     transform: scale(0.85);
   }
-  100% {
-    transform: scale(1);
-  }
-}
-
-@keyframes navLabelIn {
-  0% {
-    opacity: 0.2;
-    transform: translateX(6px);
+  45% {
+    opacity: 1;
+    transform: scale(1.08);
   }
   100% {
     opacity: 1;
-    transform: translateX(0);
+    transform: scale(1);
   }
-}
-
-/* Entering tab: the glyph pops and the label fades/slides in. Leaving tab: the
-   glyph shrinks back. */
-.nav-tab.is-enter .nav-glyph {
-  animation: navGlyphPop var(--nav-glyph-dur) cubic-bezier(0.34, 1.56, 0.64, 1) both;
-}
-
-.nav-tab.is-leave .nav-glyph {
-  animation: navGlyphShrink var(--nav-glyph-dur) cubic-bezier(0.4, 0, 0.2, 1) both;
-}
-
-.nav-tab.is-enter .nav-label {
-  animation: navLabelIn 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .nav-label {
@@ -230,24 +277,53 @@ svg.bnav-icon {
   flex: 0 0 auto;
   white-space: nowrap;
   font-size: var(--nav-label-size);
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1;
   letter-spacing: 0;
 }
 
+.nav-label--ghost {
+  color: #ffffff;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .bottom-nav.nav-float,
-  .nav-indicator,
-  .nav-icon,
+  .bottom-nav.nav-float {
+    --nav-slide-dur: 120ms;
+    --nav-slide-delay: 0ms;
+    --nav-slide-ease: ease-out;
+    transition: none;
+  }
+
+  /* global.css caps every transition at 80ms under reduced motion; the pill
+     keeps its own 120ms, with no delay and no overshoot. */
+  .bottom-nav.nav-float .nav-pill,
+  .bottom-nav.nav-float .nav-pill-track {
+    transition-duration: 120ms !important;
+    transition-delay: 0s !important;
+    transition-timing-function: ease-out !important;
+  }
+
   .nav-tab,
   .nav-label {
     transition: none !important;
   }
 
-  .nav-tab.is-enter .nav-glyph,
-  .nav-tab.is-leave .nav-glyph,
-  .nav-tab.is-enter .nav-label {
-    animation: none !important;
+  .nav-tab.is-enter .nav-glyph--filled {
+    animation: navGlyphFillInReduced 120ms linear both;
+  }
+
+  .nav-tab.is-leave .nav-glyph--filled {
+    opacity: 0;
+    transition: opacity 120ms linear !important;
+  }
+}
+
+@keyframes navGlyphFillInReduced {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 

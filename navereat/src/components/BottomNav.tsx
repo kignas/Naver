@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { isTabPath, useAppNav } from '../lib/navigation';
 import { useSearchStore } from '../store/searchStore';
 import { lightImpact } from '../lib/haptics';
 import { navScrollHide } from '../lib/navScrollHide';
 import { sheetCount, subscribeSheetCount } from '../lib/sheetStack';
-import { NavGlyph, type NavGlyphName } from './NavGlyph';
+import { NavGlyph, NavGlyphOutline, type NavGlyphName } from './NavGlyph';
 import '../styles/bottom-nav.css';
 
 interface NavEntry {
@@ -20,8 +20,12 @@ const ITEMS: NavEntry[] = [
 ];
 
 const DRAG_THRESHOLD = 6;
-/** Icon animation length; the class is dropped a frame after it ends. */
-const GLYPH_ANIM_MS = 420;
+/**
+ * The full tap sequence: 100ms outline fade, 260ms pill slide, 300ms glyph
+ * pop. The state classes are dropped just after it so a later re-render
+ * cannot replay the animations.
+ */
+const SEQUENCE_MS = 720;
 
 function activeIndexFor(pathname: string): number {
   if (pathname === '/orders') return 1;
@@ -75,23 +79,56 @@ export function BottomNav() {
 
   const navRef = useRef<HTMLElement | null>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const dragRef = useRef<{ pointerId: number; startX: number; startPercent: number; moved: boolean; captured: boolean } | null>(null);
-  const suppressClickRef = useRef(false);
-  const [dragging, setDragging] = useState(false);
+  const activeIndexRef = useRef(activeIndex);
+  activeIndexRef.current = activeIndex;
 
-  // Which tabs animate: `from` shrinks and cross-fades to its outline, `to`
-  // pops in. Cleared once the keyframes have played, so a re-render never
-  // replays them.
-  const [glyphMove, setGlyphMove] = useState<{ from: number; to: number } | null>(null);
-  const lastActiveRef = useRef(activeIndex);
+  // ---- Pill geometry ------------------------------------------------------
+  // The pill is one tab wide and absolutely positioned; its travel is a single
+  // translateX in px, measured from the active tab's offsetLeft. `animate`
+  // is false for the first placement and for resizes, so neither animates.
+  const placePill = useCallback((index: number, animate: boolean) => {
+    const bar = navRef.current;
+    const tab = tabRefs.current[index];
+    if (!bar || !tab) return;
+    if (!animate) bar.classList.add('nav-no-motion');
+    bar.style.setProperty('--pill-x', `${tab.offsetLeft}px`);
+    if (!animate) {
+      // Flush the new value while the transition is off, then hand the pill
+      // back to the animated path on the next frame.
+      void bar.offsetWidth;
+      window.requestAnimationFrame(() => bar.classList.remove('nav-no-motion'));
+    }
+  }, []);
+
+  const firstPlacement = useRef(true);
+  useLayoutEffect(() => {
+    placePill(activeIndex, !firstPlacement.current);
+    firstPlacement.current = false;
+  }, [activeIndex, placePill]);
+
+  // The capsule is a percentage width, so a resize changes the tab offsets.
   useEffect(() => {
-    const from = lastActiveRef.current;
-    lastActiveRef.current = activeIndex;
-    if (from === activeIndex) return undefined;
-    setGlyphMove({ from, to: activeIndex });
-    const timer = window.setTimeout(() => setGlyphMove(null), GLYPH_ANIM_MS + 20);
+    const bar = navRef.current;
+    if (!bar || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(() => placePill(activeIndexRef.current, false));
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, [placePill]);
+
+  // Which tabs animate. Derived during render (not in an effect) so the
+  // classes are in the very first paint after the tap: the outgoing filled
+  // glyph has to start its 100ms fade at t=0.
+  const [settledIndex, setSettledIndex] = useState(activeIndex);
+  const [glyphMove, setGlyphMove] = useState<{ from: number; to: number } | null>(null);
+  if (settledIndex !== activeIndex) {
+    setGlyphMove({ from: settledIndex, to: activeIndex });
+    setSettledIndex(activeIndex);
+  }
+  useEffect(() => {
+    if (!glyphMove) return undefined;
+    const timer = window.setTimeout(() => setGlyphMove(null), SEQUENCE_MS);
     return () => window.clearTimeout(timer);
-  }, [activeIndex]);
+  }, [glyphMove]);
 
   useEffect(() => {
     document.body.classList.toggle('has-bottom-nav', visible);
@@ -160,12 +197,21 @@ export function BottomNav() {
       return rect.left + rect.width / 2;
     });
 
+  const pillPx = (): number => {
+    const raw = navRef.current?.style.getPropertyValue('--pill-x') ?? '0';
+    return Number.parseFloat(raw) || 0;
+  };
+
+  const dragRef = useRef<{ pointerId: number; startX: number; startPx: number; moved: boolean; captured: boolean } | null>(null);
+  const suppressClickRef = useRef(false);
+  const [dragging, setDragging] = useState(false);
+
   const beginDrag = (event: React.PointerEvent<HTMLElement>) => {
     if (!visible || (event.pointerType === 'mouse' && event.button !== 0)) return;
     dragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
-      startPercent: activeIndex * 100,
+      startPx: pillPx(),
       moved: false,
       captured: false,
     };
@@ -185,9 +231,10 @@ export function BottomNav() {
       }
     }
     event.preventDefault();
-    // The resting transform is a percentage of the indicator's own width, so a
-    // drag offsets it from that percentage and never needs a measurement.
-    navRef.current?.style.setProperty('--nav-drag-x', `calc(${drag.startPercent}% + ${dx}px)`);
+    // The pill follows the finger in the same px space it rests in, and the
+    // white-label track (translated by the negative of the same variable)
+    // follows it, so labels whiten as the pill crosses them.
+    navRef.current?.style.setProperty('--pill-x', `${drag.startPx + dx}px`);
   };
 
   const endDrag = (event: React.PointerEvent<HTMLElement>) => {
@@ -209,15 +256,12 @@ export function BottomNav() {
         nearest = index;
       }
     });
-    // Park the capsule on the tab the drag committed to, then hand it back to
-    // the state-driven transform once that render has landed.
-    navRef.current?.style.setProperty('--nav-drag-x', `${nearest * 100}%`);
+    // Park the pill on the tab the drag committed to without a transition;
+    // the state-driven transform then agrees with it on the next render.
+    placePill(nearest, false);
     // A drag that commits on a different tab is a user-initiated change, so it
     // gets the same light impact as a tap.
     if (nearest !== activeIndex) select(nearest);
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => navRef.current?.style.removeProperty('--nav-drag-x'));
-    });
     window.setTimeout(() => {
       suppressClickRef.current = false;
     }, 0);
@@ -227,7 +271,7 @@ export function BottomNav() {
     dragRef.current = null;
     setDragging(false);
     navScrollHide.suspend('drag', false);
-    navRef.current?.style.removeProperty('--nav-drag-x');
+    placePill(activeIndexRef.current, false);
   };
 
   return (
@@ -242,7 +286,22 @@ export function BottomNav() {
       onPointerUp={endDrag}
       onPointerCancel={cancelDrag}
     >
-      <span className="nav-indicator" aria-hidden="true" />
+      {/* The moving pill. Its translateX is set from the active tab's
+          offsetLeft; the track inside it holds a duplicate of both labels in
+          white and is translated by the negative of the same value, so the
+          labels whiten exactly where the pill covers them and nowhere else. */}
+      <span className="nav-indicator nav-pill" aria-hidden="true">
+        <span className="nav-pill-track">
+          {ITEMS.map((item) => (
+            <span className="nav-pill-cell" key={item.to}>
+              <span className="nav-icon">
+                <NavGlyphOutline name={item.glyph} />
+              </span>
+              <span className="nav-label nav-label--ghost">{item.label}</span>
+            </span>
+          ))}
+        </span>
+      </span>
       {ITEMS.map((item, index) => {
         const active = index === activeIndex;
         const entering = glyphMove?.to === index;
@@ -270,7 +329,7 @@ export function BottomNav() {
             }}
           >
             <span className="nav-icon" aria-hidden="true">
-              <NavGlyph name={item.glyph} active={active} />
+              <NavGlyph name={item.glyph} />
             </span>
             <span className="nav-label">{item.label}</span>
           </button>
