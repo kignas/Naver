@@ -40,7 +40,13 @@ export const MenuFreeDeliveryStrip = memo(function MenuFreeDeliveryStrip({
         </span>
       </div>
       <div className="delivery-rider" aria-hidden="true">
-        <svg id="delivery-rider-fallback" role="presentation" viewBox="0 0 110 58">
+        <svg
+          id="delivery-rider-fallback"
+          role="presentation"
+          width="100"
+          height="54"
+          viewBox="0 0 110 58"
+        >
           <g fill="none" stroke="none">
             <circle cx="80" cy="43" fill="#222936" r="9" />
             <circle cx="32" cy="43" fill="#222936" r="9" />

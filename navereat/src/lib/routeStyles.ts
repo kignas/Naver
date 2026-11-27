@@ -5,7 +5,8 @@ export interface RouteStyleSheet {
 }
 
 interface RegisteredSheet {
-  style: HTMLStyleElement;
+  /** Enables or disables the sheet from its holders and its tab layer. */
+  apply: () => void;
   routePath: string;
 }
 
@@ -18,12 +19,7 @@ const registeredSheets = new Set<RegisteredSheet>();
  * A sheet may only apply while its tab layer is the active one.
  */
 export function syncRouteStyleSheets(): void {
-  for (const entry of registeredSheets) {
-    const activeLayer = document.querySelector(
-      `.route-tab-cache.is-active[data-route="${entry.routePath}"]`,
-    );
-    entry.style.media = activeLayer ? 'all' : 'not all';
-  }
+  for (const entry of registeredSheets) entry.apply();
 }
 
 /**
@@ -43,14 +39,39 @@ export function createRouteStyleSheet(css: string, marker: string, routePath?: s
   document.head.appendChild(style);
   // Force the CSS parser to run now, while the route chunk is being preloaded.
   void style.sheet?.cssRules;
-  if (routePath) registeredSheets.add({ style, routePath });
+
+  // Two layers of the same route can be mounted at once (a push lands before
+  // the page it covers finishes leaving, and a swipe-back preview mounts a
+  // second copy), so the sheet is reference counted: the first detach used to
+  // switch it off under the page that was still on screen, leaving the route
+  // rendered with no styles at all.
+  let holders = 0;
+  const apply = () => {
+    if (holders === 0) {
+      style.media = 'not all';
+      return;
+    }
+    if (!routePath) {
+      style.media = 'all';
+      return;
+    }
+    const activeLayer = document.querySelector(
+      `.route-tab-cache.is-active[data-route="${routePath}"]`,
+    );
+    style.media = activeLayer ? 'all' : 'not all';
+  };
+  if (routePath) registeredSheets.add({ apply, routePath });
 
   return {
     attach: () => {
-      style.media = 'all';
-      if (routePath) syncRouteStyleSheets();
+      holders += 1;
+      apply();
+      let released = false;
       return () => {
-        style.media = 'not all';
+        if (released) return;
+        released = true;
+        holders = Math.max(0, holders - 1);
+        apply();
       };
     },
   };

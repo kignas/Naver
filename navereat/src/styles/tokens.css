@@ -116,15 +116,18 @@
   --sh-nav: 0 -2px 12px rgba(0, 0, 0, 0.06);
 
   /* Layout */
-  /* Tab bar: H = 64dp. The rest are the measured ratios of H — pill inset
-     0.067·H, icon 0.34·H, icon→label 0.19·H, label 0.205·H. */
-  --nav-h: 64px;
+  /* Tab bar: a compact centred capsule, 52dp tall, 5dp inset around the
+     42dp tab capsules inside it. */
+  --nav-h: 52px;
+  --nav-pad: 5px;
   --nav-bottom: max(12px, var(--sab));
   --nav-reserve: calc(var(--nav-h) + var(--nav-bottom) + 12px);
   --nav-side: 14px;
-  --nav-gap: 4.3px;
-  --nav-icon-size: 22px;
-  --nav-icon-label-gap: 12px;
+  --nav-gap: 0px;
+  --nav-tab-pad: 24px;
+  --nav-tab-min: 118px;
+  --nav-icon-size: 18px;
+  --nav-icon-label-gap: 7px;
   --nav-label-size: 13px;
   /* Non-overlay Android status bar: the WebView starts below it. */
   --safe-top: 0px;

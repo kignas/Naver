@@ -73,6 +73,40 @@ const state = () =>
       const rect = node.getBoundingClientRect();
       return rect.width > 0 && rect.height > 0 && getComputedStyle(node).visibility !== 'hidden';
     });
+    // The route stylesheets are injected raw and switched with `media`, so a
+    // sheet that is off (or a surface that never got one) renders the page with
+    // no styles at all: metadata stacks and bare SVGs fill the viewport.
+    const SHEET = {
+      'home-screen': 'navereatHome',
+      'orders-page': 'navereatOrders',
+      'rest-page': 'navereatRestaurant',
+      'cart-page': 'navereatCart',
+      'u99-page': 'navereatUnder99',
+      'profile-page': 'navereatProfile',
+      'track-page': 'navereatTrack',
+      'login-page': 'navereatLogin',
+      'cat-page': 'navereatCategory',
+    };
+    const surfacePage = [...(surface?.querySelectorAll('*') ?? [])].find((node) => [...node.classList].some((name) => SHEET[name]));
+    const pageClass = surfacePage ? [...surfacePage.classList].find((name) => SHEET[name]) : null;
+    const sheetKey = pageClass ? SHEET[pageClass] : null;
+    const sheet = sheetKey
+      ? [...document.querySelectorAll('style')].find((node) => node.dataset[sheetKey] === 'true')
+      : null;
+    // A stylesheet-less page blows every inline SVG up to the container width.
+    // The verified badge and the rider illustration are the two that made it
+    // visible, so they carry an explicit intrinsic size of their own.
+    const iconBox = (selector) => {
+      const node = surface?.querySelector(selector);
+      if (!node) return null;
+      const rect = node.getBoundingClientRect();
+      return { w: Math.round(rect.width), h: Math.round(rect.height) };
+    };
+    const verified = iconBox('.ew-verified');
+    const rider = iconBox('#delivery-rider-fallback');
+    const oversizedIcons =
+      (verified && (verified.w > 40 || verified.h > 40) ? 1 : 0) +
+      (rider && (rider.w > 130 || rider.h > 70) ? 1 : 0);
     return {
       hash: location.hash,
       covered: Boolean(pushed),
@@ -91,6 +125,12 @@ const state = () =>
       navTabs: document.querySelectorAll('.bottom-nav .nav-tab').length,
       errorCard,
       title: (surface?.querySelector('#restaurants-title') ?? document.querySelector('#restaurants-title'))?.textContent ?? null,
+      sheet: pageClass,
+      sheetOn: sheet ? sheet.media === 'all' : null,
+      verified,
+      rider,
+      oversizedIcons,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     };
   });
 
@@ -125,6 +165,21 @@ const backToHome = async (label) => {
   throw new Error(`${label}: could not get back to Home`);
 };
 
+/**
+ * A route's stylesheet is injected raw and toggled with `media`, so a page can
+ * render with no styles at all: metadata stacks and bare SVGs fill the width.
+ * Every surface must have its own sheet on, no oversized SVG and no overflow.
+ */
+const audit = (label, snapshot) => {
+  check(`${label}: its route stylesheet is applied`, snapshot.sheetOn === true, `${snapshot.sheet}=${snapshot.sheetOn}`);
+  check(
+    `${label}: badge and rider art keep their size`,
+    snapshot.oversizedIcons === 0,
+    `verified=${JSON.stringify(snapshot.verified)} rider=${JSON.stringify(snapshot.rider)}`,
+  );
+  check(`${label}: no horizontal overflow`, snapshot.overflow === 0, `${snapshot.overflow}px`);
+};
+
 const navTo = async (path) => {
   await page.evaluate((target) => {
     location.hash = target;
@@ -143,6 +198,7 @@ try {
   check('home: header, hero and nav render', home.home && home.hero && home.nav, `home=${home.home} hero=${home.hero} nav=${home.nav}`);
   check('home: demo restaurants are listed', cards > 0, `${cards} cards`);
   check('home: bottom nav has both tabs', home.navTabs === 2, `${home.navTabs} tabs`);
+  audit('home', home);
   await page.screenshot({ path: path.join(outDir, '01-home.png') });
 
   // --- Hero CTA opens the deals route (the original's /deals) ------------
@@ -172,6 +228,7 @@ try {
   await sleep(420);
   const under99 = await state();
   check('UNDER ₹99 pill: opens /under99 with content', under99.hash === '#/under99' && under99.under99, under99.hash);
+  audit('under99', under99);
   await page.screenshot({ path: path.join(outDir, '02-under99.png') });
   await backToHome('under99');
 
@@ -179,7 +236,9 @@ try {
   await tap('#home-header .btn-profile');
   await page.waitForSelector('.profile-page', { timeout: 15000 });
   await sleep(380);
-  check('profile button: opens /profile', (await state()).profile, 'profile-page visible');
+  const profile = await state();
+  check('profile button: opens /profile', profile.profile, 'profile-page visible');
+  audit('profile', profile);
   await backToHome('profile');
 
   // --- Restaurant card + page slide ---------------------------------------
@@ -204,7 +263,27 @@ try {
   check('restaurant card: opens the menu page', restaurant.restaurant && restaurant.hash.startsWith('#/restaurant/'), restaurant.hash);
   check('restaurant card: menu renders its dishes', menuItems > 0, `${menuItems} dishes`);
   check('page transition: the incoming layer slides', layerTransforms.length > 0, `${layerTransforms.length} moving frames`);
-  await page.screenshot({ path: path.join(outDir, '03-restaurant.png') });
+  audit('restaurant', restaurant);
+
+  // --- Two layers of the same route (regression) --------------------------
+  // A push lands before the page it covers finishes leaving, so for ~260ms two
+  // layers of the same route are mounted. The route sheet is reference counted:
+  // the leaving layer's detach must not switch it off under the visible page.
+  await page.evaluate(() => {
+    location.hash = '#/restaurant/2';
+  });
+  await sleep(1400);
+  const stacked = await state();
+  const stackedTitle = await page.evaluate(() => {
+    const node = document.querySelector('.route-layer.is-top .res-name');
+    return node ? getComputedStyle(node).fontSize : null;
+  });
+  check(
+    'stacked restaurants: the second layer keeps its styles',
+    stacked.restaurant && stacked.sheetOn === true && stacked.oversizedIcons === 0 && stacked.overflow === 0,
+    `${stacked.hash} sheet=${stacked.sheetOn} verified=${JSON.stringify(stacked.verified)} rider=${JSON.stringify(stacked.rider)} overflow=${stacked.overflow}`,
+  );
+  check('stacked restaurants: the title keeps its 28px size', stackedTitle === '28px', String(stackedTitle));
 
   // --- Cart pill from an added dish ---------------------------------------
   await page.locator('.nb-add-btn:not(.nb-add-btn--cust)').first().tap();
@@ -215,6 +294,7 @@ try {
   await sleep(500);
   const cart = await state();
   check('cart pill: opens /cart with the item list', cart.cart && cart.hash === '#/cart', cart.hash);
+  audit('cart', cart);
   await page.screenshot({ path: path.join(outDir, '04-cart.png') });
   await backToHome('cart');
 
@@ -254,6 +334,7 @@ try {
   });
   const pillAnimated = await page.evaluate(() => window.__navPill);
   check('History tab: opens /orders', orders.orders && orders.hash === '#/orders', orders.hash);
+  audit('orders', orders);
   check('History tab: the nav pill moves', indicatorBefore !== indicatorAfter, `${indicatorBefore} → ${indicatorAfter}`);
   check(
     'History tab: the pill swap animation runs',
@@ -266,7 +347,9 @@ try {
   await page.locator('.orders-page .live-state').first().tap();
   await page.waitForSelector('.track-page', { timeout: 15000 });
   await sleep(520);
-  check('Track live: opens the tracking page', (await state()).track, 'track-page visible');
+  const track = await state();
+  check('Track live: opens the tracking page', track.track, 'track-page visible');
+  audit('track', track);
   await backToHome('track');
   await tap('.bottom-nav .nav-tab[data-nav-item="/"]');
   await page.waitForSelector('.route-tab-cache.is-active #home-header', { timeout: 15000 });
@@ -285,6 +368,7 @@ try {
   await navTo('#/under99');
   const under99Deep = await waitFor((snapshot) => snapshot.under99, 'deep link /under99');
   check('deep link /under99 renders', under99Deep.under99 && under99Deep.hash === '#/under99', under99Deep.hash);
+  audit('deep-linked under99', under99Deep);
   await navTo('#/category/Biryani');
   const category = await waitFor((snapshot) => snapshot.category, 'deep link /category/Biryani');
   await page.waitForSelector('.cat-result', { timeout: 8000 }).catch(() => {});
@@ -294,7 +378,9 @@ try {
   await page.locator('.cat-result').first().tap();
   await page.waitForSelector('.menu-item', { timeout: 15000 });
   await sleep(420);
-  check('category result: opens the restaurant', (await state()).restaurant, 'rest-page visible');
+  const categoryResult = await state();
+  check('category result: opens the restaurant', categoryResult.restaurant, 'rest-page visible');
+  audit('category result', categoryResult);
   await backToHome('category result');
 
   // --- Login (fresh session) ---------------------------------------------

@@ -24,6 +24,9 @@ import '../styles/pages/restaurant.css';
 
 const restaurantStyle = createRouteStyleSheet(`${restaurantBundleCss}\n${restaurantShellCss}`, 'navereatRestaurant');
 
+/** Restaurant layers can overlap during a slide; the body class follows all of them. */
+let restaurantBodies = 0;
+
 type MenuTab = 'menu' | 'info';
 
 function compactCount(value: number | undefined): string {
@@ -92,12 +95,16 @@ export function Restaurant() {
 
   useLayoutEffect(() => {
     const detach = restaurantStyle.attach();
+    // Same overlap as the stylesheet: a leaving restaurant layer must not clear
+    // the viewport rules the incoming one is already using.
+    restaurantBodies += 1;
     document.body.classList.add('navereat-restaurant');
     document.documentElement.dataset.ewHeader = 'raspberry';
     document.documentElement.dataset.ewTheme = 'light';
     return () => {
       detach();
-      document.body.classList.remove('navereat-restaurant');
+      restaurantBodies = Math.max(0, restaurantBodies - 1);
+      if (restaurantBodies === 0) document.body.classList.remove('navereat-restaurant');
     };
   }, []);
 
@@ -241,6 +248,8 @@ export function Restaurant() {
                     <svg
                       className="ew-verified"
                       id="res-verified"
+                      width="22"
+                      height="22"
                       viewBox="0 0 24 24"
                       role="img"
                       aria-label="Verified restaurant"

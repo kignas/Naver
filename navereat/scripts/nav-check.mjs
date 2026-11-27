@@ -8,24 +8,31 @@ const appRoot = process.cwd();
 const repoRoot = path.resolve(appRoot, '..');
 const outDir = path.join(repoRoot, 'verify', 'item19');
 const base = 'http://127.0.0.1:4177';
-/** --nav-h (64) + --nav-bottom (12) + 12 */
-const NAV_RESERVE = 88;
-/** Measured spec, ratios of the 64dp container. */
-const H = 64;
+/**
+ * --nav-h (52) + --nav-bottom (12) + 12
+ */
+const NAV_RESERVE = 76;
+/**
+ * Compact centred capsule: 52dp tall, 5dp inset, one 118x42 tab capsule each.
+ */
+const H = 52;
 const SPEC = {
   height: H,
-  side: 14,
+  pad: 5,
   bottom: 12,
-  gap: Number((0.067 * H).toFixed(2)),
-  icon: Number((0.34 * H).toFixed(2)),
-  iconLabelGap: Number((0.19 * H).toFixed(2)),
-  label: Number((0.205 * H).toFixed(2)),
-  shadowY: Number((0.1 * H).toFixed(2)),
-  shadowBlur: Number((0.35 * H).toFixed(2)),
+  width: 246,
+  tabWidth: 118,
+  tabHeight: H - 2 * 5,
+  tabPad: 24,
+  gap: 0,
+  icon: 18,
+  iconLabelGap: 7,
+  label: 13,
+  shadowY: 8,
+  shadowBlur: 24,
 };
-const PILL_TOP = 'rgb(42, 42, 46)';
-const PILL_BOTTOM = 'rgb(30, 30, 34)';
-const IDLE_LABEL = 'rgb(28, 28, 40)';
+const PILL = 'rgb(36, 36, 41)';
+const IDLE_LABEL = 'rgb(31, 32, 36)';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const failures = [];
 
@@ -174,6 +181,9 @@ async function navState(page) {
               pillBottom: style.getPropertyValue('--nav-pill-bottom').trim(),
               idle: style.getPropertyValue('--nav-idle-fg').trim(),
               gap: style.getPropertyValue('--nav-gap').trim(),
+              pad: style.getPropertyValue('--nav-pad').trim(),
+              tabPad: style.getPropertyValue('--nav-tab-pad').trim(),
+              pill: style.getPropertyValue('--nav-pill').trim(),
               icon: style.getPropertyValue('--nav-icon-size').trim(),
               iconLabelGap: style.getPropertyValue('--nav-icon-label-gap').trim(),
               labelSize: style.getPropertyValue('--nav-label-size').trim(),
@@ -183,8 +193,6 @@ async function navState(page) {
       tabs: tabs.map((tab) => {
         const tabLabel = tab.querySelector('.nav-label');
         const glyph = tab.querySelector('.nav-glyph');
-        const activeLayer = tab.querySelector('.nav-glyph__active');
-        const outlineLayer = tab.querySelector('.nav-glyph__outline');
         const labelStyle = tabLabel ? getComputedStyle(tabLabel) : null;
         const iconBox = glyph?.getBoundingClientRect();
         const labelBox = tabLabel?.getBoundingClientRect();
@@ -199,14 +207,24 @@ async function navState(page) {
           labelScrollWidth: tabLabel?.scrollWidth ?? 0,
           icon: Boolean(glyph),
           iconSize: iconBox ? { width: iconBox.width, height: iconBox.height } : null,
-          iconGap: iconBox && labelBox ? Math.round((labelBox.top - iconBox.bottom) * 10) / 10 : null,
+          iconAttrs: { width: glyph?.getAttribute('width') ?? null, height: glyph?.getAttribute('height') ?? null },
+          glyphPaint: glyph
+            ? {
+                fill:
+                  glyph.querySelector('.nav-glyph__house-body')?.getAttribute('fill') ??
+                  glyph.querySelector('.nav-glyph__bag-body')?.getAttribute('fill') ??
+                  null,
+                roofFill: glyph.querySelector('.nav-glyph__roof')?.getAttribute('fill') ?? null,
+                doorFill: glyph.querySelector('.nav-glyph__door')?.getAttribute('fill') ?? null,
+                stroke: glyph.querySelector('.nav-glyph__bag-body')?.getAttribute('stroke') ?? null,
+                strokeWidth: Number(glyph.querySelector('.nav-glyph__bag-body')?.getAttribute('stroke-width') ?? 0),
+                lines: glyph.querySelectorAll('.nav-glyph__lines').length,
+              }
+            : null,
+          iconGap: iconBox && labelBox ? Math.round((labelBox.left - iconBox.right) * 10) / 10 : null,
           labelStyle: labelStyle
             ? { size: parseFloat(labelStyle.fontSize), weight: labelStyle.fontWeight, color: labelStyle.color }
             : null,
-          layers: {
-            active: activeLayer ? Number(getComputedStyle(activeLayer).opacity) : -1,
-            outline: outlineLayer ? Number(getComputedStyle(outlineLayer).opacity) : -1,
-          },
         };
       }),
       active: active?.getAttribute('data-nav-item') ?? '',
@@ -246,21 +264,23 @@ try {
   const specPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await specPage.setContent(`<!doctype html><meta charset="utf-8"><style>
     html,body{margin:0;height:100%;background:#f6f4f7;font-family:Manrope,system-ui,sans-serif}
-    .bar{position:absolute;left:${SPEC.side}px;right:${SPEC.side}px;bottom:${SPEC.bottom}px;height:${SPEC.height}px;
-      background:#fff;border:1px solid rgba(196,196,214,0.6);border-radius:999px;
-      box-shadow:0 ${SPEC.shadowY}px ${SPEC.shadowBlur}px rgba(0,0,0,0.1);display:flex}
-    .slot{position:relative;flex:1 1 0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-      gap:${SPEC.iconLabelGap}px;color:#1C1C28}
+    .bar{position:absolute;left:0;right:0;margin-inline:auto;width:${SPEC.width}px;bottom:${SPEC.bottom}px;
+      height:${SPEC.height}px;box-sizing:border-box;padding:${SPEC.pad}px;
+      background:#fff;border-radius:999px;display:flex;align-items:center;
+      box-shadow:inset 0 0 0 1px rgba(0,0,0,0.06),0 ${SPEC.shadowY}px ${SPEC.shadowBlur}px rgba(0,0,0,0.12)}
+    .slot{position:relative;flex:0 0 auto;min-width:${SPEC.tabWidth}px;height:${SPEC.tabHeight}px;box-sizing:border-box;
+      display:flex;flex-direction:row;align-items:center;justify-content:center;gap:${SPEC.iconLabelGap}px;
+      padding:0 ${SPEC.tabPad}px;color:#1F2024}
     .slot.on{color:#fff}
-    .pill{position:absolute;inset:${SPEC.gap}px;border-radius:999px;
-      background:linear-gradient(180deg,#2A2A2E 0%,#1E1E22 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,0.18)}
-    .glyph{width:${SPEC.icon}px;height:${SPEC.icon}px;position:relative;z-index:1}
-    .lbl{font-size:${SPEC.label}px;font-weight:500;line-height:1;position:relative;z-index:1}
+    .pill{position:absolute;inset:0;border-radius:999px;background:#242429;
+      box-shadow:inset 0 0 0 1px rgba(255,255,255,0.14),0 4px 10px rgba(17,17,20,0.18)}
+    .glyph{width:${SPEC.icon}px;height:${SPEC.icon}px;flex:0 0 auto;position:relative;z-index:1}
+    .lbl{font-size:${SPEC.label}px;font-weight:600;line-height:1;position:relative;z-index:1}
   </style><div class="bar">
     <div class="slot on"><span class="pill"></span>
-      <svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3.15 12.15 11.3 3.95a1 1 0 0 1 1.4 0l8.15 8.2"/><path d="M5.6 11.4v7.05a2.15 2.15 0 0 0 2.15 2.15h8.5a2.15 2.15 0 0 0 2.15-2.15V11.4"/></svg>
+      <svg class="glyph" viewBox="0 0 24 24"><path d="M3.05 12.55 11.15 4.35a1.2 1.2 0 0 1 1.7 0l8.1 8.2-1.85 1.8L12 7.2 4.9 14.35l-1.85-1.8Z" fill="#FF6B6B"/><path d="M5.75 12.1h12.5v6.35a2.3 2.3 0 0 1-2.3 2.3H8.05a2.3 2.3 0 0 1-2.3-2.3V12.1Z" fill="#F15A64"/><path d="M10.2 20.75v-3.15a1.8 1.8 0 0 1 3.6 0v3.15h-3.6Z" fill="#241014"/></svg>
       <span class="lbl">Home</span></div>
-    <div class="slot"><svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4.3" y="8.8" width="15.4" height="12" rx="2"/><path d="M8.9 9.2V7.7a3.1 3.1 0 0 1 6.2 0v1.5"/></svg>
+    <div class="slot"><svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.3 10.4a1.6 1.6 0 0 1 1.6-1.6h12.2a1.6 1.6 0 0 1 1.6 1.6v8a2.4 2.4 0 0 1-2.4 2.4H6.7a2.4 2.4 0 0 1-2.4-2.4v-8Z"/><path d="M8.9 9.2V7.7a3.1 3.1 0 0 1 6.2 0v1.5"/><path d="M8.8 13.1h6.4"/><path d="M8.8 16.4h4.3"/></svg>
       <span class="lbl">History</span></div>
   </div>`);
   await sleep(200);
@@ -306,34 +326,41 @@ try {
   // Container: white, hairline, pill radius, soft large shadow, no blur.
   check('home: white surface', home.navStyle?.background === 'rgb(255, 255, 255)', home.navStyle?.background);
   check(
-    'home: hairline border',
-    near(parseFloat(home.navStyle?.border), 1, 0.01) && /^rgba?\(196, 196, 214/.test(home.navStyle?.borderColor ?? ''),
-    `${home.navStyle?.border} ${home.navStyle?.borderColor}`,
+    'home: hairline is a 1px inset shadow, not a border',
+    parseFloat(home.navStyle?.border ?? '1') === 0 &&
+      /rgba\(0, 0, 0, 0\.06\) 0px 0px 0px 1px inset/.test(home.navStyle?.shadow ?? ''),
+    `${home.navStyle?.border} ${home.navStyle?.shadow}`,
   );
   check('home: full pill radius', home.navStyle?.radius === '999px', home.navStyle?.radius);
   check(
-    'home: shadow 0.10H / 0.35H, 10% black',
-    ['6.4px', '22.4px', 'rgba(0, 0, 0, 0.1)'].every((part) => (home.navStyle?.shadow ?? '').includes(part)),
+    'home: elevation 0 8px 24px, 12% black',
+    ['0px 8px 24px', 'rgba(0, 0, 0, 0.12)'].every((part) => (home.navStyle?.shadow ?? '').includes(part)),
     home.navStyle?.shadow,
   );
   check('home: no backdrop blur', home.navStyle?.backdrop === 'none', home.navStyle?.backdrop);
   check(
     'home: colours are CSS variables',
     home.navStyle?.vars.surface === '#ffffff' &&
-      home.navStyle?.vars.pillTop === '#2a2a2e' &&
-      home.navStyle?.vars.pillBottom === '#1e1e22' &&
-      home.navStyle?.vars.idle === '#1c1c28',
+      home.navStyle?.vars.pill === '#242429' &&
+      home.navStyle?.vars.idle === '#1f2024',
     JSON.stringify(home.navStyle?.vars),
   );
 
   // Measured geometry.
   check(
-    'home: floating geometry H=64, 14px sides, 12px bottom',
-    home.navRect.height === 64 && home.navRect.bottom === 12 && home.navRect.x === 14,
+    'home: compact capsule H=52, 246 wide, centred, 12px off the bottom',
+    home.navRect.height === SPEC.height &&
+      home.navRect.bottom === SPEC.bottom &&
+      near(home.navRect.width, SPEC.width, 1) &&
+      near(home.navRect.x + home.navRect.width / 2, 390 / 2, 1),
     JSON.stringify(home.navRect),
   );
   check('home: nav above route/sheet layers', Number(home.navStyle.z) >= 2000, home.navStyle.z);
-  check('home: tab touch targets >= 44px', home.tabs.every((tab) => tab.rect.height >= 44), home.tabs.map((tab) => tab.rect.height).join('/'));
+  check(
+    'home: tab capsules are 118x42 inside the 52px pill',
+    home.tabs.every((tab) => near(tab.rect.height, SPEC.tabHeight, 0.5) && near(tab.rect.width, SPEC.tabWidth, 0.5)),
+    home.tabs.map((tab) => `${Math.round(tab.rect.width)}x${Math.round(tab.rect.height)}`).join('/'),
+  );
   check(
     'home: labels are not clipped',
     home.tabs.every((tab) => tab.labelWidth > 0 && tab.labelScrollWidth <= tab.labelWidth + 1),
@@ -344,11 +371,12 @@ try {
 
   // Ratios of H.
   check(
-    'ratios: icon 0.34H=22, label 0.205H=13 @500, gap 0.19H=12, pill inset 0.067H=4.3',
-    // Ratios are rounded to whole dp/sp in CSS, so allow half a unit.
+    'spec: 18px icons, 13px/600 labels, 7px icon→label gap, 24px tab padding, 5px pill inset',
     home.tabs.every((tab) => near(tab.iconSize.width, SPEC.icon, 0.5) && near(tab.iconSize.height, SPEC.icon, 0.5)) &&
-      home.tabs.every((tab) => near(tab.labelStyle.size, SPEC.label, 0.5) && tab.labelStyle.weight === '500') &&
-      home.tabs.every((tab) => near(tab.iconGap, SPEC.iconLabelGap, 0.6)) &&
+      home.tabs.every((tab) => near(tab.labelStyle.size, SPEC.label, 0.5) && tab.labelStyle.weight === '600') &&
+      home.tabs.every((tab) => near(tab.iconGap, SPEC.iconLabelGap, 0.8)) &&
+      near(parseFloat(home.navStyle.vars.tabPad), SPEC.tabPad, 0.01) &&
+      near(parseFloat(home.navStyle.vars.pad), SPEC.pad, 0.01) &&
       near(parseFloat(home.navStyle.vars.gap), SPEC.gap, 0.01),
     JSON.stringify({
       icons: home.tabs.map((tab) => tab.iconSize),
@@ -360,33 +388,47 @@ try {
 
   // Pill: charcoal gradient, 1px inner highlight, inset by --nav-gap.
   check(
-    'home: pill is a charcoal vertical gradient',
-    home.indicator?.backgroundImage.includes('linear-gradient') &&
-      home.indicator.backgroundImage.includes(PILL_TOP) &&
-      home.indicator.backgroundImage.includes(PILL_BOTTOM),
-    home.indicator?.backgroundImage,
+    'home: pill is flat charcoal #242429',
+    home.indicator?.background === PILL && home.indicator?.backgroundImage === 'none',
+    `${home.indicator?.background} ${home.indicator?.backgroundImage}`,
   );
   check(
     'home: pill has the 1px inner highlight',
-    /rgba\(255, 255, 255, 0\.18\) 0px 0px 0px 1px inset/.test(home.indicator?.boxShadow ?? ''),
+    /rgba\(255, 255, 255, 0\.14\) 0px 0px 0px 1px inset/.test(home.indicator?.boxShadow ?? ''),
     home.indicator?.boxShadow,
   );
   check(
-    'home: pill inset by 0.067H inside the slot',
-    near(home.indicator.x - home.tabs[0].rect.x, SPEC.gap, 0.6) && near(home.indicator.width, home.tabs[0].rect.width - 2 * SPEC.gap, 0.6),
-    `${home.indicator.x - home.tabs[0].rect.x} / ${home.indicator.width} vs ${home.tabs[0].rect.width}`,
+    'home: pill covers exactly the active tab slot',
+    near(home.indicator.x - home.tabs[0].rect.x, SPEC.gap, 0.6) &&
+      near(home.indicator.width, home.tabs[0].rect.width - 2 * SPEC.gap, 0.6) &&
+      near(home.indicator.height, home.tabs[0].rect.height, 0.6),
+    `${home.indicator.x - home.tabs[0].rect.x} / ${home.indicator.width}x${home.indicator.height} vs ${home.tabs[0].rect.width}x${home.tabs[0].rect.height}`,
   );
   check('home: active label is white', home.activeColor === 'rgb(255, 255, 255)', home.activeColor);
-  check('home: idle label is #1C1C28', home.tabs[1].labelStyle.color === IDLE_LABEL, home.tabs[1].labelStyle.color);
+  check('home: idle label is #1F2024', home.tabs[1].labelStyle.color === IDLE_LABEL, home.tabs[1].labelStyle.color);
 
-  // Icon states.
+  // Icons: crisp intrinsic 18px SVGs, no scaling box to fall back on.
   check(
-    'icons: active shows the gradient layer, idle shows the outline',
-    home.tabs[0].layers.active === 1 &&
-      home.tabs[0].layers.outline === 0 &&
-      home.tabs[1].layers.active === 0 &&
-      home.tabs[1].layers.outline === 1,
-    JSON.stringify(home.tabs.map((tab) => tab.layers)),
+    'icons: both glyphs are 18x18 with intrinsic width/height',
+    home.tabs.every(
+      (tab) =>
+        tab.iconSize.width === 18 &&
+        tab.iconSize.height === 18 &&
+        tab.iconAttrs.width === '18' &&
+        tab.iconAttrs.height === '18',
+    ),
+    JSON.stringify(home.tabs.map((tab) => tab.iconAttrs)),
+  );
+  check(
+    'icons: filled coral house and a 1.8px currentColor receipt outline',
+    home.tabs[0].glyphPaint.fill === '#F15A64' &&
+      home.tabs[0].glyphPaint.roofFill === '#FF6B6B' &&
+      home.tabs[0].glyphPaint.doorFill === '#241014' &&
+      home.tabs[1].glyphPaint.stroke === 'currentColor' &&
+      near(home.tabs[1].glyphPaint.strokeWidth, 1.8, 0.01) &&
+      home.tabs[1].glyphPaint.fill === 'none' &&
+      home.tabs[1].glyphPaint.lines === 2,
+    JSON.stringify(home.tabs.map((tab) => tab.glyphPaint)),
   );
   check(
     'icons: home glyph is the house, history the bag',
@@ -404,10 +446,14 @@ try {
   const history = await capture('history', '.orders-page');
   check('history: active is History', history.active === '/orders' && history.activeLabel === 'History', `${history.active} ${history.activeLabel}`);
   check('history: pill moved to History', near(history.indicator.x - history.tabs[1].rect.x, SPEC.gap, 0.6), JSON.stringify({ pill: history.indicator.x, tab: history.tabs[1].rect.x }));
-  check('history: pill colour', history.indicator?.backgroundImage.includes(PILL_TOP), history.indicator?.backgroundImage);
+  check('history: pill colour', history.indicator?.background === PILL, history.indicator?.background);
   check('history: reserves nav height', parseFloat(history.paddingBottom) >= NAV_RESERVE, history.paddingBottom);
   check('history: nav node preserved', history.sameNode);
-  check('history: icon states swapped', history.tabs[0].layers.active === 0 && history.tabs[1].layers.active === 1, JSON.stringify(history.tabs.map((tab) => tab.layers)));
+  check(
+    'history: label colours swap with the pill',
+    history.activeColor === 'rgb(255, 255, 255)' && history.tabs[0].labelStyle.color === IDLE_LABEL,
+    `${history.activeColor} / ${history.tabs[0].labelStyle.color}`,
+  );
   const vibAfterHistory = await vibrationCount(page);
   check('haptics: one light impact on the tab change', vibAfterHistory === 1, String(vibAfterHistory));
   const mounted = await page.evaluate(() => ({
@@ -582,9 +628,14 @@ try {
     );
     check(`fit ${size.width}: pill on History`, near(state.indicator.x - state.tabs[1].rect.x, SPEC.gap, 0.6), `${state.indicator.x} vs ${state.tabs[1].rect.x}`);
     check(
-      `fit ${size.width}: icon + label stack fits the pill`,
-      state.tabs.every((tab) => tab.iconSize.height + tab.iconGap + tab.labelStyle.size <= 64 - 2 * SPEC.gap - 2),
-      JSON.stringify(state.tabs.map((tab) => tab.iconSize.height + tab.iconGap + tab.labelStyle.size)),
+      `fit ${size.width}: icon + gap + label fit the tab capsule`,
+      state.tabs.every((tab) => tab.iconSize.width + tab.iconGap + tab.labelWidth <= tab.rect.width - 2 * SPEC.tabPad + 1),
+      JSON.stringify(state.tabs.map((tab) => tab.iconSize.width + tab.iconGap + tab.labelWidth)),
+    );
+    check(
+      `fit ${size.width}: capsule stays centred`,
+      near(state.navRect.x + state.navRect.width / 2, size.width / 2, 1),
+      `${state.navRect.x + state.navRect.width / 2} vs ${size.width / 2}`,
     );
     await fitPage.screenshot({ path: path.join(outDir, `fit-${size.width}x${size.height}.png`) });
     await fitContext.close();
@@ -626,15 +677,24 @@ try {
   await sleep(700);
   await rmPage.evaluate(() => document.querySelector('[data-nav-item="/orders"]')?.click());
   await sleep(120);
-  const rm = await rmPage.evaluate(() => ({
-    running: document.querySelector('.bottom-nav')?.getAnimations({ subtree: true }).filter((animation) => animation.playState === 'running').length ?? -1,
-    layers: Array.from(document.querySelectorAll('.nav-tab')).map((tab) => ({
-      active: Number(getComputedStyle(tab.querySelector('.nav-glyph__active')).opacity),
-      outline: Number(getComputedStyle(tab.querySelector('.nav-glyph__outline')).opacity),
-    })),
-  }));
+  const rm = await rmPage.evaluate(() => {
+    const nav = document.querySelector('.bottom-nav');
+    const active = document.querySelector('.nav-tab.is-active');
+    const indicator = document.querySelector('.nav-indicator');
+    return {
+      running: nav?.getAnimations({ subtree: true }).filter((animation) => animation.playState === 'running').length ?? -1,
+      activeItem: active?.getAttribute('data-nav-item') ?? '',
+      label: active ? getComputedStyle(active).color : '',
+      transform: indicator ? getComputedStyle(indicator).transform : '',
+      transition: indicator ? getComputedStyle(indicator).transitionDuration : '',
+    };
+  });
   check('reduced motion: no animation runs', rm.running === 0, String(rm.running));
-  check('reduced motion: icon state is instant', rm.layers[0].active === 0 && rm.layers[1].active === 1, JSON.stringify(rm.layers));
+  check(
+    'reduced motion: the pill and label land instantly on History',
+    rm.activeItem === '/orders' && rm.label === 'rgb(255, 255, 255)' && rm.transition.split(',')[0].trim() === '0s',
+    JSON.stringify(rm),
+  );
   await rmContext.close();
 
   // ---- 11. The debug panel shows the haptic count. -----------------------

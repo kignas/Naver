@@ -173,16 +173,15 @@ export function BottomNav() {
     }
   };
 
-  const tabCenters = (): number[] => {
-    const element = navRef.current;
-    if (!element) return [];
-    const navRect = element.getBoundingClientRect();
-    return tabRefs.current.map((tab) => {
+  const tabCenters = (): number[] =>
+    tabRefs.current.map((tab) => {
       if (!tab) return 0;
       const rect = tab.getBoundingClientRect();
-      return rect.left - navRect.left + rect.width / 2;
+      // Viewport coordinates, the same space as the pointer events they are
+      // compared against. The pill is centred and only as wide as its tabs, so
+      // nav-relative centres would land nearer the wrong tab.
+      return rect.left + rect.width / 2;
     });
-  };
 
   const beginDrag = (event: React.PointerEvent<HTMLElement>) => {
     if (!visible || (event.pointerType === 'mouse' && event.button !== 0)) return;

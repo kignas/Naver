@@ -23,7 +23,7 @@ interface HomeRestaurantCardProps {
 }
 
 const RATING_BADGE = (
-  <svg className="u99-rating-badge" viewBox="0 0 24 24" aria-hidden="true">
+  <svg className="u99-rating-badge" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
     <circle cx="12" cy="12" r="11" fill="var(--ew-success,#23956D)" />
     <path
       d="M12 5.4 13.94 9.33 18.28 9.96 15.14 13.02 15.88 17.34 12 15.3 8.12 17.34 8.86 13.02 5.72 9.96 10.06 9.33Z"
@@ -33,7 +33,7 @@ const RATING_BADGE = (
 );
 
 const VERIFIED_BADGE = (
-  <svg className="u99-verified" viewBox="0 0 24 24" role="img" aria-label="Verified restaurant">
+  <svg className="u99-verified" width="16" height="16" viewBox="0 0 24 24" role="img" aria-label="Verified restaurant">
     <path
       fill="currentColor"
       d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.34 2.19c-1.39-.46-2.9-.2-3.91.81s-1.27 2.52-.81 3.91C2.63 9.33 1.75 10.57 1.75 12s.88 2.67 2.19 3.34c-.46 1.39-.2 2.9.81 3.91s2.52 1.26 3.91.81c.67 1.31 1.91 2.19 3.34 2.19s2.67-.88 3.34-2.19c1.39.45 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34z"
@@ -50,7 +50,7 @@ const VERIFIED_BADGE = (
 );
 
 const OFFER_SEAL = (
-  <svg className="u99-seal" viewBox="0 0 24 24" aria-hidden="true">
+  <svg className="u99-seal" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
     <path
       d="M12 0.8Q12 0.8 13.3 1.99Q14.59 3.17 16.32 2.88Q18.06 2.58 18.5 4.28Q18.95 5.98 20.57 6.66Q22.19 7.35 21.65 9.02Q21.11 10.69 22.1 12.14Q23.09 13.59 21.73 14.71Q20.37 15.82 20.42 17.58Q20.46 19.33 18.72 19.54Q16.97 19.74 16.06 21.24Q15.16 22.75 13.58 21.97Q12 21.2 10.42 21.97Q8.84 22.75 7.94 21.24Q7.03 19.74 5.28 19.54Q3.54 19.33 3.58 17.58Q3.63 15.82 2.27 14.71Q0.91 13.59 1.9 12.14Q2.89 10.69 2.35 9.02Q1.81 7.35 3.43 6.66Q5.05 5.98 5.5 4.28Q5.94 2.58 7.68 2.88Q9.41 3.17 10.7 1.99Z"
       fill="var(--ew-success,#23956D)"
