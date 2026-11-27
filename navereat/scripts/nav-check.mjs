@@ -8,30 +8,44 @@ const appRoot = process.cwd();
 const repoRoot = path.resolve(appRoot, '..');
 const outDir = path.join(repoRoot, 'verify', 'item19');
 const base = 'http://127.0.0.1:4177';
+/** 1k = 1px on the 1080px-wide Zomato reference, capped at a 480px viewport. */
+const kFor = (width) => Math.min(width, 480) / 1080;
 /**
- * --nav-h (46) + --nav-bottom (20) + 12
+ * The capsule, pill and type are all specified in k (`--k` in
+ * src/styles/tokens.css), so their px size is a ratio of the viewport width:
+ * capsule 690k x 128k, pill 334k x 107k, 54k above the bottom edge, icons 36k,
+ * icon→label gap 22k, labels 23.45k, capsule side inset 5.5k - 0.5px.
  */
-const NAV_RESERVE = 78;
-/**
- * Floating capsule: 252x46 with a 39dp pill inset 3dp, split into two equal
- * 125x39 slots.
- */
-const H = 46;
-const SPEC = {
-  height: H,
-  pad: 3,
-  bottom: 20,
-  width: 252,
-  tabWidth: 125,
-  tabHeight: 39,
-  indicatorHeight: 39,
-  icon: 20,
-  iconLabelGap: 6,
-  label: 13,
-  side: 69,
-  shadowY: 4,
-  shadowBlur: 14,
+const specFor = (width) => {
+  const k = kFor(width);
+  const capsule = 690 * k;
+  const height = 128 * k;
+  const bottom = 54 * k;
+  return {
+    k,
+    width: capsule,
+    height,
+    bottom,
+    pillWidth: 334 * k,
+    pillHeight: 107 * k,
+    pad: 5.5 * k - 0.5,
+    icon: 36 * k,
+    iconLabelGap: 22 * k,
+    label: 23.45 * k,
+    shadowY: 4 * k,
+    shadowBlur: 14 * k,
+    // The grid splits the content box (capsule minus its 1px hairline) in two.
+    tabWidth: (capsule - 2) / 2,
+    // --nav-h + --nav-bottom + 12: the clearance the cart bar keeps above it.
+    reserve: height + bottom + 12,
+    // 16k: how far the bar drops when it is scrolled away.
+    hideDrop: 16 * k,
+  };
 };
+const WIDTHS = [360, 393, 412, 460];
+const REF_WIDTH = 390;
+const SPEC = specFor(REF_WIDTH);
+const NAV_RESERVE = SPEC.reserve;
 const PILL_GRADIENT = 'linear-gradient(90deg, rgb(28, 28, 30), rgb(42, 42, 45))';
 const IDLE_INK = 'rgb(30, 30, 36)';
 const IDLE_LABEL = 'rgb(30, 30, 36)';
@@ -44,6 +58,19 @@ function check(name, condition, detail = '') {
 }
 
 const near = (a, b, tolerance = 1) => Math.abs(Number(a) - Number(b)) <= tolerance;
+
+/** Every px length in a computed box-shadow, in declaration order. */
+const shadowNumbers = (value) => (value ?? '').match(/-?\d*\.?\d+px/g)?.map((part) => Number.parseFloat(part)) ?? [];
+
+/** The horizontal part of a computed 2d/3d matrix. */
+const translateX = (value) => {
+  if (!value || value === 'none') return 0;
+  const parts = value.replace(/matrix3d\(|matrix\(|translate3d\(|translate\(|\)/g, '').split(',').map((part) => Number(part.trim()));
+  // matrix(): tx is index 4; matrix3d(): tx is index 12.
+  if (value.startsWith('matrix3d')) return parts[12] ?? 0;
+  if (value.startsWith('matrix')) return parts[4] ?? 0;
+  return parts[0] ?? 0;
+};
 
 function crop(source, x, y, width, height) {
   const out = new PNG({ width, height });
@@ -245,6 +272,10 @@ async function navState(page) {
             backgroundImage: getComputedStyle(indicator).backgroundImage,
             boxShadow: getComputedStyle(indicator).boxShadow,
             transform: getComputedStyle(indicator).transform,
+            left: Number.parseFloat(getComputedStyle(indicator).left),
+            transitionDuration: getComputedStyle(indicator).transitionDuration,
+            transitionDelay: getComputedStyle(indicator).transitionDelay,
+            transitionTimingFunction: getComputedStyle(indicator).transitionTimingFunction,
           }
         : null,
       sameNode: window.__navNode === nav,
@@ -263,13 +294,13 @@ const browser = await chromium.launch({
   args: ['--no-sandbox'],
 });
 const report = { spec: SPEC };
-const navClip = { x: 0, y: 844 - SPEC.bottom - SPEC.height - 10, width: 390, height: SPEC.height + 30 };
+const navClip = { x: 0, y: Math.round(844 - SPEC.bottom - SPEC.height - 10), width: REF_WIDTH, height: Math.ceil(SPEC.height + 30) };
 
 try {
   await mkdir(outDir, { recursive: true });
 
   // ---- 0. The spec reference: the same ratios, drawn independently. --------
-  const specPage = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const specPage = await browser.newPage({ viewport: { width: REF_WIDTH, height: 844 } });
   await specPage.setContent(`<!doctype html><meta charset="utf-8"><style>
     html,body{margin:0;height:100%;background:#f6f4f7;font-family:Manrope,system-ui,sans-serif}
     .bar{position:absolute;left:50%;transform:translate3d(-50%,0,0);width:${SPEC.width}px;bottom:${SPEC.bottom}px;
@@ -277,10 +308,10 @@ try {
       grid-template-columns:1fr 1fr;align-items:center;background:#fff;
       border:1px solid #e8e8e8;border-radius:999px;
       box-shadow:0 ${SPEC.shadowY}px ${SPEC.shadowBlur}px rgba(0,0,0,0.1),0 1px 3px rgba(0,0,0,0.06)}
-    .pill{position:absolute;top:2.5px;left:${SPEC.pad}px;
-      width:calc(50% - ${SPEC.pad * 2}px);height:${SPEC.indicatorHeight}px;border-radius:999px;
+    .pill{position:absolute;top:50%;margin-top:${-SPEC.pillHeight / 2}px;left:${SPEC.pad}px;
+      width:${SPEC.pillWidth}px;height:${SPEC.pillHeight}px;border-radius:999px;
       background:linear-gradient(90deg,#1c1c1e,#2a2a2d)}
-    .slot{position:relative;z-index:1;height:${SPEC.tabHeight}px;display:inline-flex;align-items:center;
+    .slot{position:relative;z-index:1;height:${SPEC.pillHeight}px;display:inline-flex;align-items:center;
       justify-content:center;gap:${SPEC.iconLabelGap}px;color:#1e1e24}
     .slot.on{color:#fff}
     .glyph{width:${SPEC.icon}px;height:${SPEC.icon}px;flex:0 0 auto;display:block}
@@ -342,11 +373,15 @@ try {
     `${home.navStyle?.border} ${home.navStyle?.borderColor}`,
   );
   check('home: full pill radius', home.navStyle?.radius === '999px', home.navStyle?.radius);
+  const shadow = shadowNumbers(home.navStyle?.shadow);
   check(
-    'home: elevation 0 4px 14px 10% + 0 1px 3px 6%',
-    ['0px 4px 14px', 'rgba(0, 0, 0, 0.1)', '0px 1px 3px', 'rgba(0, 0, 0, 0.06)'].every((part) =>
-      (home.navStyle?.shadow ?? '').includes(part),
-    ),
+    'home: elevation 0 4k 14k 10% + 0 1k 3k 6%',
+    near(shadow[1], SPEC.shadowY, 0.05) &&
+      near(shadow[2], SPEC.shadowBlur, 0.05) &&
+      near(shadow[5], SPEC.k, 0.05) &&
+      near(shadow[6], 3 * SPEC.k, 0.05) &&
+      (home.navStyle?.shadow ?? '').includes('rgba(0, 0, 0, 0.1)') &&
+      (home.navStyle?.shadow ?? '').includes('rgba(0, 0, 0, 0.06)'),
     home.navStyle?.shadow,
   );
   check('home: no backdrop blur', home.navStyle?.backdrop === 'none', home.navStyle?.backdrop);
@@ -361,21 +396,21 @@ try {
 
   // Measured geometry.
   check(
-    'home: capsule H=46, 252 wide, exactly centred, 20px off the bottom',
-    home.navRect.height === SPEC.height &&
-      home.navRect.bottom === SPEC.bottom &&
-      near(home.navRect.width, SPEC.width, 1) &&
-      Math.abs(home.navRect.x + home.navRect.width / 2 - 390 / 2) <= 0.5 &&
+    'home: capsule is 690k x 128k, exactly centred, 54k off the bottom',
+    near(home.navRect.height, SPEC.height, 0.1) &&
+      near(home.navRect.bottom, SPEC.bottom, 0.1) &&
+      near(home.navRect.width, SPEC.width, 0.1) &&
+      Math.abs(home.navRect.x + home.navRect.width / 2 - REF_WIDTH / 2) <= 0.5 &&
       home.navStyle?.position === 'fixed' &&
-      /matrix\(1, 0, 0, 1, -126, 0\)/.test(home.navStyle?.transform ?? ''),
+      near(translateX(home.navStyle?.transform), -SPEC.width / 2, 0.1),
     JSON.stringify({ rect: home.navRect, position: home.navStyle?.position, transform: home.navStyle?.transform }),
   );
   check('home: nav above route/sheet layers', Number(home.navStyle.z) >= 2000, home.navStyle.z);
   check(
-    'home: tabs are an equal 125x39 split of the capsule',
-    home.tabs.every((tab) => near(tab.rect.height, SPEC.tabHeight, 0.5) && near(tab.rect.width, SPEC.tabWidth, 0.5)) &&
-      near(home.tabs[0].rect.width, home.tabs[1].rect.width, 0.5),
-    home.tabs.map((tab) => `${Math.round(tab.rect.width)}x${Math.round(tab.rect.height)}`).join('/'),
+    'home: tabs are an equal 1fr split of the capsule',
+    home.tabs.every((tab) => near(tab.rect.height, SPEC.pillHeight, 0.1) && near(tab.rect.width, SPEC.tabWidth, 0.1)) &&
+      near(home.tabs[0].rect.width, home.tabs[1].rect.width, 0.05),
+    home.tabs.map((tab) => `${tab.rect.width}x${tab.rect.height}`).join('/'),
   );
   check(
     'home: labels are not clipped',
@@ -385,18 +420,18 @@ try {
   check('home: reserves nav height', parseFloat(home.paddingBottom) >= NAV_RESERVE, home.paddingBottom);
   check('home: nav node preserved', home.sameNode);
 
-  // Ratios of H.
+  // Ratios of k.
   check(
-    'spec: 20px icons, 13px/500 labels, 6px icon→label gap, 3px capsule inset',
-    home.tabs.every((tab) => near(tab.iconSize.width, SPEC.icon, 0.5) && near(tab.iconSize.height, SPEC.icon, 0.5)) &&
-      home.tabs.every((tab) => near(tab.labelStyle.size, SPEC.label, 0.5) && tab.labelStyle.weight === '500') &&
-      home.tabs.every((tab) => near(tab.iconGap, SPEC.iconLabelGap, 0.8)) &&
-      near(parseFloat(home.navStyle.vars.pad), SPEC.pad, 0.01),
+    'spec: 36k icons, 23.45k/500 labels, 22k icon→label gap, 5.5k-0.5px capsule inset',
+    home.tabs.every((tab) => near(tab.iconSize.width, SPEC.icon, 0.1) && near(tab.iconSize.height, SPEC.icon, 0.1)) &&
+      home.tabs.every((tab) => near(tab.labelStyle.size, SPEC.label, 0.05) && tab.labelStyle.weight === '500') &&
+      home.tabs.every((tab) => near(tab.iconGap, SPEC.iconLabelGap, 0.3)) &&
+      near(home.indicator?.left, SPEC.pad, 0.05),
     JSON.stringify({
       icons: home.tabs.map((tab) => tab.iconSize),
       labels: home.tabs.map((tab) => `${tab.labelStyle.size}/${tab.labelStyle.weight}`),
       gaps: home.tabs.map((tab) => tab.iconGap),
-      pad: home.navStyle.vars.pad,
+      pad: home.indicator?.left,
     }),
   );
 
@@ -412,11 +447,11 @@ try {
     home.indicator?.boxShadow,
   );
   check(
-    'home: pill is the active tab slot minus the 3px inset',
-    near(home.indicator.x - home.tabs[0].rect.x, SPEC.pad, 0.6) &&
-      near(home.indicator.width, home.tabs[0].rect.width - SPEC.pad * 2, 0.6) &&
-      near(home.indicator.height, SPEC.indicatorHeight, 0.6),
-    `${home.indicator.x - home.tabs[0].rect.x} / ${home.indicator.width}x${home.indicator.height} vs ${home.tabs[0].rect.width}x${home.tabs[0].rect.height}`,
+    'home: pill is 334k x 107k, inset by --nav-pad from the active tab',
+    near(home.indicator.x - home.tabs[0].rect.x, SPEC.pad, 0.05) &&
+      near(home.indicator.width, SPEC.pillWidth, 0.1) &&
+      near(home.indicator.height, SPEC.pillHeight, 0.1),
+    `${home.indicator.x - home.tabs[0].rect.x} / ${home.indicator.width}x${home.indicator.height} vs ${SPEC.pillWidth}x${SPEC.pillHeight}`,
   );
   check(
     'home: labels are white inside the pill and ink outside it',
@@ -425,17 +460,17 @@ try {
   );
   check('home: idle label is #1E1E24', home.tabs[1].labelStyle.color === IDLE_LABEL, home.tabs[1].labelStyle.color);
 
-  // Icons: crisp intrinsic 18px SVGs, no scaling box to fall back on.
+  // Icons: crisp intrinsic 20px SVGs, scaled to 36k by the box around them.
   check(
-    'icons: both glyphs are 20x20 with intrinsic width/height',
+    'icons: both glyphs render at 36k from intrinsic 20x20 attributes',
     home.tabs.every(
       (tab) =>
-        tab.iconSize.width === 20 &&
-        tab.iconSize.height === 20 &&
+        near(tab.iconSize.width, SPEC.icon, 0.1) &&
+        near(tab.iconSize.height, SPEC.icon, 0.1) &&
         tab.iconAttrs.width === '20' &&
         tab.iconAttrs.height === '20',
     ),
-    JSON.stringify(home.tabs.map((tab) => tab.iconAttrs)),
+    JSON.stringify({ sizes: home.tabs.map((tab) => tab.iconSize), attrs: home.tabs.map((tab) => tab.iconAttrs) }),
   );
   check(
     'icons: active Home is a filled #F15B64 even-odd house above the pill, idle History a 1.75px ink outline',
@@ -469,8 +504,8 @@ try {
   check('history: active is History', history.active === '/orders' && history.activeLabel === 'History', `${history.active} ${history.activeLabel}`);
   check(
     'history: pill moved to History',
-    near(history.indicator.x - history.tabs[1].rect.x, SPEC.pad, 0.6) &&
-      near(history.tabs[1].rect.x - history.tabs[0].rect.x, SPEC.tabWidth, 0.6),
+    near(history.indicator.x - history.tabs[1].rect.x, SPEC.pad, 0.1) &&
+      near(history.tabs[1].rect.x - history.tabs[0].rect.x, SPEC.tabWidth, 0.1),
     JSON.stringify({ pill: history.indicator.x, home: history.tabs[0].rect.x, history: history.tabs[1].rect.x }),
   );
   check('history: pill colour', history.indicator?.backgroundImage === PILL_GRADIENT, history.indicator?.backgroundImage);
@@ -554,6 +589,127 @@ try {
     'icon anim: classes cleared and nothing still running',
     !afterAnim.classes.some((name) => name.includes('is-enter') || name.includes('is-leave')) && afterAnim.running === 0,
     JSON.stringify(afterAnim),
+  );
+
+  // ---- 3b. The tap sequence itself is unchanged ---------------------------
+  // The page hard-cuts at once (route motion, checked by nav-smoke); on the
+  // bar the leaving icon dissolves to a white outline over 100ms, the pill
+  // waits 100ms and then slides 260ms with a ~4px overshoot, and the coloured
+  // icon pops in only after the pill has landed.
+  await page.evaluate(() => {
+    const nav = document.querySelector('.bottom-nav');
+    const pill = nav.querySelector('.nav-pill');
+    const tab = document.querySelector('[data-nav-item="/"]');
+    const start = performance.now();
+    window.__seq = [];
+    tab.click();
+    const sample = () => {
+      const leaving = document.querySelector('.nav-tab.is-leave .nav-glyph--filled');
+      const entering = document.querySelector('.nav-tab.is-enter .nav-glyph--filled');
+      const enteringStyle = entering ? getComputedStyle(entering) : null;
+      const leavingStyle = leaving ? getComputedStyle(leaving) : null;
+      window.__seq.push({
+        t: performance.now() - start,
+        x: pill.getBoundingClientRect().left,
+        leavingOpacity: leavingStyle ? Number(leavingStyle.opacity) : null,
+        leavingTransition: leavingStyle ? leavingStyle.transitionDuration : null,
+        enteringAnimation: enteringStyle
+          ? {
+              name: enteringStyle.animationName,
+              delay: enteringStyle.animationDelay,
+              duration: enteringStyle.animationDuration,
+            }
+          : null,
+      });
+      if (window.__seq.length < 100) requestAnimationFrame(sample);
+      else {
+        const target = document.querySelector('[data-nav-item="/"]').getBoundingClientRect();
+        window.__seqTarget = { tabLeft: target.left, pad: Number.parseFloat(getComputedStyle(pill).left) };
+      }
+    };
+    requestAnimationFrame(sample);
+  });
+  await sleep(2000);
+  const seq = await page.evaluate(() => ({ frames: window.__seq, target: window.__seqTarget }));
+  const frames = seq.frames ?? [];
+  const startX = frames[0]?.x ?? 0;
+  const settledX = frames[frames.length - 1]?.x ?? 0;
+  const firstMove = frames.find((frame) => Math.abs(frame.x - startX) > 0.5);
+  const minX = Math.min(...frames.map((frame) => frame.x));
+  const overshoot = settledX - minX;
+  const leaving = frames.find((frame) => frame.leavingTransition);
+  const entering = frames.find((frame) => frame.enteringAnimation);
+  check(
+    'anim: the pill waits ~100ms before it starts to slide',
+    Boolean(firstMove) && firstMove.t >= 80,
+    firstMove ? `${Math.round(firstMove.t)}ms` : 'never moved',
+  );
+  check(
+    'anim: the slide is 260ms with a ~4px overshoot',
+    overshoot >= 2 && overshoot <= 8,
+    `overshoot=${overshoot.toFixed(2)}px`,
+  );
+  check(
+    'anim: the pill lands exactly on the active tab',
+    near(settledX - (seq.target?.tabLeft ?? 0), seq.target?.pad ?? 0, 0.2),
+    `pill=${settledX} tab=${seq.target?.tabLeft} pad=${seq.target?.pad}`,
+  );
+  check(
+    'anim: the leaving icon fades out over 100ms',
+    leaving?.leavingTransition === '0.1s' &&
+      frames.some((frame) => frame.leavingOpacity !== null && frame.leavingOpacity < 0.1),
+    `${leaving?.leavingTransition} minOpacity=${Math.min(...frames.filter((frame) => frame.leavingOpacity !== null).map((frame) => frame.leavingOpacity))}`,
+  );
+  check(
+    'anim: the coloured icon pops in only after the pill lands',
+    entering?.enteringAnimation?.name === 'navGlyphFillIn' &&
+      entering?.enteringAnimation?.delay === '0.36s' &&
+      entering?.enteringAnimation?.duration === '0.3s',
+    JSON.stringify(entering?.enteringAnimation ?? null),
+  );
+
+  // ---- 3c. A tap in the middle of a slide retargets cleanly. -------------
+  // Tap History, wait until the pill is visibly in flight, then tap Home
+  // again: the pill has to reverse and land on Home, with no state left over.
+  await page.evaluate(() => {
+    const pill = document.querySelector('.nav-pill');
+    const home = document.querySelector('[data-nav-item="/"]');
+    window.__mid = null;
+    const start = performance.now();
+    document.querySelector('[data-nav-item="/orders"]')?.click();
+    const step = () => {
+      const x = pill.getBoundingClientRect().left;
+      const target = home.getBoundingClientRect().left;
+      if (x - target > 12) {
+        window.__mid = { x, target, t: Math.round(performance.now() - start) };
+        home.click();
+        return;
+      }
+      if (performance.now() - start < 1500) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+  await sleep(1300);
+  const midFlightRetarget = await page.evaluate(() => window.__mid);
+  const retarget = await navState(page);
+  check(
+    'anim: the retarget tap landed mid-slide',
+    Boolean(midFlightRetarget) && midFlightRetarget.x - midFlightRetarget.target > 12,
+    JSON.stringify(midFlightRetarget),
+  );
+  check(
+    'anim: a mid-slide retarget lands on the tapped tab',
+    retarget.active === '/' && near(retarget.indicator.x - retarget.tabs[0].rect.x, SPEC.pad, 0.1),
+    `${retarget.active} ${retarget.indicator.x - retarget.tabs[0].rect.x} vs ${SPEC.pad}`,
+  );
+  const retargetIdle = await page.evaluate(() => ({
+    classes: Array.from(document.querySelectorAll('.nav-tab')).map((tab) => tab.className),
+    running: document.querySelector('.bottom-nav')?.getAnimations({ subtree: true }).filter((animation) => animation.playState === 'running').length ?? -1,
+  }));
+  check(
+    'anim: nothing is left running after the retarget',
+    !retargetIdle.classes.some((name) => name.includes('is-enter') || name.includes('is-leave')) && retargetIdle.running === 0,
+    JSON.stringify(retargetIdle),
   );
 
   // ---- 4. Programmatic navigation must not vibrate. ----------------------
@@ -661,38 +817,205 @@ try {
   await loginPage.screenshot({ path: path.join(outDir, 'hidden-login.png') });
   await loginContext.close();
 
-  // ---- 8. Fit at 360 / 390 / 430. ----------------------------------------
-  for (const size of [{ width: 360, height: 800 }, { width: 390, height: 844 }, { width: 430, height: 900 }]) {
-    const fitContext = await browser.newContext({ viewport: { width: size.width, height: size.height }, isMobile: true, hasTouch: true });
+  // ---- 8. Fit and ratios at every phone width (k units). ----------------
+  // Everything about the nav is a ratio of the viewport width, so the same
+  // numbers must come out at 360, 393, 412 and 460.
+  for (const width of WIDTHS) {
+    const spec = specFor(width);
+    const fitContext = await browser.newContext({ viewport: { width, height: 844 }, isMobile: true, hasTouch: true });
     await seed(fitContext);
     const fitPage = await fitContext.newPage();
     await fitPage.goto(`${base}/#/orders`, { waitUntil: 'networkidle' });
     await sleep(900);
     const state = await navState(fitPage);
-    check(`fit ${size.width}: nav inside viewport`, state.navRect.x >= 11 && state.navRect.x + state.navRect.width <= size.width - 11, JSON.stringify(state.navRect));
+    check(`fit ${width}: nav inside viewport`, state.navRect.x >= 11 && state.navRect.x + state.navRect.width <= width - 11, JSON.stringify(state.navRect));
     check(
-      `fit ${size.width}: both labels fit`,
+      `fit ${width}: both labels fit`,
       state.tabs.length === 2 && state.tabs.every((tab) => tab.labelWidth > 0 && tab.labelScrollWidth <= tab.labelWidth + 1),
       state.tabs.map((tab) => `${tab.labelScrollWidth}/${tab.labelWidth}`).join(' '),
     );
-    check(`fit ${size.width}: pill on History`, near(state.indicator.x - state.tabs[1].rect.x, SPEC.pad, 0.6), `${state.indicator.x} vs ${state.tabs[1].rect.x}`);
     check(
-      `fit ${size.width}: icon + gap + label fit the tab slot`,
+      `fit ${width}: pill on History`,
+      near(state.indicator.x - state.tabs[1].rect.x, spec.pad, 0.1),
+      `${state.indicator.x - state.tabs[1].rect.x} vs ${spec.pad}`,
+    );
+    check(
+      `fit ${width}: icon + gap + label fit the tab slot`,
       state.tabs.every((tab) => tab.iconSize.width + tab.iconGap + tab.labelWidth <= tab.rect.width + 1),
       JSON.stringify(state.tabs.map((tab) => tab.iconSize.width + tab.iconGap + tab.labelWidth)),
     );
     check(
-      `fit ${size.width}: capsule is 252px, or the screen minus 32px`,
-      near(state.navRect.width, Math.min(252, size.width - 32), 1),
-      `${state.navRect.width} vs ${Math.min(252, size.width - 32)}`,
+      `fit ${width}: capsule is 690k x 128k`,
+      near(state.navRect.width, spec.width, 0.1) && near(state.navRect.height, spec.height, 0.1),
+      `${state.navRect.width}x${state.navRect.height} vs ${spec.width}x${spec.height}`,
     );
     check(
-      `fit ${size.width}: capsule stays centred`,
-      near(state.navRect.x + state.navRect.width / 2, size.width / 2, 1),
-      `${state.navRect.x + state.navRect.width / 2} vs ${size.width / 2}`,
+      `fit ${width}: pill is 334k x 107k`,
+      near(state.indicator.width, spec.pillWidth, 0.1) && near(state.indicator.height, spec.pillHeight, 0.1),
+      `${state.indicator.width}x${state.indicator.height}`,
     );
-    await fitPage.screenshot({ path: path.join(outDir, `fit-${size.width}x${size.height}.png`) });
+    check(
+      `fit ${width}: the History label is ~79k wide`,
+      near(state.tabs[1].labelWidth, 79 * spec.k, Math.max(0.6, 79 * spec.k * 0.06)),
+      `${state.tabs[1].labelWidth} vs ${79 * spec.k}`,
+    );
+    check(
+      `fit ${width}: capsule stays centred`,
+      near(state.navRect.x + state.navRect.width / 2, width / 2, 1),
+      `${state.navRect.x + state.navRect.width / 2} vs ${width / 2}`,
+    );
+
+    // A resize re-places the pill on the tab it belongs to (ResizeObserver,
+    // no transition) at a new, still fractional, tab offset.
+    const resized = width + 37;
+    const resizedSpec = specFor(resized);
+    await fitPage.setViewportSize({ width: resized, height: 844 });
+    await sleep(500);
+    const afterResize = await navState(fitPage);
+    check(
+      `fit ${width}: the pill follows the active tab after a resize`,
+      near(afterResize.indicator.x - afterResize.tabs[1].rect.x, resizedSpec.pad, 0.1) &&
+        near(afterResize.indicator.width, resizedSpec.pillWidth, 0.1) &&
+        near(afterResize.navRect.width, resizedSpec.width, 0.1),
+      `${afterResize.indicator.x - afterResize.tabs[1].rect.x} vs ${resizedSpec.pad}`,
+    );
+
+    // Rotate to landscape: 480px of width is the cap, and the pill still has
+    // to land on the active tab.
+    const landscape = specFor(844);
+    await fitPage.setViewportSize({ width: 844, height: 390 });
+    await sleep(500);
+    const rotated = await navState(fitPage);
+    check(
+      `fit ${width}: rotate keeps the pill on the active tab`,
+      near(rotated.indicator.x - rotated.tabs[1].rect.x, landscape.pad, 0.1) &&
+        near(rotated.navRect.width, landscape.width, 0.1) &&
+        near(rotated.navRect.x + rotated.navRect.width / 2, 844 / 2, 1),
+      `${rotated.indicator.x - rotated.tabs[1].rect.x} / ${rotated.navRect.width}`,
+    );
+    await fitPage.screenshot({ path: path.join(outDir, `fit-${width}x844.png`) });
     await fitContext.close();
+  }
+
+  // ---- 8b. Cart bar clearance at every phone width. ----------------------
+  // The cart bar docks on --nav-reserve, which includes the capsule's own
+  // bottom gap (54k). Its bottom edge has to stay at least 12px above the
+  // nav's top edge, and the page has to reserve enough room that the deepest
+  // content ends above both bars.
+  const readClearance = (scrollerSelector) => {
+    const nav = document.querySelector('.bottom-nav');
+    const cart = document.querySelector('#white-cart-root');
+    const navStyle = nav ? getComputedStyle(nav) : null;
+    const navRect = nav?.getBoundingClientRect();
+    const cartStyle = cart ? getComputedStyle(cart) : null;
+    const cartShown = Boolean(cart) && cartStyle.display !== 'none' && Number(cartStyle.opacity || 1) > 0;
+    const cartRect = cartShown ? cart.getBoundingClientRect() : null;
+    const scroller = scrollerSelector ? document.querySelector(scrollerSelector) : null;
+    let lastBottom = null;
+    if (scroller) {
+      for (const node of scroller.querySelectorAll('*')) {
+        const rect = node.getBoundingClientRect();
+        if (rect.height <= 0 || rect.width <= 0) continue;
+        if (lastBottom === null || rect.bottom > lastBottom) lastBottom = rect.bottom;
+      }
+    }
+    return {
+      navPainted: Boolean(nav) && navStyle.opacity === '1' && !document.body.classList.contains('nav-scroll-hidden'),
+      navTop: navRect ? navRect.top : null,
+      navBottomGap: navRect ? innerHeight - navRect.bottom : null,
+      cartShown,
+      cartTop: cartRect ? cartRect.top : null,
+      cartBottom: cartRect ? cartRect.bottom : null,
+      cartGap: navRect && cartRect ? navRect.top - cartRect.bottom : null,
+      reserve: scroller ? Number.parseFloat(getComputedStyle(scroller).paddingBottom) : null,
+      lastBottom,
+      viewportH: innerHeight,
+      atEnd: scroller ? Math.abs(scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop) <= 1 : null,
+    };
+  };
+  const CART_SEED = {
+    'Filter Coffee': {
+      quantity: 1,
+      price: 49,
+      originalPrice: 70,
+      resId: 1,
+      resName: 'Foodie Dosa Restaurant',
+      restaurantName: 'Foodie Dosa Restaurant',
+      menuItem: 'fd9',
+      name: 'Filter Coffee',
+      isVeg: true,
+    },
+  };
+  for (const width of WIDTHS) {
+    const spec = specFor(width);
+    const clearanceContext = await browser.newContext({ viewport: { width, height: 844 }, isMobile: true, hasTouch: true });
+    await seed(clearanceContext);
+    await clearanceContext.addInitScript((cart) => localStorage.setItem('nearbite_cart', JSON.stringify(cart)), CART_SEED);
+    const clearancePage = await clearanceContext.newPage();
+
+    await clearancePage.goto(`${base}/#/`, { waitUntil: 'networkidle' });
+    await clearancePage.waitForSelector('.bottom-nav');
+    await sleep(1000);
+    const homeTop = await clearancePage.evaluate(readClearance, '.home-scroll');
+    check(
+      `cart ${width}: the bar sits 54k off the bottom`,
+      homeTop.navPainted && near(homeTop.navBottomGap, spec.bottom, 0.1),
+      `gap=${homeTop.navBottomGap} vs ${spec.bottom}`,
+    );
+    check(
+      `cart ${width}: the cart bar clears the nav by 12px`,
+      homeTop.cartShown && homeTop.cartGap !== null && homeTop.cartGap >= 12 - 0.1,
+      `cartBottom=${homeTop.cartBottom} navTop=${homeTop.navTop} gap=${homeTop.cartGap}`,
+    );
+    check(
+      `cart ${width}: home reserves room for both bars`,
+      homeTop.reserve >= homeTop.viewportH - Math.min(homeTop.navTop, homeTop.cartTop) + 12 - 0.5,
+      `reserve=${homeTop.reserve} bars=${homeTop.viewportH - Math.min(homeTop.navTop, homeTop.cartTop)}`,
+    );
+
+    // At the end of the feed the nav has slid away, so only the cart bar is
+    // painted: the last content must still end above it.
+    await clearancePage.evaluate(() => {
+      const scroller = document.querySelector('.home-scroll');
+      scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'instant' });
+    });
+    await sleep(700);
+    const homeEnd = await clearancePage.evaluate(readClearance, '.home-scroll');
+    check(`cart ${width}: home reaches its end`, homeEnd.atEnd === true, String(homeEnd.atEnd));
+    check(
+      `cart ${width}: no home content hidden behind the cart bar`,
+      homeEnd.lastBottom !== null && homeEnd.lastBottom <= Math.min(homeEnd.cartTop ?? Infinity, homeEnd.navPainted ? homeEnd.navTop : Infinity) + 0.5,
+      `content=${homeEnd.lastBottom} cartTop=${homeEnd.cartTop} navTop=${homeEnd.navPainted ? homeEnd.navTop : 'hidden'}`,
+    );
+
+    await clearancePage.goto(`${base}/#/orders`, { waitUntil: 'networkidle' });
+    await clearancePage.waitForSelector('.bottom-nav');
+    await sleep(1000);
+    await clearancePage.evaluate(() => {
+      const scroller = document.querySelector('.orders-page');
+      scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'instant' });
+    });
+    await sleep(700);
+    const ordersEnd = await clearancePage.evaluate(readClearance, '.orders-page');
+    check(`cart ${width}: orders reaches its end`, ordersEnd.atEnd === true, String(ordersEnd.atEnd));
+    check(
+      `cart ${width}: no orders content hidden behind the nav`,
+      ordersEnd.lastBottom !== null &&
+        ordersEnd.lastBottom <= (ordersEnd.navPainted ? ordersEnd.navTop : Infinity) + 0.5,
+      `content=${ordersEnd.lastBottom} navTop=${ordersEnd.navPainted ? ordersEnd.navTop : 'hidden'}`,
+    );
+
+    // Category and cart have no nav at all (the bar is only painted on the two
+    // tab routes), so nothing there can be hidden behind it.
+    for (const [name, hash] of [['category', '#/category/Pizza'], ['cart', '#/cart']]) {
+      await clearancePage.goto(`${base}/${hash}`, { waitUntil: 'networkidle' });
+      await clearancePage.waitForSelector('.bottom-nav', { state: 'attached' });
+      await sleep(900);
+      const state = await clearancePage.evaluate(readClearance, null);
+      check(`cart ${width}: ${name} paints no nav, so no overlap`, !state.navPainted, String(state.navPainted));
+    }
+    await clearancePage.screenshot({ path: path.join(outDir, `cart-clearance-${width}.png`) });
+    await clearanceContext.close();
   }
 
   // ---- 9. Drag the pill from History to Home (haptic on the snap). -------
@@ -745,6 +1068,11 @@ try {
       transition: indicator ? getComputedStyle(indicator).transitionDuration : '',
       filledOpacity: filled ? getComputedStyle(filled).opacity : '',
       filledTransform: filled ? getComputedStyle(filled).transform : '',
+      expectedPillX: active
+        ? active.getBoundingClientRect().left -
+          nav.getBoundingClientRect().left -
+          Number.parseFloat(getComputedStyle(nav).borderLeftWidth)
+        : 0,
     };
   });
   check('reduced motion: settled (nothing still running)', rm.running === 0, String(rm.running));
@@ -752,7 +1080,7 @@ try {
     'reduced motion: 120ms, no overshoot, no scale pop',
     rm.activeItem === '/orders' &&
       rm.transition.split(',')[0].trim() === '0.12s' &&
-      /matrix\(1, 0, 0, 1, 125, 0\)/.test(rm.transform) &&
+      near(translateX(rm.transform), rm.expectedPillX, 0.1) &&
       rm.label === 'rgb(255, 255, 255)' &&
       rm.filledOpacity === '1' &&
       rm.filledTransform === 'none',
@@ -1029,8 +1357,8 @@ try {
     check(`${label}: scrolling down hides the bar`, hidden.scrollHidden && hidden.navOpacity < 0.05, `${hidden.navTransform} ${hidden.navOpacity}`);
     check(
       `${label}: bar is a full footprint below the edge`,
-      Math.abs(translateY(hidden.navTransform) - (top.navHeight + top.navBottom + 16)) <= 1.5,
-      `ty=${translateY(hidden.navTransform)} expected=${top.navHeight + top.navBottom + 16}`,
+      Math.abs(translateY(hidden.navTransform) - (top.navHeight + top.navBottom + SPEC.hideDrop)) <= 1.5,
+      `ty=${translateY(hidden.navTransform)} expected=${top.navHeight + top.navBottom + SPEC.hideDrop}`,
     );
     if (hasCart) {
       check(`${label}: cart bar follows it down`, Math.abs(cartLift(hidden.cartTranslate) - (top.cartBottom - 12)) <= 1.5, `translate=${hidden.cartTranslate} lift=${cartLift(hidden.cartTranslate)}`);
@@ -1207,14 +1535,17 @@ try {
   await writeFile(path.join(outDir, 'nav-vs-spec.png'), PNG.sync.write(stack([crop(appNav, 0, 0, 390, navClip.height), crop(specShot, 0, 0, 390, navClip.height)], 10)));
 
   report.ratios = {
-    H,
+    k: SPEC.k,
+    capsuleWidth: SPEC.width,
     containerHeight: SPEC.height,
-    sideMargin: SPEC.side,
     bottom: SPEC.bottom,
+    pillWidth: SPEC.pillWidth,
+    pillHeight: SPEC.pillHeight,
     pillInset: SPEC.pad,
     icon: SPEC.icon,
     iconLabelGap: SPEC.iconLabelGap,
     labelSize: SPEC.label,
+    reserve: SPEC.reserve,
     shadow: `0 ${SPEC.shadowY}px ${SPEC.shadowBlur}px rgba(0,0,0,0.1)`,
   };
   report.screens = shots;
