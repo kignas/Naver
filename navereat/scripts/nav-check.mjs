@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
 import { PNG } from 'pngjs';
@@ -30,8 +30,15 @@ const specFor = (width) => {
     pillHeight: 107 * k,
     pad: 5.5 * k - 0.5,
     icon: 36 * k,
-    iconLabelGap: 22 * k,
+    // Each glyph's box is cropped to its own ink, so the visible drawing is
+    // 35k wide for the History bag and 41k for the Home house, at 2.4k stroke.
+    ink: { home: 41 * k, history: 35 * k },
+    inkHeight: { home: 39.45 * k, history: 43.13 * k },
+    stroke: 2.4 * k,
+    iconLabelGap: 24 * k,
     label: 23.45 * k,
+    // Zomato's capsule bottom edge is 0.05 of the screen width above the edge.
+    bottomRatio: 0.05,
     shadowY: 4 * k,
     shadowBlur: 14 * k,
     // The grid splits the content box (capsule minus its 1px hairline) in two.
@@ -43,6 +50,11 @@ const specFor = (width) => {
   };
 };
 const WIDTHS = [360, 393, 412, 460];
+/** Mirrors GLYPH_BOX in src/components/NavGlyph.tsx (tight viewBox + stroke). */
+const GLYPH_BOX = {
+  home: { viewBox: '2.865 3.2 18.27 17.58', stroke: 1.07 },
+  history: { viewBox: '4.911 3.714 14.178 17.472', stroke: 0.972 },
+};
 const REF_WIDTH = 390;
 const SPEC = specFor(REF_WIDTH);
 const NAV_RESERVE = SPEC.reserve;
@@ -190,6 +202,22 @@ async function navState(page) {
     const navRect = nav?.getBoundingClientRect();
     const box = (rect) => (rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height, bottom: innerHeight - rect.bottom } : null);
     const style = nav ? getComputedStyle(nav) : null;
+    /** Visible ink of a glyph: its getBBox plus half a stroke each side, in px. */
+    const inkOf = (svg) => {
+      if (!svg) return null;
+      const bbox = svg.getBBox();
+      const vb = svg.viewBox.baseVal;
+      const rect = svg.getBoundingClientRect();
+      const sx = vb.width ? rect.width / vb.width : 0;
+      const sy = vb.height ? rect.height / vb.height : 0;
+      const stroke = Number.parseFloat(getComputedStyle(svg).strokeWidth) || 0;
+      return {
+        width: bbox.width * sx + stroke * sx,
+        height: bbox.height * sy + stroke * sy,
+        strokePx: stroke * sx,
+        viewBox: `${vb.x} ${vb.y} ${vb.width} ${vb.height}`,
+      };
+    };
     const paintOf = (node) =>
       node
         ? {
@@ -226,7 +254,9 @@ async function navState(page) {
               pillTo: style.getPropertyValue('--nav-pill-to').trim(),
               idle: style.getPropertyValue('--nav-idle-fg').trim(),
               pad: style.getPropertyValue('--nav-pad').trim(),
-              icon: style.getPropertyValue('--nav-icon-size').trim(),
+              bottom: style.getPropertyValue('--nav-bottom').trim(),
+              sab: style.getPropertyValue('--sab').trim(),
+              icon: style.getPropertyValue('--nav-glyph-w').trim(),
               iconLabelGap: style.getPropertyValue('--nav-icon-label-gap').trim(),
               labelSize: style.getPropertyValue('--nav-label-size').trim(),
             },
@@ -250,6 +280,7 @@ async function navState(page) {
           labelScrollWidth: tabLabel?.scrollWidth ?? 0,
           icon: Boolean(outline),
           iconSize: iconBox ? { width: iconBox.width, height: iconBox.height } : null,
+          ink: inkOf(outline),
           iconAttrs: { width: outline?.getAttribute('width') ?? null, height: outline?.getAttribute('height') ?? null },
           outlinePaint: paintOf(outline),
           filledPaint: paintOf(filled),
@@ -260,6 +291,14 @@ async function navState(page) {
             ? { size: parseFloat(labelStyle.fontSize), weight: labelStyle.fontWeight, color: labelStyle.color }
             : null,
         };
+      }),
+      // The white copies live inside the pill's clipped window; they must fit.
+      pillCells: [...document.querySelectorAll('.nav-pill-cell')].map((cell) => {
+        const white = cell.querySelector('.nav-glyph--white');
+        const rect = white?.getBoundingClientRect();
+        return rect
+          ? { glyph: cell.getAttribute('data-glyph'), top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, width: rect.width, height: rect.height }
+          : null;
       }),
       active: active?.getAttribute('data-nav-item') ?? '',
       activeLabel: label?.textContent ?? '',
@@ -314,14 +353,14 @@ try {
     .slot{position:relative;z-index:1;height:${SPEC.pillHeight}px;display:inline-flex;align-items:center;
       justify-content:center;gap:${SPEC.iconLabelGap}px;color:#1e1e24}
     .slot.on{color:#fff}
-    .glyph{width:${SPEC.icon}px;height:${SPEC.icon}px;flex:0 0 auto;display:block}
+    .glyph{flex:0 0 auto;display:block}
     .lbl{font-size:${SPEC.label}px;font-weight:500;letter-spacing:0;line-height:1;white-space:nowrap}
   </style><div class="bar"><span class="pill"></span>
     <div class="slot on">
-      <svg class="glyph" width="20" height="20" viewBox="0 0 24 24" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 3.2c.35 0 .68.12.95.35l7.8 6.55c.56.47.23 1.38-.5 1.38H18.8v7.1c0 1.22-.98 2.2-2.2 2.2H7.4c-1.22 0-2.2-.98-2.2-2.2v-7.1H3.75c-.73 0-1.06-.91-.5-1.38l2.55-2.14V5.3c0-.5.4-.9.9-.9h1.4c.5 0 .9.4.9.9v.38l2.05-1.73c.27-.23.6-.35.95-.35ZM10 20.78v-4.38c0-1.1.9-2 2-2s2 .9 2 2v4.38h-4Z" fill="#F15B64"/></svg>
+      <svg class="glyph" width="20" height="20" viewBox="${GLYPH_BOX.home.viewBox}" style="width:${SPEC.ink.home}px;height:${SPEC.inkHeight.home}px" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 3.2c.35 0 .68.12.95.35l7.8 6.55c.56.47.23 1.38-.5 1.38H18.8v7.1c0 1.22-.98 2.2-2.2 2.2H7.4c-1.22 0-2.2-.98-2.2-2.2v-7.1H3.75c-.73 0-1.06-.91-.5-1.38l2.55-2.14V5.3c0-.5.4-.9.9-.9h1.4c.5 0 .9.4.9.9v.38l2.05-1.73c.27-.23.6-.35.95-.35ZM10 20.78v-4.38c0-1.1.9-2 2-2s2 .9 2 2v4.38h-4Z" fill="#F15B64"/></svg>
       <span class="lbl">Home</span></div>
     <div class="slot">
-      <svg class="glyph" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M7.2 4.2h9.6l1.2 3.3H6l1.2-3.3Z"/><path d="M6 7.5h12l.6 11.1c.06 1.15-.85 2.1-2 2.1H7.4c-1.15 0-2.06-.95-2-2.1L6 7.5Z"/><path d="M9 11.5h6"/><path d="M9 15h4.2"/></svg>
+      <svg class="glyph" width="20" height="20" viewBox="${GLYPH_BOX.history.viewBox}" style="width:${SPEC.ink.history}px;height:${SPEC.inkHeight.history}px" fill="none" stroke="currentColor" stroke-width="${GLYPH_BOX.history.stroke}" stroke-linecap="round" stroke-linejoin="round"><path d="M7.2 4.2h9.6l1.2 3.3H6l1.2-3.3Z"/><path d="M6 7.5h12l.6 11.1c.06 1.15-.85 2.1-2 2.1H7.4c-1.15 0-2.06-.95-2-2.1L6 7.5Z"/><path d="M9 11.5h6"/><path d="M9 15h4.2"/></svg>
       <span class="lbl">History</span></div>
   </div>`);
   await sleep(200);
@@ -422,17 +461,22 @@ try {
 
   // Ratios of k.
   check(
-    'spec: 36k icons, 23.45k/500 labels, 22k icon→label gap, 5.5k-0.5px capsule inset',
-    home.tabs.every((tab) => near(tab.iconSize.width, SPEC.icon, 0.1) && near(tab.iconSize.height, SPEC.icon, 0.1)) &&
+    'spec: 41k/35k glyphs, 23.45k/500 labels, 24k icon→label gap, 5.5k-0.5px capsule inset',
+    home.tabs.every((tab) => near(tab.iconSize.width, SPEC.ink[tab.glyph], 0.15) && near(tab.iconSize.height, SPEC.inkHeight[tab.glyph], 0.15)) &&
       home.tabs.every((tab) => near(tab.labelStyle.size, SPEC.label, 0.05) && tab.labelStyle.weight === '500') &&
       home.tabs.every((tab) => near(tab.iconGap, SPEC.iconLabelGap, 0.3)) &&
       near(home.indicator?.left, SPEC.pad, 0.05),
     JSON.stringify({
-      icons: home.tabs.map((tab) => tab.iconSize),
+      icons: home.tabs.map((tab) => `${tab.glyph}:${tab.iconSize.width.toFixed(2)}x${tab.iconSize.height.toFixed(2)}`),
       labels: home.tabs.map((tab) => `${tab.labelStyle.size}/${tab.labelStyle.weight}`),
       gaps: home.tabs.map((tab) => tab.iconGap),
       pad: home.indicator?.left,
     }),
+  );
+  check(
+    'spec: the capsule bottom is 0.05 of the screen width above the edge',
+    near(home.navRect.bottom / REF_WIDTH, SPEC.bottomRatio, 0.003) && !/env\(|sab/.test(home.navStyle?.vars?.bottom ?? ''),
+    `${home.navRect.bottom} / ${REF_WIDTH} = ${(home.navRect.bottom / REF_WIDTH).toFixed(4)}, --nav-bottom: ${home.navStyle?.vars?.bottom}`,
   );
 
   // Pill: charcoal gradient, no highlight, no shadow, inset by --nav-pad.
@@ -462,30 +506,50 @@ try {
 
   // Icons: crisp intrinsic 20px SVGs, scaled to 36k by the box around them.
   check(
-    'icons: both glyphs render at 36k from intrinsic 20x20 attributes',
+    'icons: the visible ink is 41k (home) / 35k (history), stroked 2.4k',
     home.tabs.every(
       (tab) =>
-        near(tab.iconSize.width, SPEC.icon, 0.1) &&
-        near(tab.iconSize.height, SPEC.icon, 0.1) &&
+        tab.ink &&
+        near(tab.ink.width, SPEC.ink[tab.glyph], 0.15) &&
+        near(tab.ink.strokePx, SPEC.stroke, 0.1) &&
+        // The box is the ink: no padding left inside the viewBox.
+        near(tab.ink.width, tab.iconSize.width, 0.15) &&
         tab.iconAttrs.width === '20' &&
         tab.iconAttrs.height === '20',
     ),
-    JSON.stringify({ sizes: home.tabs.map((tab) => tab.iconSize), attrs: home.tabs.map((tab) => tab.iconAttrs) }),
+    JSON.stringify(home.tabs.map((tab) => `${tab.glyph} ink ${tab.ink?.width.toFixed(2)}x${tab.ink?.height.toFixed(2)} stroke ${tab.ink?.strokePx.toFixed(2)} box ${tab.iconSize.width.toFixed(2)} [${tab.ink?.viewBox}]`)),
   );
   check(
-    'icons: active Home is a filled #F15B64 even-odd house above the pill, idle History a 1.75px ink outline',
+    'icons: active Home is a filled #F15B64 even-odd house above the pill, idle History a 2.4k ink outline',
     home.tabs[0].filledPaint?.pathFill === '#F15B64' &&
       home.tabs[0].filledPaint?.evenOdd === true &&
       home.tabs[0].filledPaint?.paths === 1 &&
       home.tabs[0].filledOpacity === '1' &&
       home.tabs[1].filledOpacity === '0' &&
       home.tabs[1].outlinePaint?.stroke === IDLE_INK &&
-      near(home.tabs[1].outlinePaint?.strokeWidth, 1.75, 0.01) &&
+      near(home.tabs[1].ink?.strokePx, SPEC.stroke, 0.1) &&
       home.tabs[1].outlinePaint?.fill === 'none' &&
       home.tabs[1].outlinePaint?.paths === 4,
     JSON.stringify(
       home.tabs.map((tab) => ({ filled: tab.filledPaint, opacity: tab.filledOpacity, outline: tab.outlinePaint })),
     ),
+  );
+  check(
+    'icons: both glyphs fit inside the pill, so the bigger ones are not clipped',
+    home.pillCells.every(
+      (cell) =>
+        cell &&
+        cell.top >= home.indicator.y - 0.5 &&
+        cell.bottom <= home.indicator.y + home.indicator.height + 0.5 &&
+        cell.height <= SPEC.pillHeight,
+    ) &&
+      home.pillCells[0] &&
+      home.pillCells[0].left >= home.indicator.x - 0.5 &&
+      home.pillCells[0].right <= home.indicator.x + home.indicator.width + 0.5,
+    JSON.stringify({
+      pill: `${home.indicator.x.toFixed(2)}..${(home.indicator.x + home.indicator.width).toFixed(2)} x ${home.indicator.y.toFixed(2)}..${(home.indicator.y + home.indicator.height).toFixed(2)}`,
+      cells: home.pillCells.map((cell) => `${cell?.glyph} ${cell?.left.toFixed(2)}..${cell?.right.toFixed(2)} x ${cell?.top.toFixed(2)}..${cell?.bottom.toFixed(2)}`),
+    }),
   );
   check(
     'icons: home glyph is the house, history the bag',
@@ -530,10 +594,10 @@ try {
     JSON.stringify({ opacity: history.tabs[1].filledOpacity, paint: history.tabs[1].filledPaint }),
   );
   check(
-    'history: idle Home swaps to the 1.75px ink outline',
+    'history: idle Home swaps to the 2.4k ink outline',
     history.tabs[0].filledOpacity === '0' &&
       history.tabs[0].outlinePaint.stroke === IDLE_INK &&
-      near(history.tabs[0].outlinePaint.strokeWidth, 1.75, 0.01) &&
+      near(history.tabs[0].ink?.strokePx, SPEC.stroke, 0.1) &&
       history.tabs[0].outlinePaint.paths === 4 &&
       history.tabs[0].outlinePaint.childFills.length === 0,
     JSON.stringify({ opacity: history.tabs[0].filledOpacity, outline: history.tabs[0].outlinePaint }),
@@ -864,6 +928,17 @@ try {
       near(state.navRect.x + state.navRect.width / 2, width / 2, 1),
       `${state.navRect.x + state.navRect.width / 2} vs ${width / 2}`,
     );
+    check(
+      `fit ${width}: the capsule bottom is 0.05 of the screen width above the edge`,
+      near(state.navRect.bottom / width, spec.bottomRatio, 0.003),
+      `${state.navRect.bottom} / ${width} = ${(state.navRect.bottom / width).toFixed(4)}`,
+    );
+    check(
+      `fit ${width}: visible ink is 35k (History) and 41k (Home) of the width`,
+      near(state.tabs[1].ink.width / width, (35 / 1080), 0.003) &&
+        near(state.tabs[0].ink.width / width, (41 / 1080), 0.003),
+      `${(state.tabs[1].ink.width / width).toFixed(4)} / ${(state.tabs[0].ink.width / width).toFixed(4)}`,
+    );
 
     // A resize re-places the pill on the tab it belongs to (ResizeObserver,
     // no transition) at a new, still fractional, tab offset.
@@ -928,6 +1003,7 @@ try {
       cartBottom: cartRect ? cartRect.bottom : null,
       cartGap: navRect && cartRect ? navRect.top - cartRect.bottom : null,
       reserve: scroller ? Number.parseFloat(getComputedStyle(scroller).paddingBottom) : null,
+      sab: getComputedStyle(document.documentElement).getPropertyValue('--sab').trim(),
       lastBottom,
       viewportH: innerHeight,
       atEnd: scroller ? Math.abs(scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop) <= 1 : null,
@@ -1016,6 +1092,49 @@ try {
     }
     await clearancePage.screenshot({ path: path.join(outDir, `cart-clearance-${width}.png`) });
     await clearanceContext.close();
+  }
+
+  // ---- 8c. A real gesture inset must not move either bar. ----------------
+  // Android Chrome reports a ~36px bottom inset; Playwright emulation reports
+  // 0, which is why the bar looked right in CI and sat 36px too high on the
+  // phone. --sab is the one place that inset enters the app, and neither the
+  // capsule nor the cart bar may read it: the capsule stays 54k off the edge
+  // and the cart bar keeps its 12px gap.
+  for (const width of WIDTHS) {
+    const spec = specFor(width);
+    const insetContext = await browser.newContext({ viewport: { width, height: 844 }, isMobile: true, hasTouch: true });
+    await seed(insetContext);
+    await insetContext.addInitScript((cart) => localStorage.setItem('nearbite_cart', JSON.stringify(cart)), CART_SEED);
+    const insetPage = await insetContext.newPage();
+    await insetPage.goto(`${base}/#/`, { waitUntil: 'networkidle' });
+    await insetPage.waitForSelector('.bottom-nav');
+    await sleep(1000);
+    const flat = await insetPage.evaluate(readClearance, '.home-scroll');
+    await insetPage.addStyleTag({ content: ':root{--sab:36px;--safe-top:36px}' });
+    await sleep(500);
+    const inset = await insetPage.evaluate(readClearance, '.home-scroll');
+    check(
+      `inset ${width}: the injected safe area is live`,
+      inset.sab === '36px',
+      `--sab: ${inset.sab}`,
+    );
+    check(
+      `inset ${width}: the capsule still sits 54k off the bottom`,
+      inset.navPainted && near(inset.navBottomGap, spec.bottom, 0.1) && near(inset.navBottomGap, flat.navBottomGap, 0.05),
+      `${inset.navBottomGap} vs ${spec.bottom} (flat ${flat.navBottomGap})`,
+    );
+    check(
+      `inset ${width}: the capsule bottom ratio is still 0.05`,
+      near(inset.navBottomGap / width, spec.bottomRatio, 0.003),
+      `${(inset.navBottomGap / width).toFixed(4)}`,
+    );
+    check(
+      `inset ${width}: the cart bar still clears the nav by 12px`,
+      inset.cartShown && inset.cartGap !== null && inset.cartGap >= 12 - 0.1,
+      `gap=${inset.cartGap}`,
+    );
+    await insetPage.screenshot({ path: path.join(outDir, `inset-${width}.png`) });
+    await insetContext.close();
   }
 
   // ---- 9. Drag the pill from History to Home (haptic on the snap). -------
@@ -1548,6 +1667,23 @@ try {
     reserve: SPEC.reserve,
     shadow: `0 ${SPEC.shadowY}px ${SPEC.shadowBlur}px rgba(0,0,0,0.1)`,
   };
+  // ---- 9. The shipped stylesheet itself carries no inset on the nav. ------
+  const assetDir = path.join(appRoot, 'dist', 'assets');
+  const cssFiles = (await readdir(assetDir)).filter((file) => file.endsWith('.css'));
+  const css = (await Promise.all(cssFiles.map((file) => readFile(path.join(assetDir, file), 'utf8')))).join('\n');
+  const navBottomDecl = css.match(/--nav-bottom:\s*[^;}]+/)?.[0] ?? '';
+  check(
+    'dist: --nav-bottom is 54k with no env() or --sab term',
+    navBottomDecl !== '' && !/env\(|--sab|safe-area/.test(navBottomDecl) && /54\s*\*\s*var\(--k\)/.test(navBottomDecl),
+    navBottomDecl || 'not found',
+  );
+  const cartBarDecl = css.match(/#cart-bar\{[^}]*bottom:\s*([^;}]+)/)?.[1] ?? '';
+  check(
+    'dist: the cart bar docks on --nav-reserve, not on a safe-area term',
+    /var\(--nav-reserve\)/.test(cartBarDecl) && !/env\(|--sab/.test(cartBarDecl),
+    cartBarDecl || 'not found',
+  );
+
   report.screens = shots;
   report.failures = failures;
   await writeFile(path.join(outDir, 'nav-report.json'), `${JSON.stringify(report, null, 2)}\n`);

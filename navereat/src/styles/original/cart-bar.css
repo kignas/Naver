@@ -50,7 +50,7 @@
       transform: translateX(-50%) translateY(calc(-1 * var(--wc-lift))) !important;
       /* IMPORTANT: inherit the bottom-nav component's shared variable.
          Do not create an inline --nb-cart-bottom on this element. */
-      bottom: var(--nb-cart-bottom, calc(12px + env(safe-area-inset-bottom, 0px))) !important;
+      bottom: var(--nb-cart-bottom, calc(12px + var(--sab))) !important;
       width: min(720px, calc(100vw - 24px)); max-width: calc(100vw - 24px);
       z-index: 100000; display: none;
       /* The mode lift is compositor-only; easing it keeps the shell from
@@ -190,7 +190,7 @@
     #white-cart-root.wc-pink::after {
       content: ''; position: absolute; z-index: -1;
       left: 50%; top: 100%; transform: translateX(-50%);
-      width: 100vw; height: var(--nb-cart-bottom, calc(12px + env(safe-area-inset-bottom, 0px)));
+      width: 100vw; height: var(--nb-cart-bottom, calc(12px + var(--sab)));
       background: #fff;
       box-shadow: 0 -1px 0 rgba(17,24,39,.04);
       pointer-events: auto;
@@ -245,7 +245,7 @@
     .ew-cd-row{background:#fff;border-radius:34px;min-height:104px;margin:0 0 14px;padding:12px 14px;display:flex;align-items:center;gap:14px;box-shadow:0 5px 18px rgba(16,24,40,.07)}
     .ew-cd-logo{width:76px;height:76px;border-radius:50%;object-fit:cover;background:#f1f3f5;flex:0 0 auto;border:2px solid #fff}.ew-cd-info{min-width:0;flex:1}.ew-cd-name{font-size:20px;line-height:1.15;font-weight:800;color:#101828;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ew-cd-menu{margin-top:5px;font-size:17px;line-height:1.1;color:#111827;font-weight:650}.ew-cd-arrow{color:#0b7a2a;margin-left:4px;font-weight:900}
     .ew-cd-view{min-width:145px;height:64px;border:0;border-radius:32px;background:#0b7a2a;color:#fff;font:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05;font-weight:800;box-shadow:0 5px 12px rgba(11,122,42,.22)}.ew-cd-view strong{font-size:20px}.ew-cd-view span{margin-top:5px;font-size:14px;font-weight:650;opacity:.92}
-    .ew-cd-footer{padding:8px 22px calc(20px + env(safe-area-inset-bottom,0px));display:flex;justify-content:center;background:#f7f8fc}.ew-cd-checkout{min-width:210px;height:56px;padding:0 28px;border-radius:30px;border:1px solid #e5e7eb;background:#fff;color:#0b7a2a;font:inherit;font-size:18px;font-weight:800;box-shadow:0 2px 7px rgba(16,24,40,.08)}.ew-cd-empty{padding:36px 20px 48px;text-align:center;color:#667085;font-weight:700}
+    .ew-cd-footer{padding:8px 22px calc(20px + var(--sab));display:flex;justify-content:center;background:#f7f8fc}.ew-cd-checkout{min-width:210px;height:56px;padding:0 28px;border-radius:30px;border:1px solid #e5e7eb;background:#fff;color:#0b7a2a;font:inherit;font-size:18px;font-weight:800;box-shadow:0 2px 7px rgba(16,24,40,.08)}.ew-cd-empty{padding:36px 20px 48px;text-align:center;color:#667085;font-weight:700}
     @media(max-width:520px){#ew-cart-drawer{border-radius:26px 26px 0 0}.ew-cd-head{padding:16px 18px 10px}.ew-cd-title{font-size:23px}.ew-cd-list{padding:6px 14px 12px}.ew-cd-row{min-height:94px;padding:10px;gap:10px;border-radius:30px}.ew-cd-logo{width:66px;height:66px}.ew-cd-name{font-size:17px}.ew-cd-menu{font-size:14px}.ew-cd-view{min-width:112px;height:58px;border-radius:29px}.ew-cd-view strong{font-size:17px}.ew-cd-view span{font-size:12px}}
 
     @media (hover: hover) {

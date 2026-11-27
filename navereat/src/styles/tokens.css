@@ -131,10 +131,17 @@
   /* Side air of the pill inside its tab: (tab 345k - 1px border share - 334k) / 2. */
   --nav-pad: calc(5.5 * var(--k) - 0.5px);
   --nav-pill-h: calc(107 * var(--k));
-  --nav-icon-size: calc(36 * var(--k));
-  --nav-icon-label-gap: calc(22 * var(--k));
+  /* Each glyph's box is cropped to its own ink, so the two are not square:
+     Home's drawing is 41k x 39.45k, History's 35k x 43.13k. The gap is measured
+     from the visible ink edge, not from a padded 36k box. */
+  --nav-glyph-w: calc(36 * var(--k));
+  --nav-glyph-h: calc(36 * var(--k));
+  --nav-icon-label-gap: calc(24 * var(--k));
   --nav-label-size: calc(23.45 * var(--k));
-  --nav-bottom: calc(54 * var(--k) + env(safe-area-inset-bottom, 0px));
+  /* Zomato puts the capsule 54k above the bottom edge and does NOT add the
+     gesture inset: on Android Chrome the inset is ~36px, and adding it lifted
+     the bar by that much. The capsule's own bottom edge is the reference. */
+  --nav-bottom: calc(54 * var(--k));
   /* Cart bar keeps its 12px gap above the capsule. */
   --nav-reserve: calc(var(--nav-h) + var(--nav-bottom) + 12px);
   /* Non-overlay Android status bar: the WebView starts below it. */

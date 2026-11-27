@@ -61,7 +61,7 @@
 .sort-option .check-icon{opacity:0;color:var(--hd-on-light,#C13A50);font-size:12px;}
 .sort-option.selected .check-icon{opacity:1;}
 
-.sheet-footer{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px 18px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid #e9ebef;background:rgba(255,255,255,.98);flex:0 0 auto;}
+.sheet-footer{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px 18px calc(12px + var(--sab));border-top:1px solid #e9ebef;background:rgba(255,255,255,.98);flex:0 0 auto;}
 .sheet-close-btn,.sheet-done{height:52px;border-radius:14px;font:800 14px/1 'Manrope',sans-serif;cursor:pointer;}
 .sheet-close-btn{border:0;background:#fff;color:#4e5662;}
 .sheet-done{border:0;background:var(--hd-on-light,#C13A50);color:#fff;box-shadow:0 8px 18px rgba(15,23,42,.18);}

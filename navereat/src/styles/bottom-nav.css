@@ -196,20 +196,35 @@ body.nav-scroll-reset .bottom-nav.nav-float {
   border-radius: 999px;
 }
 
+/* Each glyph's viewBox is cropped to its own ink (see NavGlyph.tsx), so the
+   box is the visible drawing and the two are not the same shape. Zomato's
+   History is 35k wide, its Home 41k; the height follows each aspect ratio. */
+.nav-tab[data-glyph='home'],
+.nav-pill-cell[data-glyph='home'] {
+  --nav-glyph-w: calc(41 * var(--k));
+  --nav-glyph-h: calc(39.45 * var(--k));
+}
+
+.nav-tab[data-glyph='history'],
+.nav-pill-cell[data-glyph='history'] {
+  --nav-glyph-w: calc(35 * var(--k));
+  --nav-glyph-h: calc(43.13 * var(--k));
+}
+
 .nav-icon {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  width: var(--nav-icon-size);
-  height: var(--nav-icon-size);
+  width: var(--nav-glyph-w);
+  height: var(--nav-glyph-h);
 }
 
 .nav-glyph-stack {
   position: relative;
   display: block;
   flex: 0 0 auto;
-  width: var(--nav-icon-size);
-  height: var(--nav-icon-size);
+  width: var(--nav-glyph-w);
+  height: var(--nav-glyph-h);
 }
 
 /* Two stacked glyphs: the ink outline (idle) and the brand-filled one. The
@@ -218,8 +233,8 @@ body.nav-scroll-reset .bottom-nav.nav-float {
   position: absolute;
   inset: 0;
   display: block;
-  width: var(--nav-icon-size);
-  height: var(--nav-icon-size);
+  width: 100%;
+  height: 100%;
   overflow: visible;
 }
 

@@ -299,7 +299,7 @@ export function BottomNav() {
       <span className="nav-indicator nav-pill" aria-hidden="true">
         <span className="nav-pill-track">
           {ITEMS.map((item) => (
-            <span className="nav-pill-cell" key={item.to}>
+            <span className="nav-pill-cell" key={item.to} data-glyph={item.glyph}>
               <span className="nav-icon">
                 <NavGlyphOutline name={item.glyph} />
               </span>

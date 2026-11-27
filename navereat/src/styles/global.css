@@ -919,7 +919,7 @@ a,
 .ct-footer,
 .cart-bottom-bar,
 .checkout-bar {
-  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+  padding-bottom: max(12px, var(--sab));
 }
 
 #cart-bar {

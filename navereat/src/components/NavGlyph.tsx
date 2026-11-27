@@ -42,6 +42,26 @@ const HISTORY_OUTLINE = (
   </>
 );
 
+/**
+ * Each glyph's viewBox is cropped to the union of its layers' ink (getBBox,
+ * plus half a stroke on the outlined copy), so the SVG box IS the visible
+ * drawing instead of a 36k square with ~30% empty padding. The artwork's own
+ * proportions set the box: at 1080px the History bag draws 35k wide x 43.13k
+ * tall, the house 41k x 39.45k.
+ *
+ * `stroke` is in the cropped viewBox's units, chosen so the rendered stroke is
+ * 2.4k on both glyphs (2.4k x viewBoxWidth / boxWidthK).
+ */
+interface GlyphBox {
+  viewBox: string;
+  stroke: number;
+}
+
+const GLYPH_BOX: Record<NavGlyphName, GlyphBox> = {
+  home: { viewBox: '2.865 3.2 18.27 17.58', stroke: 1.07 },
+  history: { viewBox: '4.911 3.714 14.178 17.472', stroke: 0.972 },
+};
+
 const ACTIVE_HOME = '#F15B64';
 const ACTIVE_HISTORY = '#F4C150';
 const ACTIVE_DETAIL = '#212126';
@@ -61,7 +81,6 @@ const HISTORY_FILLED = (
 
 /** Shared by the outline copies: presentation attributes inherit to their paths. */
 const OUTLINE_PAINT = {
-  strokeWidth: 1.75,
   strokeLinecap: 'round' as const,
   strokeLinejoin: 'round' as const,
 };
@@ -74,15 +93,17 @@ interface NavGlyphProps {
 export function NavGlyph({ name }: NavGlyphProps) {
   const outline: ReactNode = name === 'home' ? HOUSE_OUTLINE : HISTORY_OUTLINE;
   const filled: ReactNode = name === 'home' ? HOUSE_FILLED : HISTORY_FILLED;
+  const box = GLYPH_BOX[name];
   return (
     <span className="nav-glyph-stack">
       <svg
         className="nav-glyph bnav-icon nav-glyph--outline"
         width="20"
         height="20"
-        viewBox="0 0 24 24"
+        viewBox={box.viewBox}
         fill="none"
         aria-hidden="true"
+        strokeWidth={box.stroke}
         {...OUTLINE_PAINT}
       >
         {outline}
@@ -91,9 +112,9 @@ export function NavGlyph({ name }: NavGlyphProps) {
         className="nav-glyph bnav-icon nav-glyph--filled"
         width="20"
         height="20"
-        viewBox="0 0 24 24"
+        viewBox={box.viewBox}
         fill="none"
-        strokeWidth="1.75"
+        strokeWidth={box.stroke}
         strokeLinecap="round"
         strokeLinejoin="round"
         aria-hidden="true"
@@ -106,14 +127,16 @@ export function NavGlyph({ name }: NavGlyphProps) {
 
 /** The same outline in white, for the pill's clipped label/icon track. */
 export function NavGlyphOutline({ name }: NavGlyphProps) {
+  const box = GLYPH_BOX[name];
   return (
     <svg
       className="nav-glyph bnav-icon nav-glyph--white"
       width="20"
       height="20"
-      viewBox="0 0 24 24"
+      viewBox={box.viewBox}
       fill="none"
       aria-hidden="true"
+      strokeWidth={box.stroke}
       {...OUTLINE_PAINT}
     >
       {name === 'home' ? HOUSE_OUTLINE : HISTORY_OUTLINE}
