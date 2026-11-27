@@ -1,38 +1,42 @@
-/* Floating primary navigation: two tabs, one sliding pill, rendered once in
+/* Floating primary navigation: two tabs, one sliding capsule, rendered once in
    App outside the route transition layers.
 
-   It is a compact capsule that hugs its two tabs and sits in the exact middle
-   of the viewport (--nav-h = 52px, --nav-pad = 5px around 42px tab capsules).
-   The hairline is an inset shadow rather than a border, so the padding box is
-   exactly 52px and the indicator can cover a tab slot pixel for pixel. */
+   A 268x58 white capsule pinned to the exact horizontal middle of the screen
+   (`left: 50%` + `translate3d(-50%, …)`, so the show/hide transforms below
+   must always carry that -50%). Inside it a 2-column grid gives Home and
+   History an identical 50% each, and the charcoal capsule is a percentage
+   translate of its own width — no measurement, no layout read, no CLS. */
 .bottom-nav.nav-float {
   --nav-surface: #ffffff;
   --nav-hairline: rgba(0, 0, 0, 0.06);
-  --nav-pill: #242429;
-  --nav-pill-highlight: rgba(255, 255, 255, 0.14);
+  --nav-pill: #222226;
+  --nav-pill-highlight: rgba(255, 255, 255, 0.12);
   --nav-pill-fg: #ffffff;
-  --nav-idle-fg: #1f2024;
-  --nav-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  --nav-spring: cubic-bezier(0.34, 1.28, 0.64, 1);
+  --nav-idle-fg: #1d1e22;
+  --nav-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+  --nav-spring: cubic-bezier(0.22, 1, 0.36, 1);
   --nav-glyph-dur: 420ms;
 
-  position: absolute;
-  left: 0;
-  right: 0;
-  margin-inline: auto;
-  width: fit-content;
+  position: fixed;
+  left: 50%;
   bottom: var(--nav-bottom);
+  /* 268px on a 390px screen, 248px on a 360px one. */
+  width: min(268px, calc(100% - 112px));
   height: var(--nav-h);
   /* Above route transition layers, sheets and the search scrim. */
   z-index: 2147483005;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   align-items: center;
+  justify-content: normal;
   padding: var(--nav-pad);
+  /* The shorthand also overrides the legacy `border-top` in the orders bundle. */
+  border: 1px solid var(--nav-hairline);
   border-radius: 999px;
   background: var(--nav-surface);
-  box-shadow: inset 0 0 0 1px var(--nav-hairline), var(--nav-shadow);
+  box-shadow: var(--nav-shadow);
   opacity: 1;
-  transform: translate3d(0, 0, 0);
+  transform: translate3d(-50%, 0, 0);
   /* 240ms ease-out: shared by the scroll hide/show and the route show. */
   transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.24s ease-out;
   touch-action: pan-y;
@@ -42,12 +46,12 @@
 
 /* Hidden without motion: the nav is only taken away once a pushed page has
    finished covering it, and it is put back before a pop slide starts, so it is
-   never seen moving. No transform, so it cannot drift across the screen. */
+   never seen moving. The -50% stays, so it cannot drift off centre. */
 .bottom-nav.nav-float.is-hidden {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transform: translate3d(0, 0, 0);
+  transform: translate3d(-50%, 0, 0);
   transition: none;
 }
 
@@ -61,7 +65,7 @@
    offset and a 16px margin — so the shadow clears the edge too. Compositor
    only: the layout box stays put, so the page never reflows. */
 body.nav-scroll-hidden .bottom-nav.nav-float.is-visible {
-  transform: translate3d(0, calc(var(--nav-h) + var(--nav-bottom) + 16px), 0);
+  transform: translate3d(-50%, calc(var(--nav-h) + var(--nav-bottom) + 16px), 0);
   opacity: 0;
   pointer-events: none;
 }
@@ -72,49 +76,56 @@ body.nav-scroll-reset .bottom-nav.nav-float {
   transition: none;
 }
 
-/* The active capsule: flat charcoal, a hairline inner highlight and a soft
-   drop shadow. It covers exactly one tab slot, so the tab's own padding gives
-   it its breathing room inside the white pill. */
+/* The active capsule: 50% of the track minus the inset, 48px tall, flat
+   charcoal with a hairline inner highlight. `translate3d(100%)` moves it
+   exactly one slot, so Home/History slide on the compositor only.
+   `top` compensates the 1px border: the padding box starts 1px inside the
+   58px capsule, so 5px - 1px keeps a true 5px gap top and bottom. */
 .nav-indicator {
   position: absolute;
-  top: var(--nav-pad);
-  bottom: var(--nav-pad);
-  left: 0;
-  width: var(--nav-indicator-w, 0px);
+  top: calc(var(--nav-pad) - 1px);
+  left: var(--nav-pad);
+  width: calc(50% - var(--nav-pad));
+  height: 48px;
   border-radius: 999px;
   background: var(--nav-pill);
   box-shadow: inset 0 0 0 1px var(--nav-pill-highlight), 0 4px 10px rgba(17, 17, 20, 0.18);
-  transform: translate3d(var(--nav-indicator-x, 0px), 0, 0);
-  transition: transform 0.32s var(--nav-spring), width 0.32s var(--nav-spring);
+  transform: translate3d(0, 0, 0);
+  transition: transform 0.24s var(--nav-spring);
   will-change: transform;
 }
 
+.bottom-nav.nav-float[data-active-index='1'] .nav-indicator {
+  transform: translate3d(100%, 0, 0);
+}
+
+/* Mid-drag the capsule follows the finger from its resting percentage. */
 .bottom-nav.nav-float.is-dragging .nav-indicator {
+  transform: translate3d(var(--nav-drag-x, 0px), 0, 0);
   transition: none;
   will-change: auto;
 }
 
-/* Icon beside label, centred in its capsule; both are always painted. */
+/* Icon beside label, centred in its half of the grid; both are always painted.
+   The 48px height matches the indicator exactly, so the label sits optically
+   centred inside the dark capsule. */
 .nav-tab {
   position: relative;
   z-index: 1;
-  flex: 0 0 auto;
-  /* Both tabs share one width so the capsule never changes size as the label
-     swaps, and the pill keeps its compact 246px footprint on every phone. */
-  min-width: var(--nav-tab-min);
-  height: calc(var(--nav-h) - 2 * var(--nav-pad));
-  display: flex;
-  flex-direction: row;
+  width: 100%;
+  height: 48px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--nav-icon-label-gap);
-  padding: 0 var(--nav-tab-pad);
+  padding: 0;
   border: 0;
   background: transparent;
   color: var(--nav-idle-fg);
   font-family: var(--font);
   font-size: var(--nav-label-size);
   font-weight: 600;
+  letter-spacing: -0.01em;
   white-space: nowrap;
   cursor: pointer;
   overflow: visible;
@@ -140,26 +151,20 @@ body.nav-scroll-reset .bottom-nav.nav-float {
   height: var(--nav-icon-size);
 }
 
+/* Both glyphs are drawn at exactly 20x20: the attributes and this rule agree,
+   so no generic `.bottom-nav svg` rule can shrink them. */
+svg.bnav-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  display: block;
+}
+
 .nav-glyph {
   display: block;
   width: var(--nav-icon-size);
   height: var(--nav-icon-size);
   overflow: visible;
-}
-
-/* Movable parts: transforms only, no layout work. */
-.nav-glyph__roof,
-.nav-glyph__house-body,
-.nav-glyph__bag-body,
-.nav-glyph__door,
-.nav-glyph__handle,
-.nav-glyph__lines {
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
-.nav-glyph__handle {
-  transform-origin: 50% 100%;
 }
 
 @keyframes navGlyphPop {
@@ -186,52 +191,6 @@ body.nav-scroll-reset .bottom-nav.nav-float {
   }
 }
 
-@keyframes navRoofLift {
-  0% {
-    transform: translateY(-2.4px);
-  }
-  60% {
-    transform: translateY(0.6px);
-  }
-  100% {
-    transform: translateY(0);
-  }
-}
-
-@keyframes navDoorIn {
-  0%,
-  35% {
-    opacity: 0;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-
-@keyframes navBagBounce {
-  0% {
-    transform: translateY(-1.6px);
-  }
-  45% {
-    transform: translateY(1.2px);
-  }
-  100% {
-    transform: translateY(0);
-  }
-}
-
-@keyframes navHandleSwing {
-  0% {
-    transform: rotate(-16deg);
-  }
-  55% {
-    transform: rotate(7deg);
-  }
-  100% {
-    transform: rotate(0deg);
-  }
-}
-
 @keyframes navLabelIn {
   0% {
     opacity: 0.2;
@@ -243,31 +202,14 @@ body.nav-scroll-reset .bottom-nav.nav-float {
   }
 }
 
-/* Entering tab: the icon pops, its parts settle into place and the label
-   fades/slides in. Leaving tab: the icon shrinks (and settles back) while the
-   cross-fade above turns it into its outline. */
+/* Entering tab: the glyph pops and the label fades/slides in. Leaving tab: the
+   glyph shrinks back. */
 .nav-tab.is-enter .nav-glyph {
   animation: navGlyphPop var(--nav-glyph-dur) cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
 .nav-tab.is-leave .nav-glyph {
   animation: navGlyphShrink var(--nav-glyph-dur) cubic-bezier(0.4, 0, 0.2, 1) both;
-}
-
-.nav-tab.is-enter .nav-glyph__roof {
-  animation: navRoofLift var(--nav-glyph-dur) cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.nav-tab.is-enter .nav-glyph__door {
-  animation: navDoorIn var(--nav-glyph-dur) ease-out both;
-}
-
-.nav-tab.is-enter .nav-glyph__bag-body {
-  animation: navBagBounce var(--nav-glyph-dur) cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.nav-tab.is-enter .nav-glyph__handle {
-  animation: navHandleSwing var(--nav-glyph-dur) cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
 .nav-tab.is-enter .nav-label {
@@ -295,10 +237,6 @@ body.nav-scroll-reset .bottom-nav.nav-float {
 
   .nav-tab.is-enter .nav-glyph,
   .nav-tab.is-leave .nav-glyph,
-  .nav-tab.is-enter .nav-glyph__roof,
-  .nav-tab.is-enter .nav-glyph__door,
-  .nav-tab.is-enter .nav-glyph__bag-body,
-  .nav-tab.is-enter .nav-glyph__handle,
   .nav-tab.is-enter .nav-label {
     animation: none !important;
   }

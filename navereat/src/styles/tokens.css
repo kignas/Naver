@@ -116,19 +116,15 @@
   --sh-nav: 0 -2px 12px rgba(0, 0, 0, 0.06);
 
   /* Layout */
-  /* Tab bar: a compact centred capsule, 52dp tall, 5dp inset around the
-     42dp tab capsules inside it. */
-  --nav-h: 52px;
+  /* Tab bar: the floating capsule. 268x58 with a 5dp inset around the 48dp
+     tab capsules, so `--nav-reserve` keeps the cart bar 82dp off the bottom. */
+  --nav-h: 58px;
   --nav-pad: 5px;
-  --nav-bottom: max(12px, var(--sab));
+  --nav-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   --nav-reserve: calc(var(--nav-h) + var(--nav-bottom) + 12px);
-  --nav-side: 14px;
-  --nav-gap: 0px;
-  --nav-tab-pad: 24px;
-  --nav-tab-min: 118px;
-  --nav-icon-size: 18px;
-  --nav-icon-label-gap: 7px;
-  --nav-label-size: 13px;
+  --nav-icon-size: 20px;
+  --nav-icon-label-gap: 9px;
+  --nav-label-size: 13.5px;
   /* Non-overlay Android status bar: the WebView starts below it. */
   --safe-top: 0px;
   --sat: var(--safe-top);

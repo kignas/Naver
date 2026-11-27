@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { isTabPath, useAppNav } from '../lib/navigation';
 import { useSearchStore } from '../store/searchStore';
@@ -75,7 +75,7 @@ export function BottomNav() {
 
   const navRef = useRef<HTMLElement | null>(null);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const dragRef = useRef<{ pointerId: number; startX: number; startIndicatorX: number; moved: boolean; captured: boolean } | null>(null);
+  const dragRef = useRef<{ pointerId: number; startX: number; startPercent: number; moved: boolean; captured: boolean } | null>(null);
   const suppressClickRef = useRef(false);
   const [dragging, setDragging] = useState(false);
 
@@ -140,29 +140,6 @@ export function BottomNav() {
     });
   }, []);
 
-  const [metrics, setMetrics] = useState({ x: 0, width: 0 });
-
-  const measure = useCallback(() => {
-    const element = navRef.current;
-    const tab = tabRefs.current[activeIndex];
-    if (!element || !tab) return;
-    const navRect = element.getBoundingClientRect();
-    const tabRect = tab.getBoundingClientRect();
-    // The indicator is positioned against the padding box, inside the hairline.
-    setMetrics({ x: tabRect.left - navRect.left - element.clientLeft, width: tabRect.width });
-  }, [activeIndex]);
-
-  useLayoutEffect(() => {
-    measure();
-  }, [measure, visible, pathname]);
-
-  useEffect(() => {
-    if (!visible) return;
-    const onResize = () => measure();
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, [measure, visible]);
-
   const select = (index: number) => {
     const item = ITEMS[index];
     if (!item) return;
@@ -188,7 +165,7 @@ export function BottomNav() {
     dragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
-      startIndicatorX: metrics.x,
+      startPercent: activeIndex * 100,
       moved: false,
       captured: false,
     };
@@ -208,7 +185,9 @@ export function BottomNav() {
       }
     }
     event.preventDefault();
-    navRef.current?.style.setProperty('--nav-indicator-x', `${drag.startIndicatorX + dx}px`);
+    // The resting transform is a percentage of the indicator's own width, so a
+    // drag offsets it from that percentage and never needs a measurement.
+    navRef.current?.style.setProperty('--nav-drag-x', `calc(${drag.startPercent}% + ${dx}px)`);
   };
 
   const endDrag = (event: React.PointerEvent<HTMLElement>) => {
@@ -230,15 +209,15 @@ export function BottomNav() {
         nearest = index;
       }
     });
-    const target = tabRefs.current[nearest];
-    if (target && navRef.current) {
-      const navRect = navRef.current.getBoundingClientRect();
-      const targetRect = target.getBoundingClientRect();
-      setMetrics({ x: targetRect.left - navRect.left - navRef.current.clientLeft, width: targetRect.width });
-    }
+    // Park the capsule on the tab the drag committed to, then hand it back to
+    // the state-driven transform once that render has landed.
+    navRef.current?.style.setProperty('--nav-drag-x', `${nearest * 100}%`);
     // A drag that commits on a different tab is a user-initiated change, so it
     // gets the same light impact as a tap.
     if (nearest !== activeIndex) select(nearest);
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => navRef.current?.style.removeProperty('--nav-drag-x'));
+    });
     window.setTimeout(() => {
       suppressClickRef.current = false;
     }, 0);
@@ -248,19 +227,14 @@ export function BottomNav() {
     dragRef.current = null;
     setDragging(false);
     navScrollHide.suspend('drag', false);
-    measure();
+    navRef.current?.style.removeProperty('--nav-drag-x');
   };
-
-  const navStyle = {
-    '--nav-indicator-x': `${metrics.x}px`,
-    '--nav-indicator-w': `${metrics.width}px`,
-  } as CSSProperties;
 
   return (
     <nav
       ref={navRef}
       className={`bottom-nav nav-float${hiddenNow ? ' is-hidden' : ' is-visible'}${covered ? ' is-covered' : ''}${dragging ? ' is-dragging' : ''}`}
-      style={navStyle}
+      data-active-index={activeIndex}
       aria-label="Primary"
       aria-hidden={!visible}
       onPointerDown={beginDrag}

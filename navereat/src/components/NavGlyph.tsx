@@ -1,60 +1,58 @@
 export type NavGlyphName = 'home' | 'history';
 
 /**
- * Tab glyphs at their crisp 18px size. The house keeps its warm coral fill in
- * both states (it reads on the white pill and inside the charcoal capsule);
- * the receipt is a pure `currentColor` outline, so the active capsule turns it
- * white and the idle pill keeps it dark. Each movable part carries a class so
- * a tab change can animate it (roof lifts, door fades in, bag bounces, handle
- * swings) with transforms only.
+ * The two tab glyphs at their exact 20×20 size. The house is a single even-odd
+ * path, so the arched doorway is a true cut-out (no second colour to bleed on
+ * the charcoal capsule); the receipt is a `currentColor` outline, so it turns
+ * white on the active capsule and stays ink-dark on the white pill.
+ *
+ * `nav-glyph` is kept alongside `bnav-icon` because the tab-change animation
+ * targets it (pop / shrink); the sizing itself comes from `svg.bnav-icon`.
  */
-const HOUSE_ROOF = 'M3.05 12.55 11.15 4.35a1.2 1.2 0 0 1 1.7 0l8.1 8.2-1.85 1.8L12 7.2 4.9 14.35l-1.85-1.8Z';
-const HOUSE_BODY = 'M5.75 12.1h12.5v6.35a2.3 2.3 0 0 1-2.3 2.3H8.05a2.3 2.3 0 0 1-2.3-2.3V12.1Z';
-const HOUSE_DOOR = 'M10.2 20.75v-3.15a1.8 1.8 0 0 1 3.6 0v3.15h-3.6Z';
-
-const BAG_BODY =
-  'M4.3 10.4a1.6 1.6 0 0 1 1.6-1.6h12.2a1.6 1.6 0 0 1 1.6 1.6v8a2.4 2.4 0 0 1-2.4 2.4H6.7a2.4 2.4 0 0 1-2.4-2.4v-8Z';
-const BAG_HANDLE = 'M8.9 9.2V7.7a3.1 3.1 0 0 1 6.2 0v1.5';
-const BAG_LINE_ONE = 'M8.8 13.1h6.4';
-const BAG_LINE_TWO = 'M8.8 16.4h4.3';
-
-const STROKE = {
-  fill: 'none',
-  stroke: 'currentColor',
-  strokeWidth: 1.8,
-  strokeLinecap: 'round',
-  strokeLinejoin: 'round',
-} as const;
+const HOUSE =
+  'M12 3.2c.35 0 .68.12.95.35l7.8 6.55c.56.47.23 1.38-.5 1.38H18.8v7.1c0 1.22-.98 2.2-2.2 2.2H7.4c-1.22 0-2.2-.98-2.2-2.2v-7.1H3.75c-.73 0-1.06-.91-.5-1.38l2.55-2.14V5.3c0-.5.4-.9.9-.9h1.4c.5 0 .9.4.9.9v.38l2.05-1.73c.27-.23.6-.35.95-.35ZM10 20.78v-4.38c0-1.1.9-2 2-2s2 .9 2 2v4.38h-4Z';
 
 interface NavGlyphProps {
   name: NavGlyphName;
-  className?: string;
 }
 
-export function NavGlyph({ name, className = '' }: NavGlyphProps) {
+export function NavGlyph({ name }: NavGlyphProps) {
+  if (name === 'home') {
+    return (
+      <svg
+        className="nav-glyph bnav-icon bnav-icon--home"
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden="true"
+      >
+        <path
+          fillRule="evenodd"
+          clipRule="evenodd"
+          d={HOUSE}
+          fill="#F06464"
+        />
+      </svg>
+    );
+  }
   return (
     <svg
-      className={`nav-glyph ${className}`.trim()}
-      width="18"
-      height="18"
+      className="nav-glyph bnav-icon bnav-icon--history"
+      width="20"
+      height="20"
       viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
       aria-hidden="true"
-      focusable="false"
     >
-      {name === 'home' ? (
-        <>
-          <path className="nav-glyph__roof" d={HOUSE_ROOF} fill="#FF6B6B" />
-          <path className="nav-glyph__house-body" d={HOUSE_BODY} fill="#F15A64" />
-          <path className="nav-glyph__door" d={HOUSE_DOOR} fill="#241014" />
-        </>
-      ) : (
-        <>
-          <path className="nav-glyph__bag-body" d={BAG_BODY} {...STROKE} />
-          <path className="nav-glyph__handle" d={BAG_HANDLE} {...STROKE} />
-          <path className="nav-glyph__lines" d={BAG_LINE_ONE} {...STROKE} />
-          <path className="nav-glyph__lines" d={BAG_LINE_TWO} {...STROKE} />
-        </>
-      )}
+      <path d="M7.2 4.2h9.6l1.2 3.3H6l1.2-3.3Z" />
+      <path d="M6 7.5h12l.6 11.1c.06 1.15-.85 2.1-2 2.1H7.4c-1.15 0-2.06-.95-2-2.1L6 7.5Z" />
+      <path d="M9 11.5h6" />
+      <path d="M9 15h4.2" />
     </svg>
   );
 }

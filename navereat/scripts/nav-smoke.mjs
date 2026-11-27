@@ -310,7 +310,9 @@ try {
   // --- Bottom nav: History tab + indicator animation ----------------------
   const indicatorBefore = await page.evaluate(() => {
     const nav = document.querySelector('.bottom-nav');
-    return nav ? getComputedStyle(nav).getPropertyValue('--nav-indicator-x').trim() : null;
+    const ind = nav ? nav.querySelector('.nav-indicator') : null;
+    if (!ind) return null;
+    return String(Math.round(new DOMMatrixReadOnly(getComputedStyle(ind).transform).m41));
   });
   await page.evaluate(() => {
     window.__navPill = { enter: 0, leave: 0 };
@@ -330,7 +332,9 @@ try {
   const orders = await state();
   const indicatorAfter = await page.evaluate(() => {
     const nav = document.querySelector('.bottom-nav');
-    return nav ? getComputedStyle(nav).getPropertyValue('--nav-indicator-x').trim() : null;
+    const ind = nav ? nav.querySelector('.nav-indicator') : null;
+    if (!ind) return null;
+    return String(Math.round(new DOMMatrixReadOnly(getComputedStyle(ind).transform).m41));
   });
   const pillAnimated = await page.evaluate(() => window.__navPill);
   check('History tab: opens /orders', orders.orders && orders.hash === '#/orders', orders.hash);
