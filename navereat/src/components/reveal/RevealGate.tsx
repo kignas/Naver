@@ -105,11 +105,9 @@ export function RevealGate({
       >
         {children}
       </div>
-      {!revealed && (
-        <div className="reveal-gate__skeleton" aria-hidden="true">
-          {skeleton}
-        </div>
-      )}
+      <div className={`reveal-gate__skeleton${revealed ? ' is-hidden' : ''}`} aria-hidden="true">
+        {skeleton}
+      </div>
     </div>
   );
 }

@@ -14,4 +14,20 @@
   overflow: hidden;
   background: var(--page, #fff);
   pointer-events: none;
+  opacity: 1;
+  transition: opacity 300ms ease;
+}
+
+.reveal-gate__skeleton.is-hidden {
+  opacity: 0;
+}
+
+.reveal-gate__skeleton.is-hidden .rv-sk::after {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal-gate__skeleton {
+    transition: none;
+  }
 }
