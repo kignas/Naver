@@ -295,3 +295,23 @@ No behaviour was "fixed" beyond the branding rule.
 | Branding | Neutral "Navereat" copy, no Eatswada logo/domain/support text | Branding rule |
 | `api.js` base URL | Not copied | Branding rule; live adapter reads `VITE_API_BASE_URL` |
 | Cart bill delivery/tax/packaging rows | Fixed at ₹0 in the rendered bill | The engine computes them, but the current cart layout is the zero-fee demo shell; tracked as TODO in §2.2 |
+
+
+---
+
+## 10. Delivery status (demo mode)
+
+| Area | Status | Notes |
+| --- | --- | --- |
+| Logic port (Phase 1) | DONE | 410 parity assertions, original JS loaded as an oracle |
+| CSS bundles (Phase 2) | DONE | `src/styles/original/{restaurant,cart,payment,address}.bundle.css`, rebuilt from the source lists |
+| `/restaurant/:id` | DONE | menu, filters, veg toggle, customize sheet, offer popup, pairing, menu jump, cart bar, closed states |
+| `/cart` | DONE | items + stepper, upsells, coupon/tip/note/pay sheets, bill, address row, place order |
+| `/payment/:result` | DONE | success / failed / pending, ported from the three legacy pages with the same markup |
+| `/address` | PARTIAL | select view, saved list, add form, delete, `?return=cart`. The map picker and geocoding UI are omitted (demo) |
+| `/track/:id`, `/orders`, `/profile` | DONE (pre-existing) | reached from the new flows |
+| `/login` | DONE (pre-existing) | return flow unchanged |
+| Data adapter | DONE | `src/api/restaurantApi.ts` + `demoApi` / `liveApi` stub |
+| Demo scenarios | DONE | `?demo=` panel: closed, out of stock, quote error, slow, empty cart, zone fees, offer, coupon, free delivery, address, payment result |
+| Payment gateway | MOCK | `MockPaymentSheet` returns success / failure / pending; no Razorpay script |
+| Push / VAPID / Firebase | NOT PORTED | no config copied (branding rule) |

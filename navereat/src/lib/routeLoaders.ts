@@ -2,7 +2,16 @@ import type { ComponentType } from 'react';
 import { findRestaurant, restaurants } from '../data/demo';
 import { useNavStore } from '../store/navStore';
 
-export type LazyRouteKey = 'restaurant' | 'cart' | 'orders' | 'track' | 'profile' | 'category' | 'under99';
+export type LazyRouteKey =
+  | 'restaurant'
+  | 'cart'
+  | 'orders'
+  | 'track'
+  | 'profile'
+  | 'category'
+  | 'under99'
+  | 'payment'
+  | 'address';
 
 const NAMED_EXPORTS: Record<LazyRouteKey, string> = {
   restaurant: 'Restaurant',
@@ -12,6 +21,8 @@ const NAMED_EXPORTS: Record<LazyRouteKey, string> = {
   profile: 'Profile',
   category: 'Category',
   under99: 'Under99',
+  payment: 'PaymentResult',
+  address: 'Address',
 };
 
 export const routeLoaders = {
@@ -22,6 +33,8 @@ export const routeLoaders = {
   profile: () => import('../pages/Profile'),
   category: () => import('../pages/Category'),
   under99: () => import('../pages/Under99'),
+  payment: () => import('../pages/PaymentResult'),
+  address: () => import('../pages/Address'),
 } satisfies Record<LazyRouteKey, () => Promise<unknown>>;
 
 const components = new Map<LazyRouteKey, ComponentType>();

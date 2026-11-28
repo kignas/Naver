@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { BottomNav } from './components/BottomNav';
+import { DemoPanel } from './components/DemoPanel';
 import { CartBar } from './components/CartBar';
 import { CustomizeProvider } from './components/CustomizeSheet';
 import { PageTransition } from './components/PageTransition';
@@ -141,12 +142,15 @@ function AppRoutes() {
                 <Route path="/orders" element={<LazyRoute routeKey="orders" pathname={routeLocation.pathname} />} />
                 <Route path="/track/:id" element={<LazyRoute routeKey="track" pathname={routeLocation.pathname} />} />
                 <Route path="/profile" element={<LazyRoute routeKey="profile" pathname={routeLocation.pathname} />} />
+                <Route path="/address" element={<LazyRoute routeKey="address" pathname={routeLocation.pathname} />} />
+                <Route path="/payment/:result" element={<LazyRoute routeKey="payment" pathname={routeLocation.pathname} />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Suspense>
           )}
         />
       </div>
+      <DemoPanel />
       <CartBar
         visible={cartBarVisible}
         mode={cartBarMode}

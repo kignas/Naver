@@ -16,8 +16,12 @@ import { CartUpsell } from '../components/cart/CartUpsell';
 import { NOTE_MAX, TIP_PRESETS } from '../components/cart/cartConstants';
 import { Icon } from '../components/Icon';
 import { SlideReveal } from '../components/reveal/SlideReveal';
-import { coupons, findRestaurant, type Coupon, type DemoOffer } from '../data/demo';
-import { cartRestaurantId } from '../lib/cart';
+import { api, isApiFailure } from '../api/restaurantApi';
+import type { Coupon, DemoOffer, Order } from '../data/demo';
+import { cartRestaurantId, cartSubtotal } from '../lib/cart';
+import { ensureKey } from '../logic/checkoutKey';
+import { build as buildOrderPayload } from '../logic/orderPayload';
+import { MockPaymentSheet, type MockPaymentOutcome } from '../components/MockPaymentSheet';
 import { tapHaptic } from '../lib/haptics';
 import { createRouteStyleSheet } from '../lib/routeStyles';
 import { useAppNav } from '../lib/navigation';
@@ -67,12 +71,12 @@ const cartHeadline = (cart: ReturnType<typeof useAppStore.getState>['cart']): st
   const names = new Map<number, string>();
   Object.values(cart).forEach((line) => {
     if (names.has(line.resId)) return;
-    names.set(line.resId, line.resName ?? findRestaurant(line.resId)?.name ?? 'Restaurant');
+    names.set(line.resId, line.resName ?? api.restaurantSync(line.resId)?.name ?? 'Restaurant');
   });
   if (names.size > 1) return `${names.size} restaurants`;
   const first = names.values().next();
   if (!first.done) return first.value;
-  return findRestaurant(cartRestaurantId(cart) ?? undefined)?.name ?? 'Your cart';
+  return api.restaurantSync(cartRestaurantId(cart) ?? undefined)?.name ?? 'Your cart';
 };
 
 export function Cart() {
@@ -84,16 +88,16 @@ export function Cart() {
   const applyCoupon = useAppStore((s) => s.applyCoupon);
   const removeCoupon = useAppStore((s) => s.removeCoupon);
   const clearCart = useAppStore((s) => s.clearCart);
-  const placeOrder = useAppStore((s) => s.placeOrder);
   const empty = useAppStore((s) => Object.keys(s.cart).length === 0);
   const restaurantId = useAppStore((s) => cartRestaurantId(s.cart));
   const headline = useAppStore((s) => cartHeadline(s.cart));
 
   const [sheet, setSheet] = useState<SheetName>(null);
+  const [mockPay, setMockPay] = useState<{ orderId: string; amount: number } | null>(null);
   const sheetRef = useRef<SheetHandle>(null);
   const closeSheet = () => sheetRef.current?.close();
   const orderSuccessRef = useRef<OrderSuccessHandle>(null);
-  const pendingOrderRef = useRef<ReturnType<typeof placeOrder>>(null);
+  const pendingOrderRef = useRef<Order | null>(null);
   // The saved note, instructions and tip are read during the first render, so
   // the page the slide reveals is already complete and nothing has to re-render
   // (and re-layout the whole cart) while it travels.
@@ -129,7 +133,8 @@ export function Cart() {
   const couponSheetEmpty = hashParams.get('coupons') === 'empty';
   const offerMode = hashParams.get('offers');
   const holdOrderPopup = hashParams.get('hold') === '1';
-  const restaurant = findRestaurant(restaurantId ?? undefined);
+  const restaurant = api.restaurantSync(restaurantId ?? undefined);
+  const couponList = api.couponsSync();
   const unavailable = hashParams.get('unavailable') === '1' || restaurant?.available === false;
   const freeAbove = restaurant?.freeDeliveryAbove ?? 399;
   const eta = restaurant ? `${restaurant.deliveryMin}–${restaurant.deliveryMax} mins` : '30–40 mins';
@@ -148,8 +153,21 @@ export function Cart() {
     }
   }, [instructions, note, tip]);
 
-  const handleApply = (value: string) => {
-    const result = applyCoupon(value);
+  const handleApply = async (value: string) => {
+    const state = useAppStore.getState();
+    const check = await api.validateCoupon({
+      code: value,
+      subtotal: cartSubtotal(state.cart),
+      restaurantId: restaurantId ?? undefined,
+      paymentMethod: payment,
+    });
+    if (!check.ok) {
+      const message = check.message ?? 'Coupon is invalid or expired.';
+      setCouponError(message);
+      toast(message, 'error');
+      return;
+    }
+    const result = applyCoupon(check.code ?? value);
     if (result.ok) {
       setCouponError('');
       toast(result.message, 'success');
@@ -228,22 +246,82 @@ export function Cart() {
     );
   }, []);
 
-  const handlePlace = () => {
+  const leaveCart = (target: string) => {
+    nav.push(target);
+    // Keep the outgoing cart intact for the slide; clearing it now would
+    // resize the page while it is still visible.
+    let cleared = false;
+    const clearAfterSlide = () => {
+      if (cleared) return;
+      cleared = true;
+      window.removeEventListener('navereat:transition-end', clearAfterSlide);
+      clearCart();
+    };
+    window.addEventListener('navereat:transition-end', clearAfterSlide, { once: true });
+    window.setTimeout(clearAfterSlide, 900);
+  };
+
+  const handlePlace = async () => {
     if (placing) return;
     if (unavailable) {
       toast('Delivery is unavailable for this restaurant', 'error');
       return;
     }
-    const order = placeOrder(payment === 'cod' ? 'Cash on Delivery' : 'UPI', { keepCart: true, tip });
-    if (!order) {
+    const state = useAppStore.getState();
+    if (Object.keys(state.cart).length === 0) {
       toast('Your cart is empty', 'error');
       return;
     }
-    tapHaptic(12);
-    pendingOrderRef.current = order;
+    const payload = buildOrderPayload(state.cart, {
+      paymentMethod: payment === 'cod' ? 'cod' : 'upi',
+      tipAmount: tip,
+      restaurantNote: note,
+      deliveryInstructions: instructions.join(', '),
+      couponCode: coupon?.code ?? '',
+    });
+    const idempotencyKey = ensureKey(payload as unknown as Parameters<typeof ensureKey>[0]);
     setPlacing(true);
     setSheet(null);
-    orderSuccessRef.current?.processing();
+    try {
+      const created = await api.createOrder({
+        payload,
+        idempotencyKey,
+        restaurantName: restaurant?.name,
+        eta: restaurant?.time,
+      });
+      state.recordOrder(created.order, { keepCart: true });
+      pendingOrderRef.current = created.order;
+      tapHaptic(12);
+      if (payment === 'cod') {
+        orderSuccessRef.current?.processing();
+      } else {
+        setMockPay({ orderId: created.orderId, amount: created.total });
+      }
+    } catch (error) {
+      setPlacing(false);
+      toast(isApiFailure(error) ? error.message : 'Could not place the order. Try again.', 'error');
+    }
+  };
+
+  const handleMockResult = async (outcome: MockPaymentOutcome) => {
+    const pending = mockPay;
+    if (!pending) return;
+    setMockPay(null);
+    setPlacing(true);
+    try {
+      const intent = await api.createPayment({ orderId: pending.orderId, amount: pending.amount, method: 'upi' });
+      const verified = await api.verifyPayment({
+        paymentId: intent.paymentId,
+        orderId: pending.orderId,
+        outcome,
+      });
+      useAppStore.getState().recordOrder(verified.order, { keepCart: true });
+      const result = verified.paymentStatus === 'paid' ? 'success' : verified.paymentStatus === 'failed' ? 'failed' : 'pending';
+      leaveCart(`/payment/${result}?order=${pending.orderId}`);
+    } catch (error) {
+      setPlacing(false);
+      toast(isApiFailure(error) ? error.message : 'Payment could not be completed.', 'error');
+    }
   };
 
   const handleOrderContinue = () => {
@@ -251,18 +329,7 @@ export function Cart() {
     pendingOrderRef.current = null;
     setPlacing(false);
     if (order) {
-      nav.push(`/track/${order.id}`);
-      // Keep the outgoing cart intact for the slide; clearing it now would
-      // resize the page while it is still visible.
-      let cleared = false;
-      const clearAfterSlide = () => {
-        if (cleared) return;
-        cleared = true;
-        window.removeEventListener('navereat:transition-end', clearAfterSlide);
-        clearCart();
-      };
-      window.addEventListener('navereat:transition-end', clearAfterSlide, { once: true });
-      window.setTimeout(clearAfterSlide, 900);
+      leaveCart(`/track/${order.id}`);
     } else {
       clearCart();
       nav.tab('/orders');
@@ -299,7 +366,7 @@ export function Cart() {
   return (
     <div className="page cart-page">
       <CartTotalsProvider
-        restaurant={restaurant}
+        restaurant={restaurant ?? undefined}
         offerMode={offerMode}
         unavailable={unavailable}
         freeAbove={freeAbove}
@@ -432,7 +499,7 @@ export function Cart() {
             <button className="ct-btn ct-btn-primary" id="coupon-apply" type="button" onClick={() => handleApply(code)}>
               Apply coupon
             </button>
-            {couponSheetEmpty || coupons.length === 0 ? (
+            {couponSheetEmpty || couponList.length === 0 ? (
               <div className="ct-empty-mini">
                 <div aria-hidden="true" className="ct-empty-mini-ic">
                   <Icon name="solid:ticket" size={18} />
@@ -442,7 +509,7 @@ export function Cart() {
               </div>
             ) : (
               <div className="ct-coupon-list">
-                {coupons.map((entry: Coupon) => (
+                {couponList.map((entry: Coupon) => (
                   <button
                     key={entry.code}
                     type="button"
@@ -483,6 +550,18 @@ export function Cart() {
             payment={payment}
             onPayment={setPayment}
             onPlace={handlePlace}
+          />
+        )}
+
+        {mockPay && (
+          <MockPaymentSheet
+            orderId={mockPay.orderId}
+            amount={mockPay.amount}
+            onResult={handleMockResult}
+            onClose={() => {
+              setMockPay(null);
+              setPlacing(false);
+            }}
           />
         )}
 
