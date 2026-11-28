@@ -64,7 +64,7 @@
     "typescript": "~5.6.3",
     "typescript-eslint": "^8.18.2",
     "vite": "^5.4.11",
-    "vite-node": "^6.0.0",
+    "vite-node": "^2.1.9",
     "vitest": "^2.1.9"
   },
   "allowScripts": {
