@@ -28,6 +28,7 @@ import type { Coupon, DemoOffer, Order } from '../data/demo';
 import { cartRestaurantId, cartSubtotal } from '../lib/cart';
 import { ensureKey } from '../logic/checkoutKey';
 import { rememberCartForAuth } from '../lib/loginReturn';
+import { ctaBlockedToast } from '../logic/checkoutCta';
 import { build as buildOrderPayload } from '../logic/orderPayload';
 import { MockPaymentSheet, type MockPaymentOutcome } from '../components/MockPaymentSheet';
 import { tapHaptic } from '../lib/haptics';
@@ -321,10 +322,19 @@ export function Cart() {
     window.setTimeout(clearAfterSlide, 900);
   };
 
+  const shakeCheckout = () => {
+    const button = document.getElementById('btn-checkout');
+    if (!button) return;
+    button.classList.remove('ct-shake');
+    void (button as HTMLElement).offsetWidth;
+    button.classList.add('ct-shake');
+    window.setTimeout(() => button.classList.remove('ct-shake'), 450);
+  };
+
   const handlePlace = async () => {
     if (placing) return;
     if (unavailable) {
-      toast('Delivery is unavailable for this restaurant', 'error');
+      toast('This restaurant does not deliver to your address', 'error');
       return;
     }
     const state = useAppStore.getState();
@@ -353,16 +363,32 @@ export function Cart() {
       nav.push('/login');
       return;
     }
+    const minOrder = restaurant?.minimumOrder ?? 0;
+    const belowMin =
+      groups === 1 && minOrder > 0 && preview.subtotal < minOrder
+        ? [{ name: restaurant?.name ?? 'Restaurant', minOrder, subtotal: preview.subtotal }]
+        : [];
+    const blocked = ctaBlockedToast({
+      units: 0,
+      unavailable: false,
+      quoteBlock: null,
+      loggedIn: true,
+      multiBelowMin: belowMin,
+      usesAuthoritativeQuote: groups === 1,
+      minOrder,
+      subtotal: preview.subtotal,
+      addressOk: false,
+      ctaMain: '',
+    });
+    if (blocked) {
+      shakeCheckout();
+      toast(blocked, 'error');
+      return;
+    }
     const currentAddress = selectedAddress();
-    if (!currentAddress) {
-      const button = document.getElementById('btn-checkout');
-      if (button) {
-        button.classList.remove('ct-shake');
-        void (button as HTMLElement).offsetWidth;
-        button.classList.add('ct-shake');
-        window.setTimeout(() => button.classList.remove('ct-shake'), 450);
-      }
-      toast('Add a delivery address first', 'error');
+    if (!currentAddress || !addressHasCoords(currentAddress)) {
+      // `EatswadaLocationGate.requireAddress({ context: 'cart' })`.
+      setLocationPrompt(true);
       return;
     }
     const payload = buildOrderPayload(state.cart, {
@@ -478,6 +504,8 @@ export function Cart() {
         tip={tip}
         payment={payment}
         platform={platform}
+        addressOk={Boolean(address && addressHasCoords(address))}
+        loggedIn={Boolean(localStorage.getItem('nearbite_token') || localStorage.getItem('token'))}
       >
         <div id="cart-has-items">
           <div className="ct-delivery-head" id="delivery-eta-card">

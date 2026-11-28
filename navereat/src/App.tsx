@@ -19,6 +19,7 @@ import { installTapFeedback } from './lib/gsap';
 import { useChromePathname } from './lib/chromeRoute';
 import { isTabPath, NavBridge } from './lib/navigation';
 import { useAppStore } from './store/appStore';
+import { takeLoginNavigation } from './lib/loginReturn';
 import { useSearchStore } from './store/searchStore';
 import { useNavStore } from './store/navStore';
 import { statusBarStyle, statusBarTheme } from './lib/statusBarTheme';
@@ -31,6 +32,17 @@ import { Home } from './pages/Home';
 import { useDataSourceMode } from './data';
 
 
+
+/**
+ * The routes a guest may open. Legacy never gated browsing: a guest could look
+ * at a restaurant, fill a cart and only met the login wall when they pressed
+ * Order (`cart-page.js` `placeOrder()`). The demo keeps the app-wide wall for
+ * the tab routes so a fresh session still starts at login, but the two ported
+ * pages stay reachable, which is what makes `"Log in to order"` and the
+ * `nearbite_after_login` return path testable.
+ */
+const guestPath = (pathname: string): boolean =>
+  pathname === '/login' || pathname === '/cart' || pathname.startsWith('/restaurant/');
 
 function AppRoutes() {
   const location = useLocation();
@@ -86,10 +98,13 @@ function AppRoutes() {
   }, []);
 
   useEffect(() => {
-    if (!token && location.pathname !== '/login') {
+    if (!token && !guestPath(location.pathname)) {
       setDirection('pop');
       navigate('/login', { replace: true });
     } else if (token && location.pathname === '/login') {
+      // Watermark: Login marks its own target (the cart for a guest checkout)
+      // and the shell must not race it to Home.
+      if (takeLoginNavigation()) return;
       setDirection('tab');
       navigate('/', { replace: true });
     }
@@ -100,7 +115,7 @@ function AppRoutes() {
   // cannot move out from under a Home that is still on screen. See chromeRoute.
   const chromePathname = useChromePathname(location.pathname);
 
-  if (!token && location.pathname !== '/login') return null;
+  if (!token && !guestPath(location.pathname)) return null;
 
   const cartBarVisible =
     !searchOpen &&

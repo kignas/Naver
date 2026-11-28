@@ -14,6 +14,7 @@ import {
   type PaymentContext,
   type PaymentSettings,
 } from '../../logic/paymentOptions';
+import { resolveCta } from '../../logic/checkoutCta';
 import { CartTotalsContext, type CartGroup, type CartTotals } from './cartTotals';
 
 interface CartTotalsProviderProps {
@@ -26,6 +27,9 @@ interface CartTotalsProviderProps {
   payment: 'upi' | 'cod';
   /** `GET /platform/status` switches that gate COD and block the CTA. */
   platform: PaymentSettings;
+  /** `ctState.addressOk` / `ctState.loggedIn`: the two remaining CTA gates. */
+  addressOk: boolean;
+  loggedIn: boolean;
   children: ReactNode;
 }
 
@@ -42,6 +46,8 @@ export function CartTotalsProvider({
   tip,
   payment,
   platform,
+  addressOk,
+  loggedIn,
   children,
 }: CartTotalsProviderProps) {
   const cart = useAppStore((state) => state.cart);
@@ -50,12 +56,13 @@ export function CartTotalsProvider({
   const groups = useMemo<CartGroup[]>(() => {
     const map = new Map<number, CartGroup>();
     Object.entries(cart).forEach(([name, line]) => {
-      const group = map.get(line.resId) ?? {
+      const group: CartGroup = map.get(line.resId) ?? {
         resId: line.resId,
         name: line.resName ?? api.restaurantSync(line.resId)?.name ?? 'Restaurant',
         lines: [],
         units: 0,
         subtotal: 0,
+        minOrder: api.restaurantSync(line.resId)?.minimumOrder,
       };
       group.lines.push({ name, line });
       group.units += line.quantity;
@@ -103,6 +110,30 @@ export function CartTotalsProvider({
     };
   }, [bill.grandTotal, bill.tip, bill.total, groups.length, payment, platform]);
 
+  const multiBelowMin = useMemo(
+    () =>
+      groups
+        .filter((group) => (group.minOrder ?? 0) > 0 && group.subtotal < (group.minOrder ?? 0))
+        .map((group) => ({ name: group.name, minOrder: group.minOrder ?? 0, subtotal: group.subtotal })),
+    [groups],
+  );
+  const cta = useMemo(
+    () =>
+      resolveCta({
+        units: groups.reduce((count, group) => count + group.units, 0),
+        unavailable,
+        quoteBlock: null,
+        loggedIn,
+        multiBelowMin,
+        usesAuthoritativeQuote: groups.length === 1 && addressOk,
+        minOrder: restaurant?.minimumOrder ?? 0,
+        subtotal,
+        addressOk,
+        ctaMain: paymentOptions.ctaLabel,
+      }),
+    [addressOk, groups, loggedIn, multiBelowMin, paymentOptions.ctaLabel, restaurant, subtotal, unavailable],
+  );
+
   const value = useMemo<CartTotals>(
     () => ({
       cart,
@@ -115,8 +146,23 @@ export function CartTotalsProvider({
       freeDelivery,
       restaurant,
       paymentOptions,
+      multiBelowMin,
+      cta,
     }),
-    [bill, cart, freeDelivery, groups, offers, paymentOptions, restaurant, savings, subtotal, totalSavings],
+    [
+      bill,
+      cart,
+      cta,
+      freeDelivery,
+      groups,
+      multiBelowMin,
+      offers,
+      paymentOptions,
+      restaurant,
+      savings,
+      subtotal,
+      totalSavings,
+    ],
   );
 
   return <CartTotalsContext.Provider value={value}>{children}</CartTotalsContext.Provider>;

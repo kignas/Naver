@@ -95,7 +95,7 @@ deliberately not ported (demo mode / branding rule).
 | `cart.html:160-250` | order-info card, bill, policy | `CartOrderInfoCard.tsx` | DONE |
 | `cart.html:254` | empty cart | `Cart.tsx` empty branch | DONE |
 | `cart.html:266-267` | `#addr-toast` | `src/store/toastStore.ts` | DONE |
-| `cart.html:271-286` | location modal | `Cart.tsx` | TODO |
+| `cart.html:271-286` | location modal | `CartLocationModal.tsx` (`#ct-location-modal`) | DONE |
 | `cart.html:288-320` | checkout footer + pay bar | `CartCheckoutFooter.tsx` | DONE |
 | `cart.html:326-350` | note sheet | `Cart.tsx` (`sheet === 'note'`) | DONE |
 | `cart.html:351-372` | tip sheet | `Cart.tsx` (`sheet === 'tip'`) | DONE |
@@ -107,7 +107,7 @@ deliberately not ported (demo mode / branding rule).
 | `css/*.css` `.ct-fees` (₹0 packaging / platform strip) | shown only while no fee applies | `CartNoFeesNote.tsx` | DONE |
 | `js/cart-page.js:104-110` | distance → delivery fee | `src/logic/pricingEngine.ts` | DONE (logic only) |
 | `js/cart-page.js:598-644` | note / tip / instruction persistence (`nearbite_cart_extras`) | `Cart.tsx` `readCartExtras` | DONE |
-| `js/cart-page.js:1179-1302` | checkout CTA gating | `CartCheckoutFooter.tsx` | PARTIAL — no address gate |
+| `js/cart-page.js:1179-1302` | checkout CTA gating | `src/logic/checkoutCta.ts` (17 tests) → `CartCheckoutFooter.tsx`, `CartTotalsProvider.tsx`, `Cart.tsx` | DONE — unavailable → quote block → log-in → restaurant minimum → minimum order → address, in the legacy order, with the same labels/toasts |
 | `js/cart-page.js:1445-1457` | toast | `toastStore` + `ToastHost` | DONE |
 | `js/cart-page.js:1563-1770` | order success / COD / failed / pending | `OrderSuccessSheet.tsx` + `src/pages/PaymentResult.tsx` (`/payment/:result`) | DONE |
 | `js/cart-page.js:1773-2274` | Razorpay checkout | **mock payment sheet** (`?demo=payment=…`) | N/A (demo) |
@@ -118,14 +118,14 @@ deliberately not ported (demo mode / branding rule).
 | `js/cart-page.js:3152-3200` | savings hero/corner | `CartSavingsCorner.tsx` | DONE |
 | `js/cart-page.js:3299-3380` | tip chips + validation | `Cart.tsx` + `cartConstants.ts` | DONE |
 | `js/cart-page.js:3380-3520` | delivery summary, instructions | `CartOrderInfoCard.tsx` | PARTIAL — address row is read-only |
-| `js/cart-page.js:3661-3672` | location prompt | `Cart.tsx` | TODO |
+| `js/cart-page.js:3661-3672` | location prompt | `Cart.tsx` `locationPrompt` + `CartLocationModal.tsx` | DONE |
 
 ### 2.3 Checkout JS modules
 
 | Source | Behaviour | Target | Status |
 | --- | --- | --- | --- |
 | `cart-popups.js` | sheet plumbing | `src/components/Sheet.tsx` | DONE |
-| `cart-quote-ui.js` | quote wiring into the bill | `CartTotalsProvider.tsx` | PARTIAL — bill is local, not quote-driven |
+| `cart-quote-ui.js` | quote wiring into the bill | `CartTotalsProvider.tsx` + `src/logic/bill.ts` | PARTIAL — the bill is quote-driven, but the demo quote is synchronous, so the legacy "price unavailable / try again" retry state cannot occur |
 | `cart-checkout-upgrades.js` | CTA upgrades | `CartCheckoutFooter.tsx` | DONE |
 | `cart-checkout-upgrades.js` `codState`/`upiState`/`codVisible`/`hasChoice`/`ctaLabel`/`ctaBlock`/`revalidateBeforeOrder` | UPI/COD eligibility, pay-note copy, CTA label, pre-order gate | `src/logic/paymentOptions.ts` (16 oracle tests) → `CartPaySheet.tsx`, `CartCheckoutFooter.tsx`, `Cart.tsx` | DONE |
 | `cart-checkout-upgrades.js` `getSendCutlery` (`nearbite_send_cutlery`) | cutlery toggle | `CartItems.tsx` | DONE |
@@ -152,9 +152,9 @@ deliberately not ported (demo mode / branding rule).
 | `index.html` restaurant cards → menu | `src/pages/Home.tsx` → `/restaurant/:id` | DONE |
 | `under99.html` items → same cart | `src/pages/Under99.tsx` | DONE |
 | `search.html` | `SearchOverlay` + `/category/:type` | DONE |
-| `login.html` (return-to flow) | `src/pages/Login.tsx` | PARTIAL — no `nearbite_after_login` return path |
-| `address.html` / `address-new.html` (+`address-api/-model/-new/-sheet/-store.js`, `address-flow.css`, `address-v3.css`) | `src/pages/Address.tsx` + `/address` route | TODO |
-| `payment-success.html` / `payment-failed.html` / `payment-pending.html` | `/payment/:state` route | TODO |
+| `login.html` (return-to flow) | `src/pages/Login.tsx` + `src/lib/loginReturn.ts` | DONE — guest checkout stores `nearbite_cart_before_auth` + `nearbite_after_login`, login resets to that route and restores the cart |
+| `address.html` / `address-new.html` (+`address-api/-model/-new/-sheet/-store.js`, `address-flow.css`, `address-v3.css`) | `src/pages/Address.tsx` + `/address` route | PARTIAL — saved list / add / delete / select / `?return=cart`; the map picker and geocoding UI are omitted (see Deviations) |
+| `payment-success.html` / `payment-failed.html` / `payment-pending.html` | `src/pages/PaymentResult.tsx` (`/payment/:result`) | DONE |
 | `track-order.html` + `track-map.js` | `src/pages/Track.tsx` (`/track/:id`) | DONE (static map) |
 | `orders.html` | `src/pages/Orders.tsx` | DONE |
 | `profile.html` / `complete-profile.html` | `src/pages/Profile.tsx` | PARTIAL — no complete-profile |
@@ -203,25 +203,25 @@ brief allows the prefix to be kept when the app already uses it (it does — see
 | Key | Written by | Target | Status |
 | --- | --- | --- | --- |
 | `nearbite_cart` | `cart-page.js:645` | `appStore` | DONE |
-| `nearbite_cart_before_auth` | login return | — | TODO |
+| `nearbite_cart_before_auth` | `cart-page.js` `placeOrder()` guest branch | `src/lib/loginReturn.ts` | DONE |
 | `nearbite_checkout_key` | `checkout-key.js:35` | `logic/checkoutKey.ts` | DONE |
 | `nearbite_checkout_fp` | `checkout-key.js:36` | `logic/checkoutKey.ts` | DONE |
 | `nearbite_checkout_fp_ts` | `checkout-key.js:37` | `logic/checkoutKey.ts` | DONE |
-| `nearbite_payment_method` | `cart-page.js:63` | `Cart.tsx` state | PARTIAL — not persisted |
+| `nearbite_payment_method` | `cart-page.js:63` | `src/lib/checkoutPaymentMethod.ts` (`read`/`write`/`clear`) | DONE |
 | `nearbite_address` | `address-store.js` | `demoApi` addresses | DONE |
 | `nearbite_selected_address_id` | `address-store.js` | `demoApi` addresses | DONE |
 | `nearbite_token` | `auth-token.js` | `appStore` | DONE |
 | `nearbite_user` | `api.js` session | `appStore` | DONE |
-| `nearbite_after_login` | login return | — | TODO |
+| `nearbite_after_login` | login return (`'cart.html'`) | `src/lib/loginReturn.ts` (stores `'/cart'`) | DONE — hash route instead of the legacy filename |
 | `token` | legacy auth | `appStore` (reads `nearbite_token`) | PARTIAL |
 | `eatswada_theme` | `eatswada-theme.js` | `navereat` has no theme switch | N/A |
 | `eatswada_header_theme` | `eatswada-header-theme.js` | `scrollHeaderMotion` | N/A |
 | `es_image_dict` | `ew-image-guard.js` | image `onError` | N/A |
 | `nearbite_cart_extras` | `cart-page.js:609` | `Cart.tsx` | DONE |
 | `nearbite_orders` | `cart-page.js` | `appStore` | DONE |
-| `ew_just_placed` | `cart-page.js` | — | TODO |
+| `ew_just_placed` | `cart-page.js:1637` (sessionStorage handoff to track) | `useAppStore.recordOrder` → `Track.tsx` | N/A — the store hands the placed order to the tracker; no sessionStorage hop needed |
 | `nearbite_onboarding_location` | `location-onboarding.html` | — | N/A |
-| `nearbite_payment_method` | see above | see above | PARTIAL |
+| `nearbite_payment_method` | see above | see above | DONE |
 
 ---
 

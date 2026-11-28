@@ -10,11 +10,16 @@ interface CartCheckoutFooterProps {
   onPlace: () => void;
 }
 
+/**
+ * `#checkout-footer`: the payable amount + "View detailed bill" on the left, the
+ * CTA on the right, the pay note underneath. Label and sub-label come from
+ * `updateCheckoutCta()` (see `logic/checkoutCta`); a locked CTA still runs
+ * `placeOrder()`, which is where the legacy gate toasts live.
+ */
 export function CartCheckoutFooter({ tip, unavailable, onOpenBill, onProceed, onPlace }: CartCheckoutFooterProps) {
-  const { bill, totalSavings, groups, paymentOptions } = useCartTotals();
+  const { bill, totalSavings, paymentOptions, cta } = useCartTotals();
   const payTotal = bill.total + tip;
-  const units = groups.reduce((count, group) => count + group.units, 0);
-  const plural = units === 1 ? 'item' : 'items';
+  const locked = cta.locked || Boolean(paymentOptions.block);
 
   return (
     <div className="ct-footer" id="checkout-footer">
@@ -31,40 +36,15 @@ export function CartCheckoutFooter({ tip, unavailable, onOpenBill, onProceed, on
           <span className="ct-paybar-link">View detailed bill</span>
         </button>
         <button
-          className={unavailable ? 'ct-cta locked' : 'ct-cta'}
+          className={locked ? 'ct-cta locked' : 'ct-cta'}
           id="btn-checkout"
           type="button"
-          aria-disabled={unavailable || paymentOptions.block ? 'true' : 'false'}
-          onClick={unavailable || paymentOptions.block || !paymentOptions.choice ? onPlace : onProceed}
+          aria-disabled={locked ? 'true' : 'false'}
+          onClick={locked || !paymentOptions.choice ? onPlace : onProceed}
         >
           <span className="ct-cta-text" id="checkout-label">
-            {unavailable ? (
-              <>
-                Delivery unavailable
-                <span className="ct-cta-sub">Change your address to continue</span>
-              </>
-            ) : paymentOptions.block ? (
-              <>
-                {paymentOptions.block.label}
-                <span className="ct-cta-sub">{paymentOptions.block.sub}</span>
-              </>
-            ) : (
-              <>
-                {paymentOptions.ctaLabel}{' '}
-                <svg className="ct-cta-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path
-                    d="M5 12h13m-5-5.5 5.5 5.5-5.5 5.5"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                <span className="ct-cta-sub">
-                  {units} {plural}
-                </span>
-              </>
-            )}
+            {cta.label} {cta.arrow && <CtaArrow />}
+            <span className="ct-cta-sub">{cta.sub}</span>
           </span>
         </button>
       </div>
@@ -73,5 +53,19 @@ export function CartCheckoutFooter({ tip, unavailable, onOpenBill, onProceed, on
         <span id="ct-pay-note-text">{paymentOptions.payNote}</span>
       </div>
     </div>
+  );
+}
+
+function CtaArrow() {
+  return (
+    <svg className="ct-cta-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M5 12h13m-5-5.5 5.5 5.5-5.5 5.5"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }

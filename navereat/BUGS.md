@@ -54,6 +54,35 @@ panel lost its bottom alignment. **Fix:** the copy scopes the rule to
 the 393 px viewport: root is `column / center / flex-end`, the 44 px close
 button sits 12 px above the panel.
 
+### 7. The checkout CTA skipped four of the legacy gates
+`updateCheckoutCta()` has six gates (unavailable, quote block, logged out,
+restaurant minimum, minimum order, address). The port only painted the
+unavailable/quote ones and toasts, so a logged-out or address-less customer saw
+a live-looking "Proceed to Pay", the restaurant minimum was never enforced, and
+the address gate was a toast instead of the location dialog.
+**Fix:** `src/logic/checkoutCta.ts` ports the gates in the legacy order with the
+exact labels (17 tests); `CartTotalsProvider` derives the view from the cart,
+the footer paints it, and `handlePlace` runs `ctaBlockedToast` + the shake and
+opens `#ct-location-modal` for a missing address, as `placeOrder()` did.
+
+### 8. A guest could not open the cart at all
+`App.tsx` sent every route except `/login` to the login wall, so the legacy
+guest path (fill a cart, see "Log in to order", log in and come back) was
+unreachable and the return flow could never be exercised.
+**Fix:** `/cart` and `/restaurant/*` are now open to guests, matching the legacy
+policy (browsing and the cart are anonymous; the wall arrives at Order). The tab
+routes keep the demo's startup wall.
+
+### 9. Login return landed on Home instead of the cart
+`login()` re-renders synchronously through the external store, so the shell's
+"token while on /login -> go Home" effect fired before Login's own
+`nav.reset('/cart')` and replaced it. The cart was restored but the customer
+ended up on Home with the cart pill only.
+**Fix:** Login marks its target with `markLoginNavigation()` before `login()`;
+the shell consumes the mark and backs off. Verified end to end: guest cart ->
+pay sheet -> confirm -> `/login` (`nearbite_after_login = /cart`) -> OTP ->
+`#/cart` with the cart intact and the CTA on "Add ₹100 more".
+
 ## Open / by design
 
 - The `ct-item-actions` chip row scrolls horizontally at 390 px and the third

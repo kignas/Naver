@@ -2,6 +2,7 @@ import { createContext, useContext } from 'react';
 import type { DemoOffer, Restaurant } from '../../data/demo';
 import type { Bill, Cart, CartLine } from '../../lib/cart';
 import type { PaymentSettings, PaymentState } from '../../logic/paymentOptions';
+import type { BelowMinGroup, CtaView } from '../../logic/checkoutCta';
 
 export interface CartGroup {
   resId: number;
@@ -9,6 +10,8 @@ export interface CartGroup {
   lines: Array<{ name: string; line: CartLine }>;
   units: number;
   subtotal: number;
+  /** `restaurant.minOrder`, the legacy `rows[].minOrder` source. */
+  minOrder?: number;
 }
 
 /** What the payment selector needs to render, derived once per cart state. */
@@ -35,6 +38,10 @@ export interface CartTotals {
   freeDelivery: boolean;
   restaurant: Restaurant | undefined;
   paymentOptions: CartPaymentOptions;
+  /** `ctState.multiBelowMin`, feeding the CTA and the "add ₹x more" toast. */
+  multiBelowMin: BelowMinGroup[];
+  /** The `updateCheckoutCta()` outcome: label, sub-label and lock state. */
+  cta: CtaView;
 }
 
 export const CartTotalsContext = createContext<CartTotals | null>(null);

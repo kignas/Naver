@@ -9,6 +9,23 @@ import type { Cart } from './cart';
 export const CART_BEFORE_AUTH_KEY = 'nearbite_cart_before_auth';
 export const AFTER_LOGIN_KEY = 'nearbite_after_login';
 
+/**
+ * `login()` re-renders synchronously (external store), so the shell's
+ * "token + /login -> home" effect fires before Login's own navigation lands.
+ * Login marks its navigation first and the effect backs off once.
+ */
+let loginNavigation: string | null = null;
+
+export function markLoginNavigation(target: string): void {
+  loginNavigation = target;
+}
+
+export function takeLoginNavigation(): string | null {
+  const target = loginNavigation;
+  loginNavigation = null;
+  return target;
+}
+
 export function rememberCartForAuth(): void {
   try {
     const raw = localStorage.getItem('nearbite_cart');
