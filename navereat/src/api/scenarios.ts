@@ -34,6 +34,8 @@ export interface DemoScenarios {
   payment: PaymentScenario | null;
   /** Pay sheet COD states: switched off, customer blocked, over the COD cap. */
   cod: CodScenario | null;
+  /** `off` hides online payment, leaving COD alone (legacy `isUpiEnabled`). */
+  upi: 'off' | null;
   /** `/pricing/quote` fails with a retryable network error. */
   quoteError: boolean;
   /** Adds 1.2-1.8 s to every call. */
@@ -55,6 +57,7 @@ export const EMPTY_SCENARIOS: DemoScenarios = {
   address: null,
   payment: null,
   cod: null,
+  upi: null,
   quoteError: false,
   slow: false,
   emptyCart: false,
@@ -90,6 +93,9 @@ const parseFlag = (raw: string): DemoScenarios => {
           break;
         case 'address':
           next.address = value === 'missing' || value === 'saved' ? value : null;
+          break;
+        case 'upi':
+          next.upi = value === 'off' ? 'off' : null;
           break;
         case 'cod':
           next.cod = value === 'off' || value === 'blocked' || value === 'overcap' ? value : null;

@@ -558,8 +558,8 @@ export const demoApi: RestaurantApi = {
     const scenarios = readScenarios();
     const policy = policyFor(scenarios.zoneFees);
     const payment = {
-      isCodEnabled: scenarios.cod !== 'off' && scenarios.cod !== 'blocked',
-      isUpiEnabled: true,
+      isCodEnabled: scenarios.cod !== 'off',
+      isUpiEnabled: scenarios.upi !== 'off',
       isCodBlocked: scenarios.cod === 'blocked',
       maxCodOrderAmount: scenarios.cod === 'overcap' ? 1 : policy.codMaxOrderAmount,
       isUnderMaintenance: false,

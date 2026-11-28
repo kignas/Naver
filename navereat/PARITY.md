@@ -102,7 +102,9 @@ deliberately not ported (demo mode / branding rule).
 | `cart.html:374-384` | payment-method sheet | `CartPaySheet.tsx` | DONE |
 | `cart.html:385-400+` | coupon sheet | `Cart.tsx` (`sheet === 'coupon'`) | DONE |
 | `js/cart-page.js:723-844` | item rows, steppers | `CartItems.tsx`, `CartLineRow.tsx` | DONE |
-| `js/cart-page.js:845-900` | bill paint | `CartBillSheet.tsx` | PARTIAL — delivery/tax/packaging rows fixed at ₹0 |
+| `js/cart-page.js:845-900` | bill paint | `CartBillSheet.tsx` + `src/logic/bill.ts` | DONE — quote rows via `rowsFromQuote`, tip priced through `POST /pricing/quote` |
+| `cart.html:196-205` | hidden `#ct-bill` source panel (`#ew-quote-bill`) | not rendered | N/A — legacy only used it as the sheet's row source |
+| `css/*.css` `.ct-fees` (₹0 packaging / platform strip) | shown only while no fee applies | `CartNoFeesNote.tsx` | DONE |
 | `js/cart-page.js:104-110` | distance → delivery fee | `src/logic/pricingEngine.ts` | DONE (logic only) |
 | `js/cart-page.js:598-644` | note / tip / instruction persistence (`nearbite_cart_extras`) | `Cart.tsx` `readCartExtras` | DONE |
 | `js/cart-page.js:1179-1302` | checkout CTA gating | `CartCheckoutFooter.tsx` | PARTIAL — no address gate |
@@ -125,6 +127,8 @@ deliberately not ported (demo mode / branding rule).
 | `cart-popups.js` | sheet plumbing | `src/components/Sheet.tsx` | DONE |
 | `cart-quote-ui.js` | quote wiring into the bill | `CartTotalsProvider.tsx` | PARTIAL — bill is local, not quote-driven |
 | `cart-checkout-upgrades.js` | CTA upgrades | `CartCheckoutFooter.tsx` | DONE |
+| `cart-checkout-upgrades.js` `codState`/`upiState`/`codVisible`/`hasChoice`/`ctaLabel`/`ctaBlock`/`revalidateBeforeOrder` | UPI/COD eligibility, pay-note copy, CTA label, pre-order gate | `src/logic/paymentOptions.ts` (16 oracle tests) → `CartPaySheet.tsx`, `CartCheckoutFooter.tsx`, `Cart.tsx` | DONE |
+| `cart-checkout-upgrades.js` `getSendCutlery` (`nearbite_send_cutlery`) | cutlery toggle | `CartItems.tsx` | DONE |
 | `cart-order-card.js` | order card | `CartOrderInfoCard.tsx` | DONE |
 | `js/ew-coupon.js:1-663` | validate → quote authority, wording | `src/logic/coupon.ts` | DONE (28 parity tests) |
 | `js/ew-quote.js:1-310` | payload, totals, expiry, controller | `src/logic/quote.ts`, `pricingController.ts` | DONE |
@@ -294,7 +298,6 @@ No behaviour was "fixed" beyond the branding rule.
 | Real geolocation | Saved-address distance only | No device permission in demo |
 | Branding | Neutral "Navereat" copy, no Eatswada logo/domain/support text | Branding rule |
 | `api.js` base URL | Not copied | Branding rule; live adapter reads `VITE_API_BASE_URL` |
-| Cart bill delivery/tax/packaging rows | Fixed at ₹0 in the rendered bill | The engine computes them, but the current cart layout is the zero-fee demo shell; tracked as TODO in §2.2 |
 
 
 ---
@@ -312,6 +315,6 @@ No behaviour was "fixed" beyond the branding rule.
 | `/track/:id`, `/orders`, `/profile` | DONE (pre-existing) | reached from the new flows |
 | `/login` | DONE (pre-existing) | return flow unchanged |
 | Data adapter | DONE | `src/api/restaurantApi.ts` + `demoApi` / `liveApi` stub |
-| Demo scenarios | DONE | `?demo=` panel: closed, out of stock, quote error, slow, empty cart, zone fees, offer, coupon, free delivery, address, payment result |
+| Demo scenarios | DONE | `?demo=` panel: closed, out of stock, quote error, slow, empty cart, zone fees, offer, coupon, free delivery, address, payment result, COD state (`cod=off|blocked|overcap`) |
 | Payment gateway | MOCK | `MockPaymentSheet` returns success / failure / pending; no Razorpay script |
 | Push / VAPID / Firebase | NOT PORTED | no config copied (branding rule) |

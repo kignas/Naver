@@ -36,14 +36,29 @@ only the middle column. **Fix:** rows now render `.ls-ico`, `.ls-item-main` and
 applies the code locally; invalid/expired produce the legacy failure toast and
 inline error.
 
+### 6. The `ctp` sheet root lost its id
+`Sheet` rendered the `ctp` variant root without the `id`, so `#ct-bill-sheet`
+(and the other popup ids in `cart.html`) did not exist. Anything keyed on the
+root id — the legacy CSS, the demo scripts, `document.getElementById` checks —
+silently found nothing. **Fix:** the root carries `id={id}` again, the body
+keeps `${id}-body`, as `cart-popups.js` `sheetShell()` builds it.
+
+### 7. `ctp-root` lost the cascade to the shared sheet root
+Legacy injected `cart-popups.js`' CSS after the page bundle, so its
+`.ctp-root{flex-direction:column;align-items:center;justify-content:flex-end}`
+beat `.ct-sheet-root{align-items:flex-end;justify-content:center}`. Here the
+route bundle is attached later, so the flex row settings won: the close button
+sat at the top-right of the viewport instead of centred above the panel and the
+panel lost its bottom alignment. **Fix:** the copy scopes the rule to
+`.ct-sheet-root.ctp-root` so it wins regardless of load order. Verified against
+the 393 px viewport: root is `column / center / flex-end`, the 44 px close
+button sits 12 px above the panel.
+
 ## Open / by design
 
 - The `ct-item-actions` chip row scrolls horizontally at 390 px and the third
   chip is clipped at rest. This is the legacy behaviour
   (`.ct-page .ct-item-actions{flex-wrap:nowrap;overflow-x:auto}`); reproduced,
   not fixed (rule: do not modernise UX).
-- `CtBill` delivery/tax/packaging rows are ₹0 in the demo restaurant
-  (`PLATFORM_FEE = 0`, zero zone fees). The engine supports them; see
-  PARITY.md §9.
 - "Use my current location" shows the demo-unavailable toast instead of asking
   for geolocation (demo mode).

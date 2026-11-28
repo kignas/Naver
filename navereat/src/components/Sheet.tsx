@@ -243,7 +243,7 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
   };
 
   const content = variant === 'ctp' ? (
-    <div className={`ct-sheet-root ctp-root nb-sheet${visible ? ' is-open' : ''}`} role="presentation">
+    <div id={id} className={`ct-sheet-root ctp-root nb-sheet${visible ? ' is-open' : ''}`} role="presentation">
       <div className="ct-scrim" onClick={requestClose} />
       <button aria-label="Close" className="ctp-x" data-autofocus type="button" onClick={requestClose}>
         <Icon name="solid:xmark" size={17} />
