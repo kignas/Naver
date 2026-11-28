@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import {
   DEMO_ADDRESS,
-  PLATFORM_FEE,
   coupons as demoCoupons,
   demoOffersFor,
   demoOrders,
@@ -13,7 +12,7 @@ import {
   type Order,
   type OrderLine,
 } from '../data/demo';
-import { billFor, cartSubtotal, couponDiscount, offerDiscountFor, type Cart, type CartLine } from '../lib/cart';
+import { PLATFORM_FEE, billFor, cartSubtotal, couponDiscount, offerDiscountFor, type Cart, type CartLine } from '../lib/cart';
 import {
   compositeNameFor,
   flatCustomizationsFor,
@@ -94,6 +93,8 @@ interface AppState {
   applyCoupon: (code: string) => ApplyCouponResult;
   removeCoupon: () => void;
   placeOrder: (paymentMethod: string, options?: { keepCart?: boolean; tip?: number }) => Order | null;
+  /** Records an order created by the API adapter (authoritative id + status). */
+  recordOrder: (order: Order, options?: { keepCart?: boolean }) => void;
   selectRestaurant: (id: number | null) => void;
 }
 
@@ -344,6 +345,19 @@ export const useAppStore = create<AppState>((set, get) => ({
       lastOrderId: order.id,
     }));
     return order;
+  },
+
+  recordOrder: (order, options) => {
+    try {
+      localStorage.removeItem('nearbite_cart_extras');
+    } catch {
+      /* storage may be unavailable */
+    }
+    set((state) => ({
+      orders: [order, ...state.orders.filter((entry) => entry.id !== order.id)],
+      ...(options?.keepCart ? {} : { cart: {}, coupon: null }),
+      lastOrderId: order.id,
+    }));
   },
 
   selectRestaurant: (id) => set({ selectedRestaurantId: id }),

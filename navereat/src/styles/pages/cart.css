@@ -195,3 +195,11 @@ body.ct-page .nb-veg-mark.veg > span {
   height: 54px;
   border-radius: 999px;
 }
+
+/* Demo switchboard: only mounted when the URL carries ?demo=… */
+.demo-fab{position:fixed;left:10px;bottom:calc(96px + var(--sab));z-index:9000;border:0;border-radius:999px;background:#111;color:#fff;font:700 10px/1 var(--font);letter-spacing:.08em;padding:8px 10px;opacity:.55}
+.demo-panel{position:fixed;left:10px;bottom:calc(136px + var(--sab));z-index:9001;width:220px;max-height:60vh;overflow:auto;background:#fff;border:1px solid #ddd;border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,.18);padding:10px;display:flex;flex-direction:column;gap:6px;font:500 12px/1.35 var(--font)}
+.demo-panel header{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:2px}
+.demo-panel header button{border:0;background:#f1f1f6;border-radius:8px;padding:4px 8px;font:600 11px var(--font)}
+.demo-panel label{display:flex;align-items:center;gap:6px;justify-content:space-between}
+.demo-panel select{max-width:110px}

@@ -40,6 +40,8 @@ export interface PricingPolicy {
   codMaxOrderAmount: number;
   firstOrderFreeDelivery: boolean;
   rainSurgeFee: number;
+  /** Platform budget a coupon can draw on when the delivery fee is zero. */
+  couponFundingBudget?: number;
 }
 
 export interface BasketLine {
@@ -169,7 +171,7 @@ export function computeQuote(policy: PricingPolicy, input: QuoteInput): Quote {
   const couponValuePaise = Math.max(0, toPaise(Number(input.couponValue) || 0));
   const couponMinPaise = toPaise(Number(input.couponMinSubtotal) || 0);
   const couponFits = couponRequested && foodPaise >= couponMinPaise && couponValuePaise > 0;
-  const fundingBudget = baseDeliveryPaise + toPaise(policy.platformFee);
+  const fundingBudget = Math.max(baseDeliveryPaise + toPaise(policy.platformFee), toPaise(policy.couponFundingBudget ?? 0));
   const couponFundable = couponFits && (couponValuePaise <= fundingBudget || foodPaise >= toPaise(1000));
   const couponPaise = couponFundable ? Math.min(couponValuePaise, foodPaise) : 0;
 

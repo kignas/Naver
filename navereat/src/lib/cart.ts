@@ -1,5 +1,7 @@
 import type { Coupon, DemoOffer } from '../data/demo';
-import { PLATFORM_FEE } from '../data/demo';
+
+/** The legacy cart charges no platform fee (see PARITY.md §2.2). */
+export const PLATFORM_FEE = 0;
 
 export interface CartCustomization {
   title: string;

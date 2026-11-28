@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from 'react';
-import { demoOffersFor, findRestaurant, type Restaurant } from '../../data/demo';
-import { billFor } from '../../lib/cart';
+import { api } from '../../api/restaurantApi';
+import type { Restaurant } from '../../data/demo';
 import { useAppStore } from '../../store/appStore';
 import { cartLineOriginalPrice } from './cartPricing';
 import { CartTotalsContext, type CartGroup, type CartTotals } from './cartTotals';
@@ -33,7 +33,7 @@ export function CartTotalsProvider({
     Object.entries(cart).forEach(([name, line]) => {
       const group = map.get(line.resId) ?? {
         resId: line.resId,
-        name: line.resName ?? findRestaurant(line.resId)?.name ?? 'Restaurant',
+        name: line.resName ?? api.restaurantSync(line.resId)?.name ?? 'Restaurant',
         lines: [],
         units: 0,
         subtotal: 0,
@@ -47,8 +47,8 @@ export function CartTotalsProvider({
   }, [cart]);
 
   const subtotal = groups[0]?.subtotal ?? 0;
-  const offers = useMemo(() => (offerMode === 'none' ? [] : demoOffersFor(subtotal)), [offerMode, subtotal]);
-  const bill = useMemo(() => billFor(cart, coupon, offers), [cart, coupon, offers]);
+  const offers = useMemo(() => (offerMode === 'none' ? [] : api.offersSync(subtotal)), [offerMode, subtotal]);
+  const bill = useMemo(() => api.previewBill(cart, coupon), [cart, coupon]);
   const savings = useMemo(
     () =>
       Object.values(cart).reduce(
