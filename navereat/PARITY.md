@@ -11,8 +11,105 @@ scenario overrides). `liveApi` is a typed stub that throws
 this repo.
 
 Status legend: **DONE** = ported and verified; **PARTIAL** = ported but missing
-a sub-behaviour listed in the notes; **TODO** = not ported yet; **N/A** =
-deliberately not ported (demo mode / branding rule).
+a sub-behaviour listed in the "Open PARTIAL rows" table below; **TODO** = not
+ported yet; **N/A** = deliberately not ported, reason written in the row.
+
+## 0. Count reconciliation (why the numbers moved)
+
+The previous report quoted "199 rows (120 DONE)" and then "~114 (105 DONE / 9
+PARTIAL)". Both figures came from ad-hoc `grep`/`awk` calls, not from the file:
+
+| Revision | `grep -c '^|'` (every pipe line: headers, separators, prose tables) | Inventory rows (this table) |
+| --- | --- | --- |
+| `d6635db` (first inventory) | 185 | — |
+| `fed4045` | 199 | 150 |
+| `6e1e981` | 199 | 150 |
+| `07e3a30` (HEAD at the time of writing) | 202 | 150 |
+
+* **199 was every `\|` line**, including the "Source / Behaviour / Target /
+  Status" header rows, the `---` separator rows, and the narrative tables in
+  §7 (logic tests), §9 (deviations) and §10 (delivery notes). The earlier
+  "114" number then applied `awk -F'|'` and only looked at field 5, so it
+  silently dropped rows whose status cell sits in a different column.
+* **No inventory row was deleted.** `git diff 6e1e981..07e3a30 -- PARITY.md`
+  shows 17 removed row lines and 20 added: every removal is a relabelled copy of
+  the same source row, listed below, and every addition is either the relabel
+  or a new row for work that had no inventory entry before.
+* The canonical count is now produced by `node scripts/parity-count.mjs` (add
+  `--md` for the table). It exits non-zero while any row is TODO, so the number
+  cannot drift silently again.
+
+Relabelled rows (`6e1e981` → `07e3a30`), all with a reason:
+
+| Source row | Was | Now | Reason |
+| --- | --- | --- | --- |
+| `cart.html:271-286` location modal | TODO | DONE | `CartLocationModal.tsx` renders `#ct-location-modal` |
+| `cart.html:271` location modal (§10) | TODO | DONE | same |
+| `payment-*.html` result pages (§10) | TODO | DONE | `src/pages/PaymentResult.tsx` at `/payment/:result` |
+| `js/cart-page.js:845-900` bill paint | PARTIAL (rows fixed at ₹0) | DONE | `CartBillSheet` + `logic/bill.ts` paint the quote rows |
+| `js/cart-page.js:1179-1302` CTA gating | PARTIAL (no address gate) | DONE | `logic/checkoutCta.ts`, all six gates |
+| `js/cart-page.js:3661-3672` location prompt | TODO | DONE | `Cart.tsx` `locationPrompt` |
+| `cart-quote-ui.js` quote wiring | PARTIAL (bill local) | PARTIAL (no retry state) | narrower reason, see below |
+| `login.html` return-to flow | PARTIAL | DONE | `lib/loginReturn.ts` + `markLoginNavigation` |
+| `address.html` / `address-new.html` | TODO | PARTIAL | `/address` exists; map picker omitted |
+| `nearbite_cart_before_auth` | TODO | DONE | `lib/loginReturn.ts` |
+| `nearbite_after_login` | TODO | DONE | `lib/loginReturn.ts` (stores `/cart`) |
+| `nearbite_payment_method` (×2) | PARTIAL (not persisted) | DONE | `lib/checkoutPaymentMethod.ts` |
+| `ew_just_placed` | TODO | N/A | store hands the order to `Track.tsx`; the sessionStorage hop has no equivalent use |
+| "Cart bill delivery/tax/packaging rows" | prose row | removed | the concern is covered by the `845-900` row; it was a duplicate note, not a source row |
+| "Demo scenarios" (§10 prose) | row | row | rewritten to list the `cod`/`upi` flags |
+
+## 0.1 Open PARTIAL rows and deviations (one table, with the reason)
+
+Every non-DONE row in the inventory, so a reviewer can check the list against
+the sections below. `node scripts/parity-count.mjs` must print the same numbers.
+
+| # | Section | Source row | Target | Why it is not DONE |
+| --- | --- | --- | --- | --- |
+| 1 | 1.1 | `restaurant-shell.html:1020-1075` info hero, address, services, reviews | `Restaurant.tsx` info tab | the reviews carousel is static fixture text; legacy fetches `/restaurants/:id/reviews` (no such endpoint in the demo adapter yet) |
+| 2 | 1.1 | `restaurant-info.html` + `js/restaurant-info.js` | `Restaurant.tsx` info tab | same reviews reason (rating breakdown + photo strip are static) |
+| 3 | 1.2 | `api.js:1-265` base URL, timeout, error shape, cache | `liveApi.ts` stub + `data/api/http.ts` | the demo path is in-process, so request timeout/abort/one-error-shape code cannot run; it is exercised only through `liveApi`, which is intentionally unimplemented |
+| 4 | 1.2 | `js/ew-menu-cache.js` menu cache + TTL | `data/demoDataSource.ts` | TTL is honoured, but there is no stale-while-revalidate repaint path (the demo cache is synchronous) |
+| 5 | 1.2 | `location-gate.js` permission gate | `reveal/RevealGate.tsx` | geolocation is mocked: the gate renders the legacy permission-denied/“use my location” UI but never calls the browser API |
+| 6 | 2.2 | `js/cart-page.js:3380-3520` delivery summary | `CartOrderInfoCard.tsx` | the address row navigates to `/address?return=cart` instead of opening the legacy in-place picker sheet |
+| 7 | 2.3 | `cart-quote-ui.js` quote wiring | `CartTotalsProvider.tsx` + `logic/bill.ts` | the bill is quote-driven, but the demo quote never rejects, so the legacy "price unavailable / Try again" state was unreachable — fixed in step 2b of this pass (`?demo=quote-error`) |
+| 8 | 2.3 | `js/payment-verify.js` polling | `demoApi.verifyPayment` | no polling loop yet; step 2c of this pass adds interval, max attempts, timeout→pending and retry |
+| 9 | 3 | `address.html` / `address-new.html` | `pages/Address.tsx` | saved list / add / delete / select / `?return=cart` are ported; the map picker and the geocoding search are not (no Maps SDK in demo mode) |
+| 10 | 3 | `profile.html` / `complete-profile.html` | `pages/Profile.tsx` | `complete-profile` page missing; step 2d of this pass port it |
+| 11 | 3 | `location-onboarding.html` | `RevealGate` | onboarding intro renders, but the "allow location" step cannot ask the browser (demo), so the found/not-serviceable states are flag-driven only |
+| 12 | 5 | `token` legacy auth | `appStore` | reads `nearbite_token` and `token`, but never writes the legacy `token` key that `api.js` used for non-checkout pages |
+| 13 | 3 | `support.html` | — | **TODO**: no support page at all; step 2d of this pass port it |
+
+N/A rows, each with a reason a reviewer can check:
+
+| Source row | Why N/A |
+| --- | --- |
+| `restaurant-details.html` | a static redirect shim to `/restaurant?id=`; the SPA routes `/restaurant/:id` directly, so there is nothing to port (the shim's only job is legacy-URL compatibility) |
+| `api/restaurant-seo.js` | server-side head injection for crawlers; a static SPA cannot serve per-route `<head>` (would need SSR/prerender) |
+| `js/ew-tracking.js` | analytics beacons; demo mode has no analytics endpoint (branding/data rule) |
+| `safe-html.js` | an HTML-escaping helper for string templates; React escapes by default and the port has no `dangerouslySetInnerHTML` on these routes (`grep -rn dangerouslySetInnerHTML src/` returns none for menu/cart) |
+| `#ct-bill` / `#ew-quote-bill` hidden panel | legacy kept a hidden DOM copy of the quote rows to source the sheet; the port maps the quote object directly (`logic/bill.ts` `rowsFromQuote`) |
+| Razorpay checkout | real gateway is forbidden in demo mode; replaced by the mock sheet (`?demo=payment=success\|failure\|pending`) |
+| `eatswada_theme` | legacy light/dark switch; the app ships one theme. Header colour is handled by `lib/statusBarTheme.ts` |
+| `eatswada_header_theme` | the legacy per-page header tint is `lib/statusBarTheme.ts` + `scrollHeaderMotion` — same behaviour, different mechanism, so there is no key to keep |
+| `es_image_dict` | a localStorage image-failure dictionary used to hide broken images; the port hides them per render with `onError` (no persistence needed) |
+| `nearbite_onboarding_location` | the onboarding flag; the demo reuses `nearbite_address`, and `RevealGate` decides from that |
+| `ew_just_placed` | sessionStorage handoff to the track page; the store holds the placed order and `Track.tsx` reads it |
+
+## 0.2 Inventory totals (`node scripts/parity-count.mjs`)
+
+| Section | DONE | PARTIAL | TODO | N/A | rows |
+| --- | --- | --- | --- | --- | --- |
+| 1.1 Files and bundle recipe | 5 | 2 | 0 | 2 | 9 |
+| 1.2 JS modules | 15 | 3 | 0 | 2 | 20 |
+| 1.3 Menu-page UI states | 10 | 0 | 0 | 0 | 10 |
+| 2.2 DOM / features | 30 | 1 | 0 | 2 | 33 |
+| 2.3 Checkout JS modules | 16 | 2 | 0 | 0 | 18 |
+| 3. Connected pages | 8 | 3 | 1 | 0 | 12 |
+| 4. Popups, sheets, modals, toasts, states | 15 | 0 | 0 | 0 | 15 |
+| 5. Storage keys (byte-compatible) | 14 | 1 | 0 | 5 | 20 |
+| 6. API surface | 13 | 0 | 0 | 0 | 13 |
+| **Total** | **126** | **12** | **1** | **11** | **150** |
 
 ---
 
