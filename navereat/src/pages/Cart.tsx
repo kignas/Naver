@@ -169,10 +169,9 @@ export function Cart() {
   // cart-page.js shows the location modal when the chosen address has no
   // precise coordinates (a guest sees the "log in to order" prompt instead).
   useEffect(() => {
-    if (!address) return;
     setLocationPrompt(!addressHasCoords(address));
   }, [address]);
-  const offerBlocked = sheet !== null || placing || offerPopup !== null;
+  const offerBlocked = sheet !== null || placing || offerPopup !== null || locationPrompt;
 
   useEffect(() => {
     try {
@@ -611,7 +610,7 @@ export function Cart() {
           />
         )}
 
-        {locationPrompt && <CartLocationModal onClose={() => setLocationPrompt(false)} />}
+        {locationPrompt && <CartLocationModal />}
 
         {sheet === 'pay' && (
           <CartPaySheet

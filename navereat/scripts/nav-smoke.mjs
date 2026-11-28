@@ -30,9 +30,18 @@ const SEED_SESSION = () => {
   localStorage.setItem('nearbite_token', 'demo-token');
   localStorage.setItem('token', 'demo-token');
   localStorage.setItem('nearbite_user', JSON.stringify({ name: 'Sagnik', phone: '+91 98765 43210', email: 'demo@navereat.app' }));
+  // A saved address carries precise coordinates: cart-page.js treats an address
+  // without them as missing and blocks checkout behind the location prompt.
   localStorage.setItem(
     'nearbite_address',
-    JSON.stringify({ tag: 'Home', house: 'Demo Street', area: 'Demo City', city: 'Demo City', pincode: '735101' }),
+    JSON.stringify({
+      tag: 'Home',
+      house: 'Demo Street',
+      area: 'Demo City',
+      city: 'Demo City',
+      pincode: '735101',
+      location: { type: 'Point', coordinates: [88.3639, 22.5726] },
+    }),
   );
   localStorage.setItem('eatswada_theme', 'light');
   localStorage.setItem('eatswada_header_theme', 'raspberry');
@@ -137,7 +146,7 @@ const state = () =>
 const tap = async (selector, timeout = 15000) => {
   const target = page.locator(selector).first();
   await target.waitFor({ state: 'visible', timeout });
-  await target.tap();
+  await target.tap({ timeout });
 };
 
 const waitFor = async (predicate, label, timeout = 8000) => {
@@ -150,13 +159,20 @@ const waitFor = async (predicate, label, timeout = 8000) => {
   throw new Error(`${label}: timed out after ${timeout} ms (hash=${await page.evaluate(() => location.hash)})`);
 };
 
+/** The cart raises its offer popup after ~900 ms; its scrim would eat the tap. */
+const dismissOfferPopup = async () => {
+  const close = page.locator('.ew-offer.is-open [data-offer-close]').first();
+  if (await close.count()) await close.tap({ force: true, timeout: 1500 }).catch(() => {});
+};
+
 const backToHome = async (label) => {
   for (let attempt = 0; attempt < 25; attempt += 1) {
+    await dismissOfferPopup();
     const snapshot = await state();
     if (snapshot.home && !snapshot.errorCard) return;
     const button = page.locator('.route-layer.is-top .ew-hd-back, .route-layer.is-top .ct-dh-back, .route-layer.is-top .cat-back, .route-layer.is-top .icon-btn.back').first();
     if (await button.count()) {
-      await button.tap().catch(() => {});
+      await button.tap({ timeout: 3000 }).catch(() => {});
     } else {
       await page.evaluate(() => history.back());
     }
@@ -297,6 +313,52 @@ try {
   audit('cart', cart);
   await page.screenshot({ path: path.join(outDir, '04-cart.png') });
   await backToHome('cart');
+
+  // --- Location prompt for an address without coordinates -----------------
+  const imprecise = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await imprecise.addInitScript(() => {
+    localStorage.setItem('nearbite_token', 'demo-token');
+    localStorage.setItem('token', 'demo-token');
+    localStorage.setItem('eatswada_theme', 'light');
+    localStorage.setItem(
+      'nearbite_address',
+      JSON.stringify({ tag: 'Home', house: 'Demo Street', area: 'Demo City', city: 'Demo City' }),
+    );
+    localStorage.setItem(
+      'nearbite_cart',
+      JSON.stringify({
+        'Hyderabadi Chicken Biryani': {
+          quantity: 1,
+          price: 249,
+          originalPrice: 311,
+          resId: 2,
+          resName: 'Biryani Bhavan',
+          restaurantName: 'Biryani Bhavan',
+          menuItem: 'bb1',
+        },
+      }),
+    );
+    sessionStorage.setItem('ew_offers_seen_v1', '["demo"]');
+  });
+  const imprecisePage = await imprecise.newPage();
+  await imprecisePage.goto(`${base}/#/cart`, { waitUntil: 'networkidle' });
+  await imprecisePage.waitForSelector('.cart-page', { timeout: 20000 });
+  await sleep(700);
+  const promptShown = await imprecisePage.evaluate(() => {
+    const modal = document.querySelector('.ct-location-modal');
+    if (!modal) return false;
+    const rect = modal.getBoundingClientRect();
+    return rect.height > 0 && getComputedStyle(modal).display !== 'none';
+  });
+  check('cart: an address without coordinates shows the location prompt', promptShown, `shown=${promptShown}`);
+  // The legacy dialog has no close control: the scrim must not dismiss it.
+  await imprecisePage.locator('.ct-location-backdrop').tap({ force: true }).catch(() => {});
+  await imprecisePage.keyboard.press('Escape');
+  await sleep(400);
+  const promptStays = await imprecisePage.evaluate(() => Boolean(document.querySelector('.ct-location-modal')));
+  check('cart: the location prompt cannot be dismissed (legacy block)', promptStays, `stays=${promptStays}`);
+  await imprecisePage.screenshot({ path: path.join(outDir, '04b-cart-location.png') });
+  await imprecise.close();
 
   // --- Cart bar on Home ---------------------------------------------------
   const cartBar = await page.evaluate(() => {

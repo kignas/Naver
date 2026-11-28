@@ -54,14 +54,32 @@ export function formatAddressLine(address: SavedAddress | null | undefined): str
   return [address.house, address.area, address.city, address.pincode].filter(Boolean).join(', ');
 }
 
+/**
+ * cart-page.js `normalizeCoords`: GeoJSON `{ coordinates: [lng, lat] }` or the
+ * legacy `{ longitude, latitude }` pair, in that order.
+ */
+export function normalizeCoords(value: unknown): [number, number] | null {
+  if (!value || typeof value !== 'object') return null;
+  const point = value as { coordinates?: unknown; longitude?: unknown; latitude?: unknown };
+  if (Array.isArray(point.coordinates) && point.coordinates.length === 2) {
+    const lng = Number(point.coordinates[0]);
+    const lat = Number(point.coordinates[1]);
+    if (Number.isFinite(lng) && Number.isFinite(lat) && Math.abs(lng) <= 180 && Math.abs(lat) <= 90) {
+      return [lng, lat];
+    }
+  }
+  if (Number.isFinite(Number(point.longitude)) && Number.isFinite(Number(point.latitude))) {
+    const lng = Number(point.longitude);
+    const lat = Number(point.latitude);
+    if (Math.abs(lng) <= 180 && Math.abs(lat) <= 90) return [lng, lat];
+  }
+  return null;
+}
+
+/** Mirror of cart-page.js `hasAddress()`'s coordinate half. */
 export function addressHasCoords(address: SavedAddress | null): boolean {
   if (!address) return false;
-  const location = address.location as { coordinates?: unknown } | undefined;
-  const point = Array.isArray(location?.coordinates) ? location?.coordinates : null;
-  if (point && point.length === 2) return true;
-  const lat = Number(address.latitude);
-  const lng = Number(address.longitude);
-  return Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
+  return normalizeCoords(address.location ?? address) !== null;
 }
 
 export function announceAddressChange(): void {

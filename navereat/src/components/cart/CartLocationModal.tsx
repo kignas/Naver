@@ -1,25 +1,18 @@
 import { useEffect } from 'react';
 import { useAppNav } from '../../lib/navigation';
 
-interface CartLocationModalProps {
-  onClose: () => void;
-}
-
-/** Port of `#ct-location-modal` (cart.html:271). */
-export function CartLocationModal({ onClose }: CartLocationModalProps) {
+/**
+ * Port of `#ct-location-modal` (cart.html:271). Legacy has no close control at
+ * all — not on the backdrop, not on Esc: the dialog clears only once the cart
+ * has an address with precise coordinates, which the page re-checks itself.
+ */
+export function CartLocationModal() {
   const nav = useAppNav();
 
   useEffect(() => {
     document.body.classList.add('ct-location-modal-open');
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => {
-      document.body.classList.remove('ct-location-modal-open');
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [onClose]);
+    return () => document.body.classList.remove('ct-location-modal-open');
+  }, []);
 
   return (
     <div
@@ -30,7 +23,7 @@ export function CartLocationModal({ onClose }: CartLocationModalProps) {
       aria-labelledby="ct-location-title"
       aria-describedby="ct-location-copy"
     >
-      <div className="ct-location-backdrop" onClick={onClose} />
+      <div className="ct-location-backdrop" />
       <section className="ct-location-dialog">
         <div className="ct-location-art" aria-hidden="true">
           <i className="fa-solid fa-location-dot" />
@@ -56,14 +49,7 @@ export function CartLocationModal({ onClose }: CartLocationModalProps) {
             <span>Confirm delivery availability</span>
           </div>
         </div>
-        <button
-          className="ct-location-primary"
-          type="button"
-          onClick={() => {
-            onClose();
-            nav.push('/address?return=cart');
-          }}
-        >
+        <button className="ct-location-primary" type="button" onClick={() => nav.push('/address?return=cart')}>
           Allow location / Set delivery address <i className="fa-solid fa-arrow-right" />
         </button>
         <p className="ct-location-footnote">
