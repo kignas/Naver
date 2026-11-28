@@ -34,6 +34,16 @@ const waitServer = async () => {
 const seed = () => {
   localStorage.setItem('nearbite_token', 'demo-token');
   localStorage.setItem('nearbite_user', JSON.stringify({ name: 'Sagnik', phone: '+91 98765 43210' }));
+  // cart-page.js blocks the checkout behind its location prompt without a
+  // precise address, so the measured flow must start with one.
+  localStorage.setItem('nearbite_address', JSON.stringify({
+    tag: 'Home',
+    house: 'Demo Street',
+    area: 'Demo City',
+    city: 'Demo City',
+    pincode: '735101',
+    location: { type: 'Point', coordinates: [88.3639, 22.5726] },
+  }));
   localStorage.setItem('nearbite_cart', JSON.stringify({
     'Filter Coffee': {
       quantity: 1,
@@ -330,6 +340,16 @@ const interactions = async (browser) => {
 const latencyInitScript = () => {
   localStorage.setItem('nearbite_token', 'demo-token');
   localStorage.setItem('nearbite_user', JSON.stringify({ name: 'Aarav', phone: '+91 98765 43210' }));
+  // cart-page.js blocks the checkout behind its location prompt without a
+  // precise address, so the measured flow must start with one.
+  localStorage.setItem('nearbite_address', JSON.stringify({
+    tag: 'Home',
+    house: 'Demo Street',
+    area: 'Demo City',
+    city: 'Demo City',
+    pincode: '735101',
+    location: { type: 'Point', coordinates: [88.3639, 22.5726] },
+  }));
   sessionStorage.setItem('ew_offers_seen_v1', '["demo"]');
   localStorage.setItem('nearbite_cart', JSON.stringify({
     'Masala Dosa': {
@@ -372,6 +392,19 @@ const latencyInitScript = () => {
   });
 };
 
+/**
+ * Confirms the payment sheet on the COD path: the sheet swallows touch taps for
+ * its first 350 ms and the default method is UPI, which opens the mock gateway
+ * rather than the success sheet this gate measures.
+ */
+const confirmCodOrder = async (page) => {
+  await page.waitForSelector('#ct-pay-confirm-btn', { timeout: 15000 });
+  await page.waitForTimeout(450);
+  await page.locator('[data-ct-pick="cod"]').click();
+  await page.locator('#ct-pay-confirm-btn').click();
+  await page.waitForSelector('.ew-os__btn', { state: 'visible', timeout: 15000 });
+};
+
 const pushLatency = async (browser, rate) => {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
@@ -411,9 +444,7 @@ const pushLatency = async (browser, rate) => {
   if (!(await page.locator('#ct-pay-confirm-btn').count())) {
     await page.locator('.ct-cta').first().click();
   }
-  await page.waitForSelector('#ct-pay-confirm-btn', { timeout: 15000 });
-  await page.locator('#ct-pay-confirm-btn').click();
-  await page.waitForSelector('.ew-os__btn', { timeout: 15000 });
+  await confirmCodOrder(page);
   await page.waitForTimeout(250);
 
   await measure('Cart→Tracking', () => page.locator('.ew-os__btn').click());
@@ -425,6 +456,16 @@ const pushLatency = async (browser, rate) => {
 const clsInitScript = () => {
   localStorage.setItem('nearbite_token', 'demo-token');
   localStorage.setItem('nearbite_user', JSON.stringify({ name: 'Aarav', phone: '+91 98765 43210' }));
+  // cart-page.js blocks the checkout behind its location prompt without a
+  // precise address, so the measured flow must start with one.
+  localStorage.setItem('nearbite_address', JSON.stringify({
+    tag: 'Home',
+    house: 'Demo Street',
+    area: 'Demo City',
+    city: 'Demo City',
+    pincode: '735101',
+    location: { type: 'Point', coordinates: [88.3639, 22.5726] },
+  }));
   sessionStorage.setItem('ew_offers_seen_v1', '["demo"]');
   localStorage.setItem('nearbite_cart', JSON.stringify({
     'Masala Dosa': {
@@ -521,12 +562,8 @@ const clsTransitions = async (browser) => {
   if (!(await page.locator('#ct-pay-confirm-btn').count())) {
     await page.locator('.ct-cta').first().click();
   }
-  await page.waitForSelector('#ct-pay-confirm-btn', { timeout: 15000 });
-  transitions.push(await measure('push: Cart → Tracking', async () => {
-    await page.locator('#ct-pay-confirm-btn').click();
-    await page.waitForSelector('.ew-os__btn', { timeout: 15000 });
-    await page.locator('.ew-os__btn').click();
-  }, 1000));
+  await confirmCodOrder(page);
+  transitions.push(await measure('push: Cart → Tracking', () => page.locator('.ew-os__btn').click(), 1000));
   await page.waitForSelector('.floating-back', { timeout: 15000 });
   await page.waitForTimeout(350);
   transitions.push(await measure('pop: Tracking → Cart', () => page.locator('.floating-back').first().click(), 700));
@@ -580,14 +617,8 @@ const routeClsAt4x = async (browser) => {
   if (!(await page.locator('#ct-pay-confirm-btn').count())) {
     await page.locator('.ct-cta').first().click();
   }
-  await page.waitForSelector('#ct-pay-confirm-btn', { timeout: 30000 });
-  transitions.push(
-    await measure('4x push: Cart → Tracking', async () => {
-      await page.locator('#ct-pay-confirm-btn').click();
-      await page.waitForSelector('.ew-os__btn', { timeout: 30000 });
-      await page.locator('.ew-os__btn').click();
-    }, 2200),
-  );
+  await confirmCodOrder(page);
+  transitions.push(await measure('4x push: Cart → Tracking', () => page.locator('.ew-os__btn').click(), 2200));
   await context.close();
   return transitions;
 };
