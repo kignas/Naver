@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { demoApi } from '../src/api/demoApi';
+import { clearScenarios, writeScenarios } from '../src/api/scenarios';
 
 const verify = (outcome: 'success' | 'failure' | 'pending' | 'verifySlow' | 'verifyFlaky' | 'verifyTimeout') =>
   demoApi.verifyPayment({ paymentId: `pay_${outcome}`, orderId: `order_${outcome}`, outcome });
@@ -10,6 +11,14 @@ describe('demo verify scenarios reach every payment result', () => {
   });
   afterEach(() => {
     vi.useRealTimers();
+    clearScenarios();
+  });
+
+  it('a verify* scenario outranks the mock sheet outcome (the cart passes `success`)', async () => {
+    writeScenarios({ payment: 'verifyTimeout' });
+    const pending = demoApi.verifyPayment({ paymentId: 'pay_cart', orderId: 'order_cart', outcome: 'success' });
+    await vi.advanceTimersByTimeAsync(12000);
+    expect((await pending).paymentStatus).toBe('pending');
   });
 
   it('success → paid without polling', async () => {

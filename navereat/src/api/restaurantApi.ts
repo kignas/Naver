@@ -185,7 +185,6 @@ export interface RestaurantApi {
   getMenu(id: string | number): Promise<MenuItem[]>;
   getCoupons(): Promise<Coupon[]>;
 
-  quoteSync(request: QuoteRequest): Quote;
   getQuote(request: QuoteRequest): Promise<Quote>;
   validateCoupon(input: {
     code: string;

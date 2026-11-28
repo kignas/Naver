@@ -23,7 +23,7 @@ import {
 import { NOTE_MAX, TIP_PRESETS } from '../components/cart/cartConstants';
 import { Icon } from '../components/Icon';
 import { SlideReveal } from '../components/reveal/SlideReveal';
-import { api, isApiFailure } from '../api/restaurantApi';
+import { api, isApiFailure, type Quote } from '../api/restaurantApi';
 import type { Coupon, DemoOffer, Order } from '../data/demo';
 import { cartRestaurantId, cartSubtotal } from '../lib/cart';
 import { ensureKey } from '../logic/checkoutKey';
@@ -138,6 +138,7 @@ export function Cart() {
   const [platform, setPlatform] = useState<PaymentSettings>(DEFAULT_PAYMENT_SETTINGS);
   const [cutlery, setCutlery] = useState(false);
   const [placing, setPlacing] = useState(false);
+  const quoteRef = useRef<Quote | null>(null);
   const [offerPopup, setOfferPopup] = useState<DemoOffer[] | null>(null);
   const [instructions, setInstructions] = useState<string[]>(() => savedExtras.instructions);
   const [diOpen, setDiOpen] = useState(false);
@@ -399,6 +400,7 @@ export function Cart() {
       couponCode: coupon?.code ?? '',
       deliveryAddress: currentAddress,
       addressId: addressIdOf(currentAddress) || null,
+      quoteId: quoteRef.current?.quoteId,
     });
     const idempotencyKey = ensureKey(payload as unknown as Parameters<typeof ensureKey>[0]);
     setPlacing(true);
@@ -505,6 +507,8 @@ export function Cart() {
         payment={payment}
         platform={platform}
         addressOk={Boolean(address && addressHasCoords(address))}
+        addressId={addressIdOf(address) || null}
+        quoteRef={quoteRef}
         loggedIn={Boolean(localStorage.getItem('nearbite_token') || localStorage.getItem('token'))}
       >
         <div id="cart-has-items">

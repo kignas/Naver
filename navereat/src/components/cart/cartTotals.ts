@@ -3,6 +3,8 @@ import type { DemoOffer, Restaurant } from '../../data/demo';
 import type { Bill, Cart, CartLine } from '../../lib/cart';
 import type { PaymentSettings, PaymentState } from '../../logic/paymentOptions';
 import type { BelowMinGroup, CtaView } from '../../logic/checkoutCta';
+import type { Quote } from '../../api/restaurantApi';
+import type { QuoteStatus } from '../../hooks/useCartQuote';
 
 export interface CartGroup {
   resId: number;
@@ -42,6 +44,13 @@ export interface CartTotals {
   multiBelowMin: BelowMinGroup[];
   /** The `updateCheckoutCta()` outcome: label, sub-label and lock state. */
   cta: CtaView;
+  /** `POST /pricing/quote`: pending note, backend rows, or the failure card. */
+  quote: Quote | null;
+  quoteStatus: QuoteStatus;
+  quoteError: string | null;
+  /** `EWCartQuoteUI.blockReason()`: what the CTA and the bill must refuse. */
+  quoteBlock: 'error' | 'service' | null;
+  retryQuote: () => void;
 }
 
 export const CartTotalsContext = createContext<CartTotals | null>(null);

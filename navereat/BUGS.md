@@ -83,6 +83,47 @@ the shell consumes the mark and backs off. Verified end to end: guest cart ->
 pay sheet -> confirm -> `/login` (`nearbite_after_login = /cart`) -> OTP ->
 `#/cart` with the cart intact and the CTA on "Add ₹100 more".
 
+### 10. The cart never actually called `POST /pricing/quote`
+`demoApi` exposed a synchronous `quoteSync()` twin of `getQuote()`, and nothing
+in the cart called either: the bill painted the client estimate, so the legacy
+pending note, the quote rows, the blocked card and `Try again` were all
+unreachable code. A real backend cannot answer synchronously, so the port kept
+a path that could never run in production.
+**Fix:** `quoteSync` deleted from the interface, `demoApi` and `liveApi`.
+`hooks/useCartQuote.ts` re-quotes 200 ms after any basket / address / method
+change (legacy `schedule()`), drops stale answers, and drives the sheet:
+`Calculating your bill…` while pending, `rowsFromQuote()` rows when ready, and
+the `ew-qb-blocked` card (`We couldn’t price your order` + `Try again`) on
+failure, with the CTA locked to `Price unavailable` / `Tap Try again in your
+bill`. The latest `quoteId` now travels in `POST /orders`. Verified:
+`?demo=quote-error` → locked CTA + card + retry, clearing the flag → CTA back
+on `Proceed to Pay`, zero console errors.
+
+### 11. `?demo=payment=verifySlow` (and Flaky/Timeout) did nothing
+Two defects stacked: the flag parser lower-cased every value, so the camelCase
+`verifySlow` / `verifyFlaky` / `verifyTimeout` never matched; and the cart
+always passed an explicit `outcome` from the mock sheet, which outranked the
+scenario inside `verifyPayment`. The polling loop existed but could not be
+reached.
+**Fix:** the payment values are mapped through a table (lower-case key →
+canonical verdict), and a `verify*` scenario now outranks the mock outcome.
+Verified in a browser: `verifySlow` reconciles through a 409 capture race and
+ends on the placed order, `verifyTimeout` lands on `/payment/pending`.
+
+### 12. The performance gate was red on `main` because its fixture could not pay
+`scripts/perf-check.mjs` seeds a cart of 1 × Masala Dosa (₹99) for restaurant 1,
+whose minimum is ₹149. Once the six checkout gates landed the CTA rendered
+`Add ₹50 more` with `aria-disabled="true"`, so the gate's
+`locator('.ct-cta').first().click()` waited 30 s and the whole
+`Navereat performance gate` workflow failed on every push since. Nobody noticed
+because only the APK workflow was being watched.
+**Fix:** the seeded basket is 2 × Masala Dosa (₹198), which clears the
+minimum, so the measured push → cart → pay → track journey runs again. The gate
+now completes locally; its two marginal FPS numbers (53.7 fps against a 55 fps
+budget on this container) are machine noise — the same numbers appear with the
+quote code reverted.
+
+
 ## Open / by design
 
 - The `ct-item-actions` chip row scrolls horizontally at 390 px and the third

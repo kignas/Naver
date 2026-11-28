@@ -1,5 +1,6 @@
 import type { RefObject } from 'react';
 import { formatMoney } from '../../lib/money';
+import { rowsFromQuote } from '../../logic/bill';
 import { Sheet, type SheetHandle } from '../Sheet';
 import { TIP_PRESETS } from './cartConstants';
 import { useCartTotals } from './cartTotals';
@@ -18,9 +19,13 @@ interface CartBillSheetProps {
  * block. Same markup, classes and copy.
  */
 export function CartBillSheet({ sheetRef, onClose, tip, onTip, onOpenTipSheet }: CartBillSheetProps) {
-  const { bill, savings } = useCartTotals();
+  const { bill, savings, quote, quoteStatus, quoteBlock, quoteError, retryQuote } = useCartTotals();
   const customTip = tip > 0 && !TIP_PRESETS.includes(tip as (typeof TIP_PRESETS)[number]);
-  const rows = bill.rows.filter((row) => row.key !== 'total');
+  // A live quote owns the rows; the client estimate stays as the legacy
+  // fallback while it is pending or after a failure.
+  const quoted = quoteStatus === 'ready' ? rowsFromQuote(quote) : [];
+  const live = quoted.filter((row) => row.key !== 'total');
+  const rows = live.length ? live : bill.rows.filter((row) => row.key !== 'total');
   const originalTotal = savings > 0 ? Math.round(bill.subtotal + savings) : 0;
 
   return (
@@ -33,10 +38,36 @@ export function CartBillSheet({ sheetRef, onClose, tip, onTip, onOpenTipSheet }:
       onClose={onClose}
     >
       {originalTotal > 0 && <div className="ctp-band">{`You saved ₹${savings.toFixed(0)} on this order`}</div>}
+      {quoteBlock === 'service' && (
+        <div className="ew-qb-blocked" role="alert">
+          <span className="ew-qb-blocked-ic" aria-hidden="true">
+            !
+          </span>
+          <div className="ew-qb-blocked-copy">
+            <strong>Delivery unavailable</strong>
+            <span>{quoteError || 'This delivery is not available right now.'}</span>
+          </div>
+        </div>
+      )}
+      {quoteStatus === 'error' && (
+        <div className="ew-qb-blocked" role="alert">
+          <span className="ew-qb-blocked-ic" aria-hidden="true">
+            !
+          </span>
+          <div className="ew-qb-blocked-copy">
+            <strong>We couldn’t price your order</strong>
+            <span>{quoteError || 'Please try again.'}</span>
+          </div>
+          <button type="button" className="ew-qb-confirm" id="ew-quote-retry" onClick={retryQuote}>
+            Try again
+          </button>
+        </div>
+      )}
       <div className="ctp-card">
         {rows.length === 0 && (
           <div className="ctp-empty">Your bill will appear here once delivery is calculated.</div>
         )}
+        {quoteStatus === 'loading' && <div className="ew-qb-pending">Calculating your bill…</div>}
         {rows.map((row) => {
           const strike = row.key === 'foodSubtotal' && originalTotal > 0 ? `₹${originalTotal}` : '';
           return (

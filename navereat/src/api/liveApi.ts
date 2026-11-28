@@ -25,7 +25,6 @@ export const liveApi: RestaurantApi = {
   getRestaurant: () => NOT_ENABLED('GET /restaurants/:id'),
   getMenu: () => NOT_ENABLED('GET /restaurants/:id/menu'),
   getCoupons: () => NOT_ENABLED('getCoupons'),
-  quoteSync: () => NOT_ENABLED('quoteSync'),
   getQuote: () => NOT_ENABLED('POST /pricing/quote'),
   validateCoupon: () => NOT_ENABLED('POST /coupons/validate'),
   previewBill: () => NOT_ENABLED('previewBill'),

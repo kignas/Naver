@@ -64,9 +64,13 @@ export const EMPTY_SCENARIOS: DemoScenarios = {
   zoneFees: true,
 };
 
-const BOOLEAN_FLAGS = ['closed', 'outOfStock', 'quoteError', 'slow', 'emptyCart', 'zoneFees'] as const;
+const BOOLEAN_FLAGS = ['closed', 'outOfStock', 'quoteError', 'quote-error', 'slow', 'emptyCart', 'zoneFees'] as const;
 
-const parseFlag = (raw: string): DemoScenarios => {
+/** `quote-error` is the spelling used in the follow-up; both map to the flag. */
+const FLAG_ALIASES: Record<string, 'quoteError'> = { 'quote-error': 'quoteError' };
+
+/** Parses one `?demo=` value; exported for the tests and the demo panel. */
+export const parseDemoFlag = (raw: string): DemoScenarios => {
   const next: DemoScenarios = { ...EMPTY_SCENARIOS };
   raw
     .split(',')
@@ -77,7 +81,8 @@ const parseFlag = (raw: string): DemoScenarios => {
       const key = rawKey.trim();
       const value = (rawValue ?? '').trim().toLowerCase();
       if ((BOOLEAN_FLAGS as readonly string[]).includes(key)) {
-        next[key as (typeof BOOLEAN_FLAGS)[number]] = value === '' || value === '1' || value === 'on' || value === 'true';
+        const target = (FLAG_ALIASES[key] ?? key) as keyof DemoScenarios;
+        (next[target] as boolean) = value === '' || value === '1' || value === 'on' || value === 'true';
         return;
       }
       switch (key) {
@@ -100,18 +105,21 @@ const parseFlag = (raw: string): DemoScenarios => {
         case 'cod':
           next.cod = value === 'off' || value === 'blocked' || value === 'overcap' ? value : null;
           break;
-        case 'payment':
-          next.payment =
-            value === 'success' ||
-            value === 'failure' ||
-            value === 'pending' ||
-            value === 'cod' ||
-            value === 'verifySlow' ||
-            value === 'verifyFlaky' ||
-            value === 'verifyTimeout'
-              ? value
-              : null;
+        case 'payment': {
+          // Values are lower-cased above, so the camelCase verdicts compare
+          // in lower case and are written back in their canonical spelling.
+          const payments: Record<string, PaymentScenario> = {
+            success: 'success',
+            failure: 'failure',
+            pending: 'pending',
+            cod: 'cod',
+            verifyslow: 'verifySlow',
+            verifyflaky: 'verifyFlaky',
+            verifytimeout: 'verifyTimeout',
+          };
+          next.payment = payments[value] ?? null;
           break;
+        }
         default:
           break;
       }
@@ -134,7 +142,7 @@ const rawFlag = (): string => {
 
 export function readScenarios(): DemoScenarios {
   const flag = rawFlag();
-  if (flag !== '') return parseFlag(flag);
+  if (flag !== '') return parseDemoFlag(flag);
   try {
     const stored = localStorage.getItem(DEMO_SCENARIOS_KEY);
     if (stored) return { ...EMPTY_SCENARIOS, ...(JSON.parse(stored) as Partial<DemoScenarios>) };

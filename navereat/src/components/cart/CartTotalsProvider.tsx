@@ -1,5 +1,5 @@
-import { useMemo, type ReactNode } from 'react';
-import { api } from '../../api/restaurantApi';
+import { useEffect, useMemo, type MutableRefObject, type ReactNode } from 'react';
+import { api, type Quote } from '../../api/restaurantApi';
 import type { Restaurant } from '../../data/demo';
 import { useAppStore } from '../../store/appStore';
 import { cartLineOriginalPrice } from './cartPricing';
@@ -15,7 +15,13 @@ import {
   type PaymentSettings,
 } from '../../logic/paymentOptions';
 import { resolveCta } from '../../logic/checkoutCta';
+import { useCartQuote, type QuoteBody } from '../../hooks/useCartQuote';
 import { CartTotalsContext, type CartGroup, type CartTotals } from './cartTotals';
+
+/** `quote.message` is not on the engine type but the backend sends it; the
+ * legacy block card prints it verbatim. */
+const quoteMessage = (quote: Quote | null): string | null =>
+  quote ? ((quote as Quote & { message?: string }).message ?? null) : null;
 
 interface CartTotalsProviderProps {
   restaurant: Restaurant | undefined;
@@ -29,6 +35,10 @@ interface CartTotalsProviderProps {
   platform: PaymentSettings;
   /** `ctState.addressOk` / `ctState.loggedIn`: the two remaining CTA gates. */
   addressOk: boolean;
+  /** The address the quote prices against; null falls back to the legacy path. */
+  addressId: string | null;
+  /** Hands the live quote to the page so `POST /orders` can carry its id. */
+  quoteRef?: MutableRefObject<Quote | null>;
   loggedIn: boolean;
   children: ReactNode;
 }
@@ -40,6 +50,7 @@ interface CartTotalsProviderProps {
  */
 export function CartTotalsProvider({
   restaurant,
+  quoteRef,
   offerMode,
   unavailable,
   freeAbove,
@@ -47,6 +58,7 @@ export function CartTotalsProvider({
   payment,
   platform,
   addressOk,
+  addressId,
   loggedIn,
   children,
 }: CartTotalsProviderProps) {
@@ -89,6 +101,42 @@ export function CartTotalsProvider({
   const totalSavings = savings + bill.offerDiscount;
   const freeDelivery = !unavailable && subtotal >= freeAbove;
 
+  // `basket()`: one restaurant, a saved address, at least one priced item.
+  const quoteBody = useMemo<QuoteBody | null>(() => {
+    if (groups.length !== 1 || !addressId) return null;
+    const items = groups[0].lines
+      .map(({ name, line }) => ({
+        menuItem: line.menuItem as string | number,
+        name,
+        price: line.price,
+        quantity: line.quantity,
+      }))
+      .filter((item) => item.menuItem != null && item.quantity > 0);
+    if (!items.length) return null;
+    const body: QuoteBody = {
+      restaurantId: groups[0].resId,
+      addressId,
+      items,
+      paymentMethod: payment,
+      couponCode: coupon?.code ?? '',
+    };
+    if (tip > 0) body.tipAmount = tip;
+    return body;
+  }, [addressId, coupon?.code, groups, payment, tip]);
+  const cartQuote = useCartQuote(quoteBody);
+  useEffect(() => {
+    if (quoteRef) quoteRef.current = cartQuote.quote;
+  }, [cartQuote.quote, quoteRef]);
+  // `renderBlocked()`: a quote the backend refuses to price (other than the
+  // below-minimum case, which the CTA already states in rupees).
+  const refused =
+    cartQuote.status === 'ready' &&
+    cartQuote.quote?.serviceable === false &&
+    cartQuote.quote.reason !== 'BELOW_MINIMUM_ORDER';
+  const quoteBlock: 'error' | 'service' | null =
+    cartQuote.status === 'error' ? 'error' : refused ? 'service' : null;
+  const quoteError = cartQuote.error?.message ?? (refused ? quoteMessage(cartQuote.quote) : null);
+
   const paymentOptions = useMemo(() => {
     const context: PaymentContext = {
       total: bill.grandTotal || bill.total + bill.tip,
@@ -122,7 +170,7 @@ export function CartTotalsProvider({
       resolveCta({
         units: groups.reduce((count, group) => count + group.units, 0),
         unavailable,
-        quoteBlock: null,
+        quoteBlock,
         loggedIn,
         multiBelowMin,
         usesAuthoritativeQuote: groups.length === 1 && addressOk,
@@ -131,7 +179,7 @@ export function CartTotalsProvider({
         addressOk,
         ctaMain: paymentOptions.ctaLabel,
       }),
-    [addressOk, groups, loggedIn, multiBelowMin, paymentOptions.ctaLabel, restaurant, subtotal, unavailable],
+    [addressOk, groups, loggedIn, multiBelowMin, paymentOptions.ctaLabel, quoteBlock, restaurant, subtotal, unavailable],
   );
 
   const value = useMemo<CartTotals>(
@@ -148,9 +196,19 @@ export function CartTotalsProvider({
       paymentOptions,
       multiBelowMin,
       cta,
+      quote: cartQuote.quote,
+      quoteStatus: cartQuote.status,
+      quoteError,
+      quoteBlock,
+      retryQuote: cartQuote.retry,
     }),
     [
       bill,
+      cartQuote.quote,
+      cartQuote.retry,
+      cartQuote.status,
+      quoteBlock,
+      quoteError,
       cart,
       cta,
       freeDelivery,

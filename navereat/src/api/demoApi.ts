@@ -260,10 +260,6 @@ export const demoApi: RestaurantApi = {
     return demoCoupons;
   },
 
-  quoteSync(request) {
-    return quoteFrom(request, readScenarios());
-  },
-
   async getQuote(request) {
     const scenarios = readScenarios();
     await latency(scenarios);
@@ -408,7 +404,15 @@ export const demoApi: RestaurantApi = {
 
   async verifyPayment(input) {
     const scenarios = readScenarios();
-    const requested = input.outcome ?? scenarios.payment ?? 'success';
+    // A verify* scenario models the gateway's own behaviour (a capture race, a
+    // dropped verify request, a payment that never settles), so it outranks the
+    // outcome the mock sheet clicked.
+    const scenarioPayment = scenarios.payment;
+    const pollScenario =
+      scenarioPayment === 'verifySlow' || scenarioPayment === 'verifyFlaky' || scenarioPayment === 'verifyTimeout'
+        ? scenarioPayment
+        : null;
+    const requested = pollScenario ?? input.outcome ?? scenarioPayment ?? 'success';
     const store = paymentStore();
     const intent = store[input.paymentId];
     const cod = intent?.method === 'cod';

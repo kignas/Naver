@@ -49,7 +49,7 @@ Relabelled rows (`6e1e981` → `07e3a30`), all with a reason:
 | `js/cart-page.js:845-900` bill paint | PARTIAL (rows fixed at ₹0) | DONE | `CartBillSheet` + `logic/bill.ts` paint the quote rows |
 | `js/cart-page.js:1179-1302` CTA gating | PARTIAL (no address gate) | DONE | `logic/checkoutCta.ts`, all six gates |
 | `js/cart-page.js:3661-3672` location prompt | TODO | DONE | `Cart.tsx` `locationPrompt` |
-| `cart-quote-ui.js` quote wiring | PARTIAL (bill local) | PARTIAL (no retry state) | narrower reason, see below |
+| `cart-quote-ui.js` quote wiring | PARTIAL (bill local) | DONE (200 ms async quote, pending note, blocked card + retry) | quote now rejects under `?demo=quote-error` and recovers |
 | `login.html` return-to flow | PARTIAL | DONE | `lib/loginReturn.ts` + `markLoginNavigation` |
 | `address.html` / `address-new.html` | TODO | PARTIAL | `/address` exists; map picker omitted |
 | `nearbite_cart_before_auth` | TODO | DONE | `lib/loginReturn.ts` |
@@ -72,8 +72,8 @@ the sections below. `node scripts/parity-count.mjs` must print the same numbers.
 | 4 | 1.2 | `js/ew-menu-cache.js` menu cache + TTL | `data/demoDataSource.ts` | TTL is honoured, but there is no stale-while-revalidate repaint path (the demo cache is synchronous) |
 | 5 | 1.2 | `location-gate.js` permission gate | `reveal/RevealGate.tsx` | geolocation is mocked: the gate renders the legacy permission-denied/“use my location” UI but never calls the browser API |
 | 6 | 2.2 | `js/cart-page.js:3380-3520` delivery summary | `CartOrderInfoCard.tsx` | the address row navigates to `/address?return=cart` instead of opening the legacy in-place picker sheet |
-| 7 | 2.3 | `cart-quote-ui.js` quote wiring | `CartTotalsProvider.tsx` + `logic/bill.ts` | the bill is quote-driven, but the demo quote never rejects, so the legacy "price unavailable / Try again" state was unreachable — fixed in step 2b of this pass (`?demo=quote-error`) |
-| 8 | 2.3 | `js/payment-verify.js` polling | `demoApi.verifyPayment` | no polling loop yet; step 2c of this pass adds interval, max attempts, timeout→pending and retry |
+| 7 | 2.3 | `cart-quote-ui.js` quote wiring | `CartTotalsProvider.tsx` + `logic/bill.ts` | DONE in step 2b: `hooks/useCartQuote.ts` re-quotes 200 ms after any basket / address / method change, ignores stale answers, and renders the legacy pending note, quote rows and blocked card (`Try again` → `retryQuote`) |
+| 8 | 2.3 | `js/payment-verify.js` polling | `demoApi.verifyPayment` | DONE in step 2c: `paymentVerify.run` polls with a 1.2 s → 3 s backoff inside a 6 s demo window; `payment=verifySlow\|verifyFlaky` reconcile to paid, `verifyTimeout` lands on `/payment/pending` (verified in a browser) |
 | 9 | 3 | `address.html` / `address-new.html` | `pages/Address.tsx` | saved list / add / delete / select / `?return=cart` are ported; the map picker and the geocoding search are not (no Maps SDK in demo mode) |
 | 10 | 3 | `profile.html` / `complete-profile.html` | `pages/Profile.tsx` | `complete-profile` page missing; step 2d of this pass port it |
 | 11 | 3 | `location-onboarding.html` | `RevealGate` | onboarding intro renders, but the "allow location" step cannot ask the browser (demo), so the found/not-serviceable states are flag-driven only |
@@ -222,7 +222,7 @@ N/A rows, each with a reason a reviewer can check:
 | Source | Behaviour | Target | Status |
 | --- | --- | --- | --- |
 | `cart-popups.js` | sheet plumbing | `src/components/Sheet.tsx` | DONE |
-| `cart-quote-ui.js` | quote wiring into the bill | `CartTotalsProvider.tsx` + `src/logic/bill.ts` | PARTIAL — the bill is quote-driven, but the demo quote is synchronous, so the legacy "price unavailable / try again" retry state cannot occur |
+| `cart-quote-ui.js` | quote wiring into the bill | `hooks/useCartQuote.ts` → `CartTotalsProvider.tsx` + `src/logic/bill.ts` | DONE — async `POST /pricing/quote` (200 ms debounce, stale-safe), `Calculating your bill…` pending note, quote rows, blocked card with `Try again`, CTA `Price unavailable` / `Delivery unavailable` |
 | `cart-checkout-upgrades.js` | CTA upgrades | `CartCheckoutFooter.tsx` | DONE |
 | `cart-checkout-upgrades.js` `codState`/`upiState`/`codVisible`/`hasChoice`/`ctaLabel`/`ctaBlock`/`revalidateBeforeOrder` | UPI/COD eligibility, pay-note copy, CTA label, pre-order gate | `src/logic/paymentOptions.ts` (16 oracle tests) → `CartPaySheet.tsx`, `CartCheckoutFooter.tsx`, `Cart.tsx` | DONE |
 | `cart-checkout-upgrades.js` `getSendCutlery` (`nearbite_send_cutlery`) | cutlery toggle | `CartItems.tsx` | DONE |
@@ -235,7 +235,7 @@ N/A rows, each with a reason a reviewer can check:
 | `js/checkout-key.js:1-269` | idempotency key + payload fingerprint | `src/logic/checkoutKey.ts` | DONE (15 parity tests) |
 | `js/order-payload.js:1-117` | POST /orders body | `src/logic/orderPayload.ts` | DONE (8 parity tests) |
 | `js/payment-state.js:1-185` | payment outcome classification | `src/logic/paymentState.ts` | DONE (77 parity tests) |
-| `js/payment-verify.js` | `/payments/verify` polling | `demoApi.verifyPayment` | PARTIAL — no polling loop |
+| `js/payment-verify.js` | `/payments/verify` polling | `src/logic/paymentVerify.ts` via `demoApi.verifyPayment` | DONE — 409 / 5xx / network → status poll (1.2 s backoff to 3 s, 6 s demo window), never reports a failure it did not see |
 | `js/order-success-sheet.js` | success sheet + confetti | `OrderSuccessSheet.tsx` | DONE |
 | `platform-status.js` | `/platform/public-status` | `src/data/dataSource.ts` | DONE |
 | `js/auth-token.js` | token reader | `src/store/appStore.ts` | DONE |

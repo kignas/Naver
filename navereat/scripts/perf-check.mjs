@@ -351,9 +351,11 @@ const latencyInitScript = () => {
     location: { type: 'Point', coordinates: [88.3639, 22.5726] },
   }));
   sessionStorage.setItem('ew_offers_seen_v1', '["demo"]');
+  // The checkout gates require the restaurant minimum (149) on a single
+  // basket, so the measured cart must clear it.
   localStorage.setItem('nearbite_cart', JSON.stringify({
     'Masala Dosa': {
-      quantity: 1,
+      quantity: 2,
       price: 99,
       resId: 1,
       isVeg: true,
@@ -467,9 +469,11 @@ const clsInitScript = () => {
     location: { type: 'Point', coordinates: [88.3639, 22.5726] },
   }));
   sessionStorage.setItem('ew_offers_seen_v1', '["demo"]');
+  // The checkout gates require the restaurant minimum (149) on a single
+  // basket, so the measured cart must clear it.
   localStorage.setItem('nearbite_cart', JSON.stringify({
     'Masala Dosa': {
-      quantity: 1,
+      quantity: 2,
       price: 99,
       resId: 1,
       isVeg: true,
