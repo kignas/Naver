@@ -173,14 +173,14 @@ deliberately not ported (demo mode / branding rule).
 | Cart payment-method sheet | `cart.html:374` | `CartPaySheet.tsx` | DONE |
 | Cart coupon sheet | `cart.html:385` | `Cart.tsx` | DONE |
 | Cart bill sheet | `cart-page.js:192` | `CartBillSheet.tsx` | DONE |
-| Cart location modal | `cart.html:271` | — | TODO |
+| Cart location modal | `cart.html:271` | `CartLocationModal.tsx` | DONE |
 | Cart address toast | `cart.html:266` | `toastStore` | DONE |
 | Menu offer popup | `ew-offer-popup.js` | `OfferPopup.tsx` | DONE |
 | Menu customize sheet | `ew-customize-sheet.js` | `CustomizeSheet.tsx` | DONE |
 | Menu search overlay | `search-overlay.js` | `SearchOverlay.tsx` | DONE |
 | Service-closed screen | `service-closed-gate.js` | `ServiceClosedGate.tsx` | DONE |
 | Order-success sheet | `order-success-sheet.js` | `OrderSuccessSheet.tsx` | DONE |
-| Payment result pages | `payment-*.html` | — | TODO |
+| Payment result pages | `payment-*.html` | `src/pages/PaymentResult.tsx` | DONE |
 | Skeletons | menu / cart / home | `MenuSkeleton`, `CartSkeleton`, `RevealGate` | DONE |
 | Empty / error states | menu, cart, orders | `Cart.tsx`, `Orders.tsx`, `RouteErrorScreen.tsx` | DONE |
 
