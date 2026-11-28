@@ -5,10 +5,12 @@ import { MenuCatNav } from '../components/menu/MenuCatNav';
 import { MenuFilterBar } from '../components/menu/MenuFilterBar';
 import { MenuFiltersProvider } from '../components/menu/MenuFiltersProvider';
 import { MenuFreeDeliveryStrip } from '../components/menu/MenuFreeDeliveryStrip';
-import { MenuSearchRow } from '../components/menu/MenuSearchRow';
 import { MenuSection } from '../components/menu/MenuSection';
 import { MenuSkeleton } from '../components/menu/MenuSkeleton';
-import type { MenuGroup } from '../components/menu/menuTypes';
+import { categoryId, type MenuGroup } from '../components/menu/menuTypes';
+import { MenuJump } from '../components/restaurant/MenuJump';
+import { RestaurantSearch } from '../components/restaurant/RestaurantSearch';
+import { RestaurantStickySearch } from '../components/restaurant/RestaurantStickySearch';
 import { SlideReveal } from '../components/reveal/SlideReveal';
 import { findRestaurant } from '../data/demo';
 import { useRestaurantData } from '../data';
@@ -141,6 +143,60 @@ export function Restaurant() {
 
   const closeSearch = useCallback(() => setMenuSearchOpen(false), []);
 
+  const scrollToCategory = useCallback(
+    (name: string, index: number) => {
+      const scroller = scrollRef.current;
+      const target = document.getElementById(categoryId(name, index));
+      if (!scroller || !target) return;
+      const top = target.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 118;
+      scroller.scrollTo({ top, behavior: 'smooth' });
+    },
+    [],
+  );
+
+  // Landing glide, ported from ewAutoScrollIntoMenu: once the menu is on screen
+  // the page eases down so the header tucks away and the sticky search bar, the
+  // category strip and the quick filters take over the top. Once per page, never
+  // on Back/Forward or a reload, never when a scroll position is restored.
+  const autoScrolledRef = useRef(false);
+  useEffect(() => {
+    if (!ready || autoScrolledRef.current || tab !== 'menu') return;
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    autoScrolledRef.current = true;
+    // HashRouter keeps the route in the hash; only a real anchor/focus counts.
+    const anchorHash = window.location.hash.replace(/^#\/[^?]*/, '');
+    if (anchorHash || new URLSearchParams(window.location.search).get('focusItem')) return;
+    if (scroller.scrollTop > 0 || (cachedRestaurant?.scrollTop ?? 0) > 0) return;
+    const navigation = performance.getEntriesByType?.('navigation')[0] as PerformanceNavigationTiming | undefined;
+    if (navigation && (navigation.type === 'back_forward' || navigation.type === 'reload')) return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const anchor = document.getElementById('restaurant-filter-bar');
+    if (!anchor) return;
+    const sticky = document.getElementById('ew-sticky-search');
+    const catNav = document.getElementById('cat-nav');
+    const gapTop = Math.max(sticky?.offsetHeight ?? 0, 62) + Math.max(catNav?.offsetHeight ?? 0, 44) + 6;
+    const anchorTop = anchor.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+    const target = Math.round(anchorTop - gapTop);
+    if (target <= 80) return;
+    requestAnimationFrame(() => scroller.scrollTo({ top: target, behavior: 'smooth' }));
+  }, [cachedRestaurant?.scrollTop, ready, tab]);
+
+  // `?focusItem=<id>` links land on that dish with the original highlight.
+  useEffect(() => {
+    if (!ready) return;
+    const focusItemId = new URLSearchParams(window.location.search).get('focusItem');
+    if (!focusItemId) return;
+    const target = Array.from(document.querySelectorAll<HTMLElement>('.menu-item[data-menu-item-id]')).find(
+      (element) => element.dataset.menuItemId === focusItemId,
+    );
+    if (!target) return;
+    target.scrollIntoView({ block: 'center', behavior: 'auto' });
+    target.classList.add('ew-search-focus-item');
+    const timer = window.setTimeout(() => target.classList.remove('ew-search-focus-item'), 1800);
+    return () => window.clearTimeout(timer);
+  }, [ready]);
+
   // A page that is no longer the current route keeps rendering, and a store
   // reset can empty its menu for a moment. Swapping to the empty state then
   // collapses the menu list and its footer while the page is still on screen,
@@ -235,20 +291,6 @@ export function Restaurant() {
               <Icon name={saved ? 'solid:heart' : 'regular:heart'} size={22} />
             </button>
           </div>
-        </div>
-
-        {menuSearchOpen && <MenuSearchRow preparing={preparing} onClose={closeSearch} />}
-
-        <div className="rest-hero" aria-hidden="true">
-          <img
-            className="rest-hero-img"
-            src={restaurant.image}
-            alt=""
-            width={600}
-            height={400}
-            loading="eager"
-            decoding="async"
-          />
         </div>
 
         <div className="res-card">
@@ -492,6 +534,27 @@ export function Restaurant() {
         </MenuFiltersProvider>
       </div>
 
+      <RestaurantStickySearch
+        restaurantName={restaurant.name}
+        menu={menu}
+        onOpenSearch={() => setMenuSearchOpen(true)}
+        onBack={nav.back}
+      />
+      <MenuJump groups={groups} visible={tab === 'menu'} onJump={scrollToCategory} />
+      <RestaurantSearch
+        open={menuSearchOpen}
+        restaurantId={restaurant.id}
+        restaurantName={restaurant.name}
+        menu={menu}
+        onClose={closeSearch}
+        onJumpCategory={(name) => {
+          const index = groups.findIndex((group) => group.name === name);
+          if (index >= 0) {
+            setTab('menu');
+            window.setTimeout(() => scrollToCategory(name, index), 60);
+          }
+        }}
+      />
     </div>
   );
 }

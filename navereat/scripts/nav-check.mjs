@@ -1137,6 +1137,109 @@ try {
     await insetContext.close();
   }
 
+  // ---- 8d. Browser bottom UI: the surface must reach the visible bottom. --
+  // This is the phone case that CI missed. On Android Chrome with the browser's
+  // own bottom bar on screen, visualViewport.height is shorter than
+  // window.innerHeight. A shell sized with 100dvh then ends short (a bare strip
+  // under the last row) and the capsule, being fixed, ends that much further
+  // from the physical bottom. lib/viewport.ts publishes --vvh/--vv-gap from
+  // visualViewport; the flat case proves the module is live, and the injected
+  // vars reproduce the phone numbers for the layout assertions.
+  for (const width of [360, 393, 412]) {
+    const spec = specFor(width);
+    const ctx = await browser.newContext({ viewport: { width, height: 844 }, isMobile: true, hasTouch: true });
+    await seed(ctx);
+    const page = await ctx.newPage();
+    await page.goto(`${base}/#/`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.bottom-nav');
+    await sleep(900);
+
+    const read = () =>
+      page.evaluate(() => {
+        const shell = document.querySelector('.app-shell');
+        const nav = document.querySelector('.bottom-nav');
+        const root = document.getElementById('root');
+        const css = getComputedStyle(document.documentElement);
+        return {
+          inner: window.innerHeight,
+          shellBottom: shell ? shell.getBoundingClientRect().bottom : null,
+          rootBottom: root ? root.getBoundingClientRect().bottom : null,
+          navBottom: nav ? nav.getBoundingClientRect().bottom : null,
+          vvh: css.getPropertyValue('--vvh').trim(),
+          gap: css.getPropertyValue('--vv-gap').trim(),
+        };
+      });
+
+    const flat = await read();
+    check(
+      `browser-ui ${width}: --vvh tracks the visual viewport`,
+      flat.vvh === `${Math.round(flat.inner)}px` && flat.gap === '0px',
+      `--vvh=${flat.vvh} --vv-gap=${flat.gap} innerHeight=${flat.inner}`,
+    );
+    check(
+      `browser-ui ${width}: flat surface reaches the bottom`,
+      flat.shellBottom !== null && near(flat.shellBottom, flat.inner, 1),
+      `shell=${flat.shellBottom} innerHeight=${flat.inner}`,
+    );
+
+    // 38px of the layout viewport hidden by the browser's own bottom UI.
+    const UI = 38;
+    const visible = flat.inner - UI;
+    // lib/viewport.ts writes these as inline custom properties, so the test
+    // writes them the same way (a stylesheet rule would lose to the inline one).
+    await page.evaluate(
+      ({ ui, vh }) => {
+        document.documentElement.style.setProperty('--vv-gap', `${ui}px`);
+        document.documentElement.style.setProperty('--vvh', `${vh}px`);
+      },
+      { ui: UI, vh: visible },
+    );
+    await sleep(500);
+    const covered = await read();
+    check(
+      `browser-ui ${width}: the surface reaches the visible bottom`,
+      covered.shellBottom !== null && near(covered.shellBottom, visible, 1) &&
+        covered.rootBottom !== null && near(covered.rootBottom, visible, 1),
+      `shell=${covered.shellBottom} root=${covered.rootBottom} visible=${visible}`,
+    );
+    check(
+      `browser-ui ${width}: the capsule sits 54k above the visible bottom`,
+      covered.navBottom !== null && near(visible - covered.navBottom, spec.bottom, 1),
+      `gap=${visible - covered.navBottom} vs ${spec.bottom} (window.innerHeight would give ${Math.round(flat.inner - covered.navBottom)})`,
+    );
+
+    const png = PNG.sync.read(await page.screenshot());
+    // Only the visible part counts: rows below --vvh are what Chrome's own
+    // toolbar covers on the phone, and they are expected to be one flat colour.
+    const lastVisibleRow = Math.min(png.height - 1, Math.round(visible) - 1);
+    const flatRows = (image) => {
+      let run = 0;
+      for (let y = lastVisibleRow; y >= 0 && lastVisibleRow - y <= 120; y -= 1) {
+        const at = (x) => (y * image.width + x) * 4;
+        const first = [image.data[at(0)], image.data[at(0) + 1], image.data[at(0) + 2]];
+        let flatRow = true;
+        for (let x = 0; x < image.width; x += 2) {
+          const i = at(x);
+          if (
+            Math.abs(image.data[i] - first[0]) > 2 ||
+            Math.abs(image.data[i + 1] - first[1]) > 2 ||
+            Math.abs(image.data[i + 2] - first[2]) > 2
+          ) {
+            flatRow = false;
+            break;
+          }
+        }
+        if (!flatRow) break;
+        run += 1;
+      }
+      return run;
+    };
+    const stripRows = flatRows(png);
+    check(`browser-ui ${width}: no flat strip across the bottom edge`, stripRows < 10, `${stripRows} flat rows`);
+    await page.screenshot({ path: path.join(outDir, `browser-ui-${width}.png`) });
+    await ctx.close();
+  }
+
   // ---- 9. Drag the pill from History to Home (haptic on the snap). -------
   const dragContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   await seed(dragContext);

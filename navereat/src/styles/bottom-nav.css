@@ -31,8 +31,10 @@
 
   position: fixed;
   left: 50%;
-  /* 54k + safe area above the bottom of the visible screen. */
-  bottom: var(--nav-bottom);
+  /* 54k above the visible bottom: --vv-gap is the part of the layout viewport
+     the browser's own bottom UI hides (lib/viewport.ts). Fixed boxes are laid
+     out against the layout viewport, so it has to be added back. */
+  bottom: calc(var(--nav-bottom) + var(--vv-gap));
   right: auto;
   /* 690k wide: 0.639 of the screen width at every width up to 480px. */
   width: var(--nav-w);
@@ -78,7 +80,7 @@
    offset and a 16px margin — so the shadow clears the edge too. Compositor
    only: the layout box stays put, so the page never reflows. */
 body.nav-scroll-hidden .bottom-nav.nav-float.is-visible {
-  transform: translate3d(-50%, calc(var(--nav-h) + var(--nav-bottom) + calc(16 * var(--k))), 0);
+  transform: translate3d(-50%, calc(var(--nav-h) + var(--nav-bottom) + var(--vv-gap) + calc(16 * var(--k))), 0);
   opacity: 0;
   pointer-events: none;
 }

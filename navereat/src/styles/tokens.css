@@ -141,9 +141,16 @@
   /* Zomato puts the capsule 54k above the bottom edge and does NOT add the
      gesture inset: on Android Chrome the inset is ~36px, and adding it lifted
      the bar by that much. The capsule's own bottom edge is the reference. */
+  /* Written by lib/viewport.ts from window.visualViewport: the visible height
+     and how much of the layout viewport is hidden below it (browser bottom UI).
+     The defaults keep CSS valid before the first paint and on desktop. */
+  --vvh: 100dvh;
+  --vv-gap: 0px;
+  --vv-top: 0px;
   --nav-bottom: calc(54 * var(--k));
-  /* Cart bar keeps its 12px gap above the capsule. */
-  --nav-reserve: calc(var(--nav-h) + var(--nav-bottom) + 12px);
+  /* Cart bar keeps its 12px gap above the capsule, measured in the same
+     visible-bottom space as the capsule. */
+  --nav-reserve: calc(var(--nav-h) + var(--nav-bottom) + var(--vv-gap) + 12px);
   /* Non-overlay Android status bar: the WebView starts below it. */
   --safe-top: 0px;
   --sat: var(--safe-top);

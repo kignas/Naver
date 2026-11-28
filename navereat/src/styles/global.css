@@ -15,7 +15,7 @@
 html,
 body,
 #root {
-  height: 100%;
+  height: var(--vvh, 100%);
 }
 
 /* The app is a phone surface; scrollbars must never consume layout width
@@ -92,14 +92,27 @@ ol {
 }
 
 /* ---------- App shell / viewport ---------- */
+/* Sized from the visual viewport (lib/viewport.ts). `100dvh` is only the
+   fallback: on Android Chrome it can keep the height it had while the browser
+   bar was showing, which ended the surface short of the physical bottom and
+   left a bare strip under the last row. */
 .app-shell {
   position: relative;
   width: 100%;
   max-width: var(--maxw);
-  height: 100dvh;
+  height: var(--vvh, 100dvh);
+  top: var(--vv-top, 0px);
   margin: 0 auto;
   overflow: hidden;
   background: var(--page);
+}
+
+/* Nothing may paint a different colour under the surface: a route bundle's
+   `body{background:#fff}` used to be visible in the gap. `html body` outranks a
+   plain `body` rule from a later sheet. */
+html body {
+  background: var(--page);
+  height: var(--vvh, 100dvh);
 }
 
 @media (min-width: 520px) {
@@ -271,7 +284,7 @@ ol {
   position: absolute;
   left: 16px;
   right: 16px;
-  bottom: calc(16px + var(--sab));
+  bottom: calc(16px + var(--vv-gap));
   background: linear-gradient(90deg, #00813d 0%, #00a34d 100%);
   border-radius: 16px;
   padding: 14px 16px;

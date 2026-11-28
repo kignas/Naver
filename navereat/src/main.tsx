@@ -6,6 +6,9 @@ import './styles/original/ew-sheet.css';
 import './styles/original/filter-sheet.css';
 import './styles/sheets.css';
 import { primeFonts } from './lib/fonts';
+import { installViewportVars } from './lib/viewport';
+
+installViewportVars();
 
 async function boot() {
   // Text must never reflow after the first paint: every bundled face (Manrope,
