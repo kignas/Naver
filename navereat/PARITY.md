@@ -107,7 +107,7 @@ deliberately not ported (demo mode / branding rule).
 | `js/cart-page.js:598-644` | note / tip / instruction persistence (`nearbite_cart_extras`) | `Cart.tsx` `readCartExtras` | DONE |
 | `js/cart-page.js:1179-1302` | checkout CTA gating | `CartCheckoutFooter.tsx` | PARTIAL — no address gate |
 | `js/cart-page.js:1445-1457` | toast | `toastStore` + `ToastHost` | DONE |
-| `js/cart-page.js:1563-1770` | order success / COD / failed / pending | `OrderSuccessSheet.tsx` | PARTIAL — no failed/pending pages |
+| `js/cart-page.js:1563-1770` | order success / COD / failed / pending | `OrderSuccessSheet.tsx` + `src/pages/PaymentResult.tsx` (`/payment/:result`) | DONE |
 | `js/cart-page.js:1773-2274` | Razorpay checkout | **mock payment sheet** (`?demo=payment=…`) | N/A (demo) |
 | `js/cart-page.js:2316-2386` | sheet open/close, focus trap, Esc, scrim | `src/components/Sheet.tsx` | DONE |
 | `js/cart-page.js:2387-2465` | restaurant note card/pill | `Cart.tsx` note sheet | DONE |
