@@ -16,6 +16,8 @@ export function CartBillSheet({ sheetRef, onClose, tip, onTip, onOpenTipSheet }:
   const { bill, savings } = useCartTotals();
   const payTotal = bill.total + tip;
   const customTip = tip > 0 && !TIP_PRESETS.includes(tip as (typeof TIP_PRESETS)[number]);
+  const km = Number(bill.distanceKm);
+  const kmLabel = Number.isFinite(km) && km > 0 ? ` | ${km.toFixed(1)} kms` : '';
 
   return (
     <Sheet ref={sheetRef} title="Bill summary" onClose={onClose}>
@@ -30,8 +32,21 @@ export function CartBillSheet({ sheetRef, onClose, tip, onTip, onOpenTipSheet }:
           </div>
           <div className="ct-bill-sep" />
           <div className="ct-bill-row">
-            <span className="ct-bill-label is-dashed">Delivery Fee</span>
-            <span className="ct-bill-val is-free">{bill.deliveryFee > 0 ? formatMoney(bill.deliveryFee) : 'FREE'}</span>
+            <span className="ct-bill-label is-dashed">
+              {bill.deliverySubsidy > 0 ? 'Delivery (free)' : 'Delivery fee'}
+              {kmLabel}
+            </span>
+            <span className={bill.deliveryFee > 0 ? 'ct-bill-val' : 'ct-bill-val is-free'}>
+              {bill.deliveryFee > 0 ? (
+                formatMoney(bill.deliveryFee)
+              ) : bill.baseDeliveryFee > 0 ? (
+                <>
+                  <s>{formatMoney(bill.baseDeliveryFee)}</s> FREE
+                </>
+              ) : (
+                'FREE'
+              )}
+            </span>
           </div>
           <div className="ct-bill-row">
             <span className="ct-bill-label">Platform fee</span>
@@ -39,8 +54,26 @@ export function CartBillSheet({ sheetRef, onClose, tip, onTip, onOpenTipSheet }:
           </div>
           <div className="ct-bill-row">
             <span className="ct-bill-label">Packaging fee</span>
-            <span className="ct-bill-val is-free">₹0</span>
+            <span className="ct-bill-val is-free">{formatMoney(bill.packagingFee)}</span>
           </div>
+          {bill.tax > 0 && (
+            <div className="ct-bill-row">
+              <span className="ct-bill-label is-dashed">Government Taxes</span>
+              <span className="ct-bill-val">{formatMoney(bill.tax)}</span>
+            </div>
+          )}
+          {bill.codFee > 0 && (
+            <div className="ct-bill-row">
+              <span className="ct-bill-label">COD handling fee</span>
+              <span className="ct-bill-val">{formatMoney(bill.codFee)}</span>
+            </div>
+          )}
+          {bill.smallOrderFee > 0 && (
+            <div className="ct-bill-row">
+              <span className="ct-bill-label">Small order fee</span>
+              <span className="ct-bill-val">{formatMoney(bill.smallOrderFee)}</span>
+            </div>
+          )}
           {bill.discount > 0 && (
             <div className="ct-bill-row">
               <span className="ct-bill-label">Coupon discount</span>

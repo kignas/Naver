@@ -1,13 +1,9 @@
 import { memo } from 'react';
 import { Icon } from '../Icon';
-import { DEMO_ADDRESS } from '../../data/demo';
 import { toast } from '../../store/toastStore';
 import { CartBillRow } from './CartBillRow';
 import { chevron, clockIcon } from './cartIcons';
 
-const addressText = DEMO_ADDRESS.includes('·')
-  ? DEMO_ADDRESS.split('·').slice(1).join('·').trim()
-  : DEMO_ADDRESS;
 
 const DI_PRESETS = [
   {
@@ -70,6 +66,12 @@ interface CartOrderInfoCardProps {
   tip: number;
   unavailable: boolean;
   onOpenBill: () => void;
+  addressTag: string;
+  addressLine: string;
+  /** Legacy `hasAddress()`: house + area + usable coordinates. */
+  addressOk: boolean;
+  loggedIn: boolean;
+  onChangeAddress: () => void;
 }
 
 export const CartOrderInfoCard = memo(function CartOrderInfoCard({
@@ -83,6 +85,11 @@ export const CartOrderInfoCard = memo(function CartOrderInfoCard({
   tip,
   unavailable,
   onOpenBill,
+  addressTag,
+  addressLine,
+  addressOk,
+  loggedIn,
+  onChangeAddress,
 }: CartOrderInfoCardProps) {
   return (
     <section aria-label="Delivery and bill details" className="ct-oi-card" id="ct-order-info">
@@ -104,12 +111,18 @@ export const CartOrderInfoCard = memo(function CartOrderInfoCard({
           <Icon name="solid:location-dot" size={22} />
         </span>
         <div className="ct-oi-copy">
-          <button className="ct-oi-hit" type="button" onClick={() => toast('Address picker is not part of this demo')}>
+          <button className="ct-oi-hit" type="button" onClick={onChangeAddress}>
             <span className="ct-oi-hit-copy">
               <span className="ct-oi-line">
-                Delivery at <b>Home</b>
+                Delivery at <b>{addressOk ? addressTag : loggedIn ? 'Home' : 'Log in to order'}</b>
               </span>
-              <span className="ct-oi-sub">{addressText}</span>
+              <span className={addressOk ? 'ct-oi-sub' : 'ct-oi-sub ct-prompt'}>
+                {addressOk
+                  ? addressLine
+                  : loggedIn
+                    ? 'Tap to add your delivery address'
+                    : 'Log in with your phone to add a delivery address'}
+              </span>
             </span>
             {chevron}
           </button>

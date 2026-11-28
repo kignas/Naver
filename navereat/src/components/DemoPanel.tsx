@@ -15,7 +15,7 @@ const BOOLEANS: Array<{ key: keyof DemoScenarios; label: string }> = [
   { key: 'quoteError', label: 'Quote network error' },
   { key: 'slow', label: 'Slow network' },
   { key: 'emptyCart', label: 'Empty cart' },
-  { key: 'zoneFees', label: 'Zone fees + tax' },
+  { key: 'zoneFees', label: 'Zone fees + tax (off = zero fees)' },
 ];
 
 const SELECTS: Array<{ key: 'offer' | 'coupon' | 'freeDelivery' | 'address' | 'payment'; label: string; values: string[] }> = [
@@ -23,7 +23,11 @@ const SELECTS: Array<{ key: 'offer' | 'coupon' | 'freeDelivery' | 'address' | 'p
   { key: 'coupon', label: 'Coupon', values: ['default', 'valid', 'invalid', 'expired'] },
   { key: 'freeDelivery', label: 'Free delivery', values: ['default', 'reached', 'not'] },
   { key: 'address', label: 'Address', values: ['default', 'saved', 'missing'] },
-  { key: 'payment', label: 'Payment', values: ['default', 'success', 'failure', 'pending', 'cod'] },
+  {
+    key: 'payment',
+    label: 'Payment',
+    values: ['default', 'success', 'failure', 'pending', 'cod', 'verifySlow', 'verifyFlaky', 'verifyTimeout'],
+  },
 ];
 
 /**

@@ -1,4 +1,5 @@
 import type { Coupon, DemoOffer } from '../data/demo';
+import type { QuoteBill } from '../logic/bill';
 
 /** The legacy cart charges no platform fee (see PARITY.md §2.2). */
 export const PLATFORM_FEE = 0;
@@ -31,10 +32,20 @@ export interface Bill {
   items: number;
   subtotal: number;
   deliveryFee: number;
+  baseDeliveryFee: number;
+  deliverySubsidy: number;
+  packagingFee: number;
   platformFee: number;
+  tax: number;
+  smallOrderFee: number;
+  codFee: number;
   discount: number;
   offerDiscount: number;
+  /** Grand total before tip, exactly as the quote returns it. */
   total: number;
+  /** Restaurant → customer distance from the quote, for the bill label. */
+  distanceKm?: number;
+  grandTotal: number;
   freeDelivery: boolean;
 }
 
@@ -66,11 +77,53 @@ export const billFor = (cart: Cart, coupon: Coupon | null = null, offers: DemoOf
     items: cartCount(cart),
     subtotal,
     deliveryFee: 0,
+    baseDeliveryFee: 0,
+    deliverySubsidy: 0,
+    packagingFee: 0,
     platformFee: PLATFORM_FEE,
+    tax: 0,
+    smallOrderFee: 0,
+    codFee: 0,
     discount,
     offerDiscount,
     total: Math.max(0, subtotal + PLATFORM_FEE - discount - offerDiscount),
+    grandTotal: Math.max(0, subtotal + PLATFORM_FEE - discount - offerDiscount),
     freeDelivery: true,
+  };
+};
+
+/**
+ * View model for the bill sheet, built from the engine quote the demo endpoint
+ * returns. Delivery, GST and the small-order fee come from the quote; packaging
+ * and the platform fee are ₹0, exactly as the legacy bill strip states.
+ */
+export const billFromQuote = (
+  cart: Cart,
+  quote: { bill: QuoteBill; distance?: { restaurantToCustomerKm?: number } },
+  policy: { packagingPerItem: number; platformFee: number },
+): Bill => {
+  const units = cartCount(cart);
+  const round = (value: number) => Math.round(value * 100) / 100;
+  const packagingFee = round(policy.packagingPerItem * units);
+  const platformFee = round(policy.platformFee);
+  const qb = quote.bill;
+  return {
+    items: units,
+    subtotal: qb.customerFoodSubtotal ?? 0,
+    deliveryFee: qb.deliveryFee ?? 0,
+    baseDeliveryFee: qb.baseDeliveryFee ?? 0,
+    deliverySubsidy: qb.deliverySubsidy ?? 0,
+    packagingFee,
+    platformFee,
+    tax: qb.taxAmount ?? 0,
+    smallOrderFee: qb.smallOrderFee ?? 0,
+    codFee: qb.codFee ?? 0,
+    discount: qb.couponDiscount ?? 0,
+    offerDiscount: 0,
+    total: qb.total ?? 0,
+    grandTotal: qb.grandTotal ?? 0,
+    distanceKm: quote.distance?.restaurantToCustomerKm,
+    freeDelivery: (qb.deliverySubsidy ?? 0) > 0,
   };
 };
 

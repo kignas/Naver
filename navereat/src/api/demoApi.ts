@@ -18,8 +18,9 @@ import {
   type Order,
   type Restaurant,
 } from '../data/demo';
-import { billFor, couponDiscount, type Bill, type Cart } from '../lib/cart';
+import { billFor, billFromQuote, cartRestaurantId, couponDiscount, type Bill, type Cart } from '../lib/cart';
 import { computeQuote } from '../logic/pricingEngine';
+import { paymentVerify } from '../logic/paymentVerify';
 import type {
   Address,
   ApiFailure,
@@ -314,7 +315,32 @@ export const demoApi: RestaurantApi = {
   },
 
   previewBill(cart: Cart, coupon?: Coupon | null): Bill {
-    return billFor(cart, coupon ?? null);
+    const scenarios = readScenarios();
+    const policy = policyFor(scenarios.zoneFees);
+    const restaurant = findRestaurant(cartRestaurantId(cart) ?? undefined);
+    const lines = Object.entries(cart).map(([name, line]) => ({
+      menuItem: line.menuItem ?? name,
+      name: line.name ?? name,
+      price: line.price,
+      quantity: line.quantity,
+    }));
+    if (lines.length === 0) return billFor(cart, coupon ?? null);
+    const subtotal = lines.reduce((sum, line) => sum + Number(line.price) * Number(line.quantity), 0);
+    const applied = applyScenarioCoupon(scenarios, coupon ?? undefined) ?? null;
+    const quote = computeQuote(policy, {
+      restaurantId: String(restaurant?.id ?? cartRestaurantId(cart) ?? ''),
+      restaurantName: restaurant?.name,
+      addressId: selectedAddress(scenarios)?.id ?? null,
+      distanceKm: distanceFor(restaurant),
+      items: lines,
+      paymentMethod: 'upi',
+      couponCode: applied ? applied.code : null,
+      couponValue: applied ? couponDiscount(applied, subtotal) : 0,
+      couponMinSubtotal: applied?.minOrder ?? 0,
+      isFirstOrder: false,
+      rainSurge: false,
+    });
+    return billFromQuote(cart, quote, policy);
   },
 
   async createOrder(input) {
@@ -379,35 +405,77 @@ export const demoApi: RestaurantApi = {
 
   async verifyPayment(input) {
     const scenarios = readScenarios();
-    await latency(scenarios);
+    const requested = input.outcome ?? scenarios.payment ?? 'success';
     const store = paymentStore();
     const intent = store[input.paymentId];
-    const requested = input.outcome ?? scenarios.payment ?? 'success';
+    const cod = intent?.method === 'cod';
+    const terminal: PaymentIntent['status'] = cod
+      ? 'pending'
+      : requested === 'failure'
+        ? 'failed'
+        : requested === 'pending'
+          ? 'pending'
+          : 'paid';
+
+    const settle = (status: PaymentIntent['status']) => {
+      if (intent) {
+        store[input.paymentId] = { ...intent, status };
+        write(PAYMENTS_KEY, store);
+      }
+    };
+    let polls = 0;
+    const json = (status: number, body: unknown) =>
+      ({
+        ok: status >= 200 && status < 300,
+        status,
+        json: async () => body,
+      }) as unknown as Response;
+
+    const demoFetch = (async (url: string) => {
+      await latency(scenarios);
+      if (String(url).endsWith('/payments/verify')) {
+        if (requested === 'verifyFlaky') throw new TypeError('Failed to fetch');
+        if (requested === 'verifySlow') return json(409, { success: false, code: 'CAPTURE_RACE', message: 'Capture in progress.' });
+        if (requested === 'verifyTimeout') return json(202, { success: true, data: { paymentStatus: 'pending' } });
+        if (terminal === 'failed') return json(200, { success: true, data: { paymentStatus: 'failed' } });
+        if (terminal === 'pending') return json(200, { success: true, data: { paymentStatus: 'pending' } });
+        settle('paid');
+        return json(200, { success: true, data: { paymentStatus: 'paid' } });
+      }
+      polls += 1;
+      if (requested === 'verifyTimeout') return json(200, { success: true, data: { paymentStatus: 'pending' } });
+      if (requested === 'verifySlow' && polls < 3) return json(200, { success: true, data: { paymentStatus: 'pending' } });
+      settle(terminal);
+      return json(200, { success: true, data: { paymentStatus: terminal } });
+    }) as unknown as typeof fetch;
+
+    const run = await paymentVerify.run({
+      orderId: input.orderId,
+      verifyBody: { orderId: input.orderId, paymentId: input.paymentId, signature: input.signature ?? 'demo' },
+      fetchImpl: demoFetch,
+      // The window is 6 s in the demo so the pending screen is reachable
+      // without waiting the production 22 s.
+      maxMs: 6000,
+    });
+
     const outcome: PaymentIntent['status'] =
-      intent?.method === 'cod'
-        ? 'pending'
-        : requested === 'failure'
-          ? 'failed'
-          : requested === 'pending'
-            ? 'pending'
-            : 'paid';
-    if (intent) {
-      store[input.paymentId] = { ...intent, status: outcome };
-      write(PAYMENTS_KEY, store);
-    }
+      run.verdict === 'paid' ? 'paid' : run.verdict === 'failed' ? 'failed' : 'pending';
+    settle(outcome);
+
     const orders = ordersNow();
     const index = orders.findIndex((order) => order.id === input.orderId);
     const order = index >= 0 ? orders[index] : null;
     const paymentStatus: PaymentVerifyResult['paymentStatus'] =
-      outcome === 'paid' ? 'paid' : outcome === 'failed' ? 'failed' : intent?.method === 'cod' ? 'cod_pending' : 'pending';
+      outcome === 'paid' ? 'paid' : outcome === 'failed' ? 'failed' : cod ? 'cod_pending' : 'pending';
     if (order) {
       const next = { ...order, paymentStatus } as Order;
       orders[index] = next;
       write(ORDERS_KEY, orders);
       return {
-        success: outcome === 'paid' || outcome === 'pending',
+        success: outcome !== 'failed',
         order: next,
         paymentStatus,
+        source: run.source,
         ...(outcome === 'failed' ? { message: 'Your payment could not be completed.' } : {}),
       };
     }
@@ -430,6 +498,7 @@ export const demoApi: RestaurantApi = {
         paymentStatus,
       } as Order,
       paymentStatus,
+      source: run.source,
     };
   },
 

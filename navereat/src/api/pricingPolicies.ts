@@ -18,7 +18,7 @@ export const ZERO_FEE_POLICY: PricingPolicy = {
   couponFundingBudget: 150,
 };
 
-/** A realistic zone policy, reachable with `?demo=zoneFees`. */
+/** The restaurant's zone policy: 3-zone delivery, 5% GST, ₹15 COD handling. */
 export const ZONE_POLICY: PricingPolicy = {
   deliveryFeeBands: [
     { maxKm: 3, fee: 13 },
@@ -53,3 +53,7 @@ export const ZONE_POLICY: PricingPolicy = {
 };
 
 export const policyFor = (zoneFees: boolean): PricingPolicy => (zoneFees ? ZONE_POLICY : ZERO_FEE_POLICY);
+
+/** Every restaurant in the demo sits inside a delivery zone, so the bill shows
+ *  the zone fee and GST unless the `zoneFees` scenario is switched off. */
+export const DEFAULT_POLICY = ZONE_POLICY;

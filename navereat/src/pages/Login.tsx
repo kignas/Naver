@@ -4,6 +4,7 @@ import { createRouteStyleSheet } from '../lib/routeStyles';
 import { useAppNav } from '../lib/navigation';
 import { useAppStore } from '../store/appStore';
 import { toast } from '../store/toastStore';
+import { consumeLoginReturn } from '../lib/loginReturn';
 import loginBundleCss from '../styles/original/login.bundle.css?raw';
 import loginShellCss from '../styles/original/login-shell.css?raw';
 import '../styles/pages/login.css';
@@ -56,14 +57,14 @@ export function Login() {
     window.setTimeout(() => {
       login(digits);
       toast('Welcome to Navereat', 'success');
-      nav.reset('/');
+      nav.reset(consumeLoginReturn() ?? '/');
     }, 500);
   };
 
   const skip = () => {
     login('9876543210');
     toast('Browsing as a demo guest', 'success');
-    nav.reset('/');
+    nav.reset(consumeLoginReturn() ?? '/');
   };
 
   const handleOtpChange = (index: number, value: string) => {

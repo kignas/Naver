@@ -90,6 +90,7 @@ interface AppState {
   setQty: (name: string, qty: number) => void;
   removeItem: (name: string) => void;
   clearCart: () => void;
+  restoreCart: (cart: Cart) => void;
   applyCoupon: (code: string) => ApplyCouponResult;
   removeCoupon: () => void;
   placeOrder: (paymentMethod: string, options?: { keepCart?: boolean; tip?: number }) => Order | null;
@@ -274,6 +275,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       delete next[name];
       return { cart: next };
     }),
+
+  restoreCart: (cart) => set({ cart }),
 
   clearCart: () => {
     emitCartUpdated({ source: 'clearCart', cleared: true });

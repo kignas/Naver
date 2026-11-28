@@ -4,6 +4,7 @@ import type { Address as AddressModel } from '../api/restaurantApi';
 import { useAppNav } from '../lib/navigation';
 import { createRouteStyleSheet } from '../lib/routeStyles';
 import { toast } from '../store/toastStore';
+import { announceAddressChange } from '../lib/checkoutAddress';
 import addressBundleCss from '../styles/original/address.bundle.css?raw';
 
 const SELECTED_ADDRESS_KEY = 'nearbite_selected_address_id';
@@ -87,6 +88,7 @@ export default function Address() {
     } catch {
       /* storage may be unavailable */
     }
+    announceAddressChange();
     if (returnTo === 'cart') nav.back();
     else nav.back();
   };

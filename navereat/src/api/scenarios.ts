@@ -5,7 +5,17 @@
  *
  * Example: `#/cart?demo=coupon=expired,payment=failure,slow`
  */
-export type PaymentScenario = 'success' | 'failure' | 'pending' | 'cod';
+export type PaymentScenario =
+  | 'success'
+  | 'failure'
+  | 'pending'
+  | 'cod'
+  /** Verify hits a capture race, then the status poll confirms. */
+  | 'verifySlow'
+  /** Verify request dies on the network, then the poll confirms. */
+  | 'verifyFlaky'
+  /** Status never settles inside the window: the customer must see `pending`. */
+  | 'verifyTimeout';
 export type CouponScenario = 'valid' | 'invalid' | 'expired';
 
 export interface DemoScenarios {
@@ -43,7 +53,7 @@ export const EMPTY_SCENARIOS: DemoScenarios = {
   quoteError: false,
   slow: false,
   emptyCart: false,
-  zoneFees: false,
+  zoneFees: true,
 };
 
 const BOOLEAN_FLAGS = ['closed', 'outOfStock', 'quoteError', 'slow', 'emptyCart', 'zoneFees'] as const;
@@ -78,7 +88,15 @@ const parseFlag = (raw: string): DemoScenarios => {
           break;
         case 'payment':
           next.payment =
-            value === 'success' || value === 'failure' || value === 'pending' || value === 'cod' ? value : null;
+            value === 'success' ||
+            value === 'failure' ||
+            value === 'pending' ||
+            value === 'cod' ||
+            value === 'verifySlow' ||
+            value === 'verifyFlaky' ||
+            value === 'verifyTimeout'
+              ? value
+              : null;
           break;
         default:
           break;

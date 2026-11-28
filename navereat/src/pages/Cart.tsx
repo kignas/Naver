@@ -8,6 +8,7 @@ import { CartFreeDeliveryStrip } from '../components/cart/CartFreeDeliveryStrip'
 import { CartItems } from '../components/cart/CartItems';
 import { CartSkeleton } from '../components/cart/CartSkeleton';
 import { CartOfferWatcher } from '../components/cart/CartOfferWatcher';
+import { CartLocationModal } from '../components/cart/CartLocationModal';
 import { CartOrderInfoCard } from '../components/cart/CartOrderInfoCard';
 import { CartPaySheet } from '../components/cart/CartPaySheet';
 import { CartSavingsCorner } from '../components/cart/CartSavingsCorner';
@@ -20,10 +21,24 @@ import { api, isApiFailure } from '../api/restaurantApi';
 import type { Coupon, DemoOffer, Order } from '../data/demo';
 import { cartRestaurantId, cartSubtotal } from '../lib/cart';
 import { ensureKey } from '../logic/checkoutKey';
+import { rememberCartForAuth } from '../lib/loginReturn';
 import { build as buildOrderPayload } from '../logic/orderPayload';
 import { MockPaymentSheet, type MockPaymentOutcome } from '../components/MockPaymentSheet';
 import { tapHaptic } from '../lib/haptics';
 import { createRouteStyleSheet } from '../lib/routeStyles';
+import {
+  clearPaymentMethod,
+  readPaymentMethod,
+  writePaymentMethod,
+} from '../lib/checkoutPaymentMethod';
+import {
+  ADDRESS_CHANGED_EVENT,
+  addressHasCoords,
+  addressIdOf,
+  formatAddressLine,
+  selectedAddress,
+  type SavedAddress,
+} from '../lib/checkoutAddress';
 import { useAppNav } from '../lib/navigation';
 import { useAppStore } from '../store/appStore';
 import { toast } from '../store/toastStore';
@@ -112,7 +127,7 @@ export function Cart() {
   const [tip, setTip] = useState(() => savedExtras.tip);
   const [tipInput, setTipInput] = useState('');
   const [tipError, setTipError] = useState('');
-  const [payment, setPayment] = useState<Payment>('upi');
+  const [payment, setPayment] = useState<Payment>(() => readPaymentMethod());
   const [cutlery, setCutlery] = useState(false);
   const [placing, setPlacing] = useState(false);
   const [offerPopup, setOfferPopup] = useState<DemoOffer[] | null>(null);
@@ -140,6 +155,23 @@ export function Cart() {
   const eta = restaurant ? `${restaurant.deliveryMin}–${restaurant.deliveryMax} mins` : '30–40 mins';
   const displayName = user?.name ?? 'Demo Foodie';
   const phone = user?.phone ?? '+91 98765 43210';
+  const [address, setAddress] = useState<SavedAddress | null>(() => selectedAddress());
+  const [locationPrompt, setLocationPrompt] = useState(false);
+  useEffect(() => {
+    const sync = () => setAddress(selectedAddress());
+    window.addEventListener(ADDRESS_CHANGED_EVENT, sync);
+    window.addEventListener('focus', sync);
+    return () => {
+      window.removeEventListener(ADDRESS_CHANGED_EVENT, sync);
+      window.removeEventListener('focus', sync);
+    };
+  }, []);
+  // cart-page.js shows the location modal when the chosen address has no
+  // precise coordinates (a guest sees the "log in to order" prompt instead).
+  useEffect(() => {
+    if (!address) return;
+    setLocationPrompt(!addressHasCoords(address));
+  }, [address]);
   const offerBlocked = sheet !== null || placing || offerPopup !== null;
 
   useEffect(() => {
@@ -256,6 +288,7 @@ export function Cart() {
       cleared = true;
       window.removeEventListener('navereat:transition-end', clearAfterSlide);
       clearCart();
+      clearPaymentMethod();
     };
     window.addEventListener('navereat:transition-end', clearAfterSlide, { once: true });
     window.setTimeout(clearAfterSlide, 900);
@@ -272,16 +305,37 @@ export function Cart() {
       toast('Your cart is empty', 'error');
       return;
     }
+    const token = localStorage.getItem('nearbite_token') || localStorage.getItem('token');
+    if (!token) {
+      rememberCartForAuth();
+      nav.push('/login');
+      return;
+    }
+    const currentAddress = selectedAddress();
+    if (!currentAddress) {
+      const button = document.getElementById('btn-checkout');
+      if (button) {
+        button.classList.remove('ct-shake');
+        void (button as HTMLElement).offsetWidth;
+        button.classList.add('ct-shake');
+        window.setTimeout(() => button.classList.remove('ct-shake'), 450);
+      }
+      toast('Add a delivery address first', 'error');
+      return;
+    }
     const payload = buildOrderPayload(state.cart, {
       paymentMethod: payment === 'cod' ? 'cod' : 'upi',
       tipAmount: tip,
       restaurantNote: note,
       deliveryInstructions: instructions.join(', '),
       couponCode: coupon?.code ?? '',
+      deliveryAddress: currentAddress,
+      addressId: addressIdOf(currentAddress) || null,
     });
     const idempotencyKey = ensureKey(payload as unknown as Parameters<typeof ensureKey>[0]);
     setPlacing(true);
     setSheet(null);
+    orderSuccessRef.current?.processing({ message: 'Placing your order' });
     try {
       const created = await api.createOrder({
         payload,
@@ -293,11 +347,13 @@ export function Cart() {
       pendingOrderRef.current = created.order;
       tapHaptic(12);
       if (payment === 'cod') {
-        orderSuccessRef.current?.processing();
+        orderSuccessRef.current?.show();
       } else {
+        orderSuccessRef.current?.stop();
         setMockPay({ orderId: created.orderId, amount: created.total });
       }
     } catch (error) {
+      orderSuccessRef.current?.stop();
       setPlacing(false);
       toast(isApiFailure(error) ? error.message : 'Could not place the order. Try again.', 'error');
     }
@@ -308,6 +364,7 @@ export function Cart() {
     if (!pending) return;
     setMockPay(null);
     setPlacing(true);
+    orderSuccessRef.current?.processing({ message: 'Confirming your payment' });
     try {
       const intent = await api.createPayment({ orderId: pending.orderId, amount: pending.amount, method: 'upi' });
       const verified = await api.verifyPayment({
@@ -316,9 +373,15 @@ export function Cart() {
         outcome,
       });
       useAppStore.getState().recordOrder(verified.order, { keepCart: true });
-      const result = verified.paymentStatus === 'paid' ? 'success' : verified.paymentStatus === 'failed' ? 'failed' : 'pending';
-      leaveCart(`/payment/${result}?order=${pending.orderId}`);
+      if (verified.paymentStatus === 'paid') {
+        pendingOrderRef.current = verified.order;
+        orderSuccessRef.current?.show();
+        return;
+      }
+      orderSuccessRef.current?.stop();
+      leaveCart(`/payment/${verified.paymentStatus === 'failed' ? 'failed' : 'pending'}?order=${pending.orderId}`);
     } catch (error) {
+      orderSuccessRef.current?.stop();
       setPlacing(false);
       toast(isApiFailure(error) ? error.message : 'Payment could not be completed.', 'error');
     }
@@ -328,10 +391,10 @@ export function Cart() {
     const order = pendingOrderRef.current;
     pendingOrderRef.current = null;
     setPlacing(false);
+    clearCart();
     if (order) {
       leaveCart(`/track/${order.id}`);
     } else {
-      clearCart();
       nav.tab('/orders');
     }
   };
@@ -419,6 +482,11 @@ export function Cart() {
             tip={tip}
             unavailable={unavailable}
             onOpenBill={openBillSheet}
+            addressTag={address?.tag ?? 'Home'}
+            addressLine={formatAddressLine(address)}
+            addressOk={Boolean(address && addressHasCoords(address))}
+            loggedIn={Boolean(localStorage.getItem('nearbite_token') || localStorage.getItem('token'))}
+            onChangeAddress={() => nav.push('/address?return=cart')}
           />
 
           <section className="ct-oi-policy" aria-labelledby="ct-oi-policy-title">
@@ -543,12 +611,17 @@ export function Cart() {
           />
         )}
 
+        {locationPrompt && <CartLocationModal onClose={() => setLocationPrompt(false)} />}
+
         {sheet === 'pay' && (
           <CartPaySheet
             sheetRef={sheetRef}
             onClose={() => setSheet(null)}
             payment={payment}
-            onPayment={setPayment}
+            onPayment={(method) => {
+              setPayment(method);
+              writePaymentMethod(method);
+            }}
             onPlace={handlePlace}
           />
         )}

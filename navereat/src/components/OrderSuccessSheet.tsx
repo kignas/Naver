@@ -17,8 +17,12 @@ import '../styles/original/order-success-sheet.css';
 type Stage = 'processing' | 'speed' | 'placed';
 
 export interface OrderSuccessHandle {
+  /** Stage 1 only: stays on "Processing…" until `show()` or `stop()`. */
   processing: (options?: { title?: string; message?: string }) => void;
+  /** Speed-up then the green "Order placed" wipe. */
   show: () => void;
+  /** Drop the sheet without placing (payment window took over). */
+  stop: () => void;
 }
 
 interface OrderSuccessSheetProps {
@@ -62,6 +66,7 @@ export const OrderSuccessSheet = forwardRef<OrderSuccessHandle, OrderSuccessShee
     const [message, setMessage] = useState('Placing your order');
     const timers = useRef<number[]>([]);
     const stageRef = useRef<Stage | null>(null);
+    const startedAt = useRef(0);
     const continuedRef = useRef(false);
     const onContinueRef = useRef(onContinue);
 
@@ -91,53 +96,54 @@ export const OrderSuccessSheet = forwardRef<OrderSuccessHandle, OrderSuccessShee
       onContinueRef.current();
     }, [clearTimers]);
 
-    const open = useCallback(() => {
+    const open = useCallback(
+      (options?: { title?: string; message?: string }) => {
+        clearTimers();
+        continuedRef.current = false;
+        setLeaving(false);
+        startedAt.current = window.performance.now();
+        setStage('processing');
+        setTitle(options?.title ?? 'Processing');
+        setMessage(options?.message ?? 'Placing your order');
+        window.requestAnimationFrame(() => window.requestAnimationFrame(() => setEntered(true)));
+      },
+      [clearTimers],
+    );
+
+    const place = useCallback(() => {
       clearTimers();
       continuedRef.current = false;
       setLeaving(false);
-      setStage('processing');
-      setTitle('Processing');
-      setMessage('Placing your order');
-      window.requestAnimationFrame(() => window.requestAnimationFrame(() => setEntered(true)));
+      setTitle('Order placed');
+      setMessage('The restaurant is getting your order ready.');
+      // Keep the plane animating for the same minimum the old sheet showed,
+      // then run the launch and the green wipe.
+      const elapsed = stageRef.current ? window.performance.now() - startedAt.current : PROC_MIN_MS;
+      const wait = Math.max(0, PROC_MIN_MS - elapsed);
       timers.current.push(
         window.setTimeout(() => {
           setStage('speed');
-        }, PROC_MIN_MS),
-      );
-      timers.current.push(
-        window.setTimeout(() => {
-          setStage('placed');
-          setTitle('Order placed');
-          setMessage('The restaurant is getting your order ready.');
-          if (navigator.vibrate) navigator.vibrate([18, 40, 22]);
-        }, PROC_MIN_MS + SPEED_MS),
+          timers.current.push(
+            window.setTimeout(() => {
+              setStage('placed');
+              if (navigator.vibrate) navigator.vibrate([18, 40, 22]);
+            }, SPEED_MS),
+          );
+        }, wait),
       );
       if (autoMs > 0) {
-        timers.current.push(
-          window.setTimeout(() => {
-            finish();
-          }, PROC_MIN_MS + SPEED_MS + 650 + autoMs),
-        );
+        timers.current.push(window.setTimeout(finish, wait + SPEED_MS + 650 + autoMs));
       }
     }, [autoMs, clearTimers, finish]);
 
-    useImperativeHandle(
-      ref,
-      () => ({
-        processing: open,
-        show: () => {
-          clearTimers();
-          continuedRef.current = false;
-          setLeaving(false);
-          setStage('placed');
-          setTitle('Order placed');
-          setMessage('The restaurant is getting your order ready.');
-          window.requestAnimationFrame(() => window.requestAnimationFrame(() => setEntered(true)));
-          if (autoMs > 0) timers.current.push(window.setTimeout(finish, 650 + autoMs));
-        },
-      }),
-      [autoMs, clearTimers, finish, open],
-    );
+    const stop = useCallback(() => {
+      clearTimers();
+      setStage(null);
+      setEntered(false);
+      setLeaving(false);
+    }, [clearTimers]);
+
+    useImperativeHandle(ref, () => ({ processing: open, show: place, stop }), [open, place, stop]);
 
     useEffect(() => {
       if (!stage) return;
