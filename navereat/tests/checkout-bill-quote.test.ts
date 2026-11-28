@@ -78,6 +78,35 @@ describe('demo previewBill uses the shared engine', () => {
     expect(bill.total).toBe(bill.subtotal + bill.deliveryFee + bill.tax);
   });
 
+  it('prices the tip into the bill exactly as the quote payload does', () => {
+    const plain = demoApi.previewBill(cart(150, 2));
+    const tipped = demoApi.previewBill(cart(150, 2), null, { tip: 20 });
+    expect(tipped.tip).toBe(20);
+    expect(tipped.grandTotal).toBe(plain.grandTotal + 20);
+    expect(tipped.rows.map((row) => row.key)).toContain('tip');
+    expect(tipped.rows[tipped.rows.length - 1].key).toBe('total');
+  });
+
+  it('adds the COD handling fee when cash on delivery is selected', () => {
+    const cod = demoApi.previewBill(cart(150, 2), null, { paymentMethod: 'cod' });
+    const upi = demoApi.previewBill(cart(150, 2));
+    expect(cod.codFee).toBe(ZONE_POLICY.codFee);
+    expect(cod.total).toBe(upi.total + ZONE_POLICY.codFee);
+    expect(cod.rows.map((row) => row.key)).toContain('codFee');
+  });
+
+  it('renders the quote rows through the legacy mapper', () => {
+    const quote = quoteFor(150, 2, 4.2);
+    const bill = billFromQuote(cart(150, 2), quote, ZONE_POLICY, 15);
+    expect(bill.rows).toEqual(legacy.rowsFromQuote(quote));
+    expect(bill.rows.filter((row) => row.key !== 'total').map((row) => row.label)).toEqual(
+      legacy
+        .rowsFromQuote(quote)
+        .filter((row) => row.key !== 'total')
+        .map((row) => row.label),
+    );
+  });
+
   it('agrees with an explicit quote for the same inputs', () => {
     const preview = demoApi.previewBill(cart(150, 2));
     const quote = quoteFor(150, 2, 4);

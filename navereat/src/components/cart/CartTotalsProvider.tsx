@@ -3,6 +3,17 @@ import { api } from '../../api/restaurantApi';
 import type { Restaurant } from '../../data/demo';
 import { useAppStore } from '../../store/appStore';
 import { cartLineOriginalPrice } from './cartPricing';
+import {
+  codState,
+  ctaBlock,
+  ctaLabel,
+  effectiveMethod,
+  hasChoice,
+  payNoteText,
+  upiState,
+  type PaymentContext,
+  type PaymentSettings,
+} from '../../logic/paymentOptions';
 import { CartTotalsContext, type CartGroup, type CartTotals } from './cartTotals';
 
 interface CartTotalsProviderProps {
@@ -10,6 +21,11 @@ interface CartTotalsProviderProps {
   offerMode: string | null;
   unavailable: boolean;
   freeAbove: number;
+  /** Tip and method the bill is priced with, the same fields the quote payload carries. */
+  tip: number;
+  payment: 'upi' | 'cod';
+  /** `GET /platform/status` switches that gate COD and block the CTA. */
+  platform: PaymentSettings;
   children: ReactNode;
 }
 
@@ -23,6 +39,9 @@ export function CartTotalsProvider({
   offerMode,
   unavailable,
   freeAbove,
+  tip,
+  payment,
+  platform,
   children,
 }: CartTotalsProviderProps) {
   const cart = useAppStore((state) => state.cart);
@@ -48,7 +67,10 @@ export function CartTotalsProvider({
 
   const subtotal = groups[0]?.subtotal ?? 0;
   const offers = useMemo(() => (offerMode === 'none' ? [] : api.offersSync(subtotal)), [offerMode, subtotal]);
-  const bill = useMemo(() => api.previewBill(cart, coupon), [cart, coupon]);
+  const bill = useMemo(
+    () => api.previewBill(cart, coupon, { tip, paymentMethod: payment }),
+    [cart, coupon, tip, payment],
+  );
   const savings = useMemo(
     () =>
       Object.values(cart).reduce(
@@ -60,9 +82,41 @@ export function CartTotalsProvider({
   const totalSavings = savings + bill.offerDiscount;
   const freeDelivery = !unavailable && subtotal >= freeAbove;
 
+  const paymentOptions = useMemo(() => {
+    const context: PaymentContext = {
+      total: bill.grandTotal || bill.total + bill.tip,
+      groups: groups.length,
+      restaurantCod: null,
+      backend: null,
+    };
+    const choice = hasChoice(platform, context);
+    const method = effectiveMethod(payment, platform, context);
+    return {
+      settings: platform,
+      cod: codState(platform, context),
+      upi: upiState(platform),
+      choice,
+      method,
+      ctaLabel: ctaLabel(choice, method),
+      payNote: payNoteText(choice, method),
+      block: ctaBlock(platform),
+    };
+  }, [bill.grandTotal, bill.tip, bill.total, groups.length, payment, platform]);
+
   const value = useMemo<CartTotals>(
-    () => ({ cart, groups, subtotal, offers, bill, savings, totalSavings, freeDelivery, restaurant }),
-    [bill, cart, freeDelivery, groups, offers, restaurant, savings, subtotal, totalSavings],
+    () => ({
+      cart,
+      groups,
+      subtotal,
+      offers,
+      bill,
+      savings,
+      totalSavings,
+      freeDelivery,
+      restaurant,
+      paymentOptions,
+    }),
+    [bill, cart, freeDelivery, groups, offers, paymentOptions, restaurant, savings, subtotal, totalSavings],
   );
 
   return <CartTotalsContext.Provider value={value}>{children}</CartTotalsContext.Provider>;

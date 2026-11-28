@@ -1,5 +1,5 @@
 import type { Coupon, DemoOffer } from '../data/demo';
-import type { QuoteBill } from '../logic/bill';
+import { rowsFromQuote, type BillRow, type QuoteBill } from '../logic/bill';
 
 /** The legacy cart charges no platform fee (see PARITY.md §2.2). */
 export const PLATFORM_FEE = 0;
@@ -47,6 +47,10 @@ export interface Bill {
   distanceKm?: number;
   grandTotal: number;
   freeDelivery: boolean;
+  /** Tip the quote was priced with (already inside `grandTotal`). */
+  tip: number;
+  /** Itemised rows exactly as `ew-bill.rowsFromQuote` renders them. */
+  rows: BillRow[];
 }
 
 export const cartCount = (cart: Cart): number =>
@@ -89,6 +93,8 @@ export const billFor = (cart: Cart, coupon: Coupon | null = null, offers: DemoOf
     total: Math.max(0, subtotal + PLATFORM_FEE - discount - offerDiscount),
     grandTotal: Math.max(0, subtotal + PLATFORM_FEE - discount - offerDiscount),
     freeDelivery: true,
+    tip: 0,
+    rows: [],
   };
 };
 
@@ -101,6 +107,7 @@ export const billFromQuote = (
   cart: Cart,
   quote: { bill: QuoteBill; distance?: { restaurantToCustomerKm?: number } },
   policy: { packagingPerItem: number; platformFee: number },
+  tip = 0,
 ): Bill => {
   const units = cartCount(cart);
   const round = (value: number) => Math.round(value * 100) / 100;
@@ -124,6 +131,8 @@ export const billFromQuote = (
     grandTotal: qb.grandTotal ?? 0,
     distanceKm: quote.distance?.restaurantToCustomerKm,
     freeDelivery: (qb.deliverySubsidy ?? 0) > 0,
+    tip: round(tip),
+    rows: rowsFromQuote(quote),
   };
 };
 

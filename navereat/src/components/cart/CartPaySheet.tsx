@@ -1,6 +1,7 @@
 import { useRef, type RefObject } from 'react';
 import { Icon } from '../Icon';
 import { Sheet, type SheetHandle } from '../Sheet';
+import { useCartTotals } from './cartTotals';
 
 type Payment = 'upi' | 'cod';
 
@@ -12,20 +13,11 @@ interface CartPaySheetProps {
   onPlace: () => void;
 }
 
-/* Titles, notes and glyphs match cart.html + js/cart-checkout-upgrades.js. */
+/* Titles and glyphs match cart.html + js/cart-checkout-upgrades.js; the
+   sub-text and badge come from the same eligibility rules the CTA uses. */
 const OPTIONS = [
-  {
-    id: 'upi' as const,
-    title: 'UPI / Online Payment',
-    sub: 'Instant & Contactless',
-    icon: 'solid:mobile-screen-button' as const,
-  },
-  {
-    id: 'cod' as const,
-    title: 'Cash on Delivery (COD)',
-    sub: 'Pay Cash or UPI at Doorstep',
-    icon: 'solid:hand-holding-dollar' as const,
-  },
+  { id: 'upi' as const, title: 'UPI / Online Payment', icon: 'solid:mobile-screen-button' as const },
+  { id: 'cod' as const, title: 'Cash on Delivery (COD)', icon: 'solid:hand-holding-dollar' as const },
 ];
 
 /* The sheet's confirm button lands where the cart's pay bar was, so a double
@@ -37,6 +29,7 @@ const OPTIONS = [
 const TAP_THROUGH_GUARD_MS = 350;
 
 export function CartPaySheet({ sheetRef, onClose, payment, onPayment, onPlace }: CartPaySheetProps) {
+  const { paymentOptions } = useCartTotals();
   const mountedAt = useRef(performance.now());
   const pointerType = useRef('mouse');
   const confirm = () => {
@@ -53,26 +46,38 @@ export function CartPaySheet({ sheetRef, onClose, payment, onPayment, onPlace }:
       onClose={onClose}
     >
       <div className="ct-pay-opts" id="ct-pay-sheet-opts" role="radiogroup" aria-label="Payment method">
-        {OPTIONS.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            role="radio"
-            aria-checked={payment === option.id}
-            className={`ct-pay-opt${payment === option.id ? ' is-selected' : ''}`}
-            data-ct-pick={option.id}
-            onClick={() => onPayment(option.id)}
-          >
-            <span className="ct-pay-ic" aria-hidden="true">
-              <Icon name={option.icon} size={18} />
-            </span>
-            <span className="ct-pay-copy">
-              <span className="ct-pay-title">{option.title}</span>
-              <span className="ct-pay-sub">{option.sub}</span>
-            </span>
-            <span className="ct-pay-radio" aria-hidden="true" />
-          </button>
-        ))}
+        {OPTIONS.map((option) => {
+          const state = option.id === 'cod' ? paymentOptions.cod : paymentOptions.upi;
+          return (
+            <button
+              key={option.id}
+              type="button"
+              role="radio"
+              aria-checked={payment === option.id}
+              aria-disabled={state.ok ? undefined : 'true'}
+              className={`ct-pay-opt${payment === option.id ? ' is-selected' : ''}${state.ok ? '' : ' is-disabled'}`}
+              data-ct-pick={option.id}
+              onClick={() => {
+                if (!state.ok) return;
+                onPayment(option.id);
+              }}
+            >
+              <span className="ct-pay-ic" aria-hidden="true">
+                <Icon name={option.icon} size={18} />
+              </span>
+              <span className="ct-pay-copy">
+                <span className="ct-pay-title">{option.title}</span>
+                <span className={state.ok ? 'ct-pay-sub' : 'ct-pay-sub is-warn'}>{state.note}</span>
+              </span>
+              {!state.ok && (
+                <span className="ct-pay-badge">
+                  {state.note === 'Unavailable' ? 'Unavailable' : 'Not eligible'}
+                </span>
+              )}
+              <span className="ct-pay-radio" aria-hidden="true" />
+            </button>
+          );
+        })}
       </div>
       <div id="ct-pay-confirm">
         <button

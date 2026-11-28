@@ -29,6 +29,7 @@ import type {
   PaymentIntent,
   PaymentVerifyResult,
   PlatformStatusLite,
+  PreviewBillOptions,
   Quote,
   QuoteRequest,
   RestaurantApi,
@@ -314,7 +315,7 @@ export const demoApi: RestaurantApi = {
     };
   },
 
-  previewBill(cart: Cart, coupon?: Coupon | null): Bill {
+  previewBill(cart: Cart, coupon?: Coupon | null, options: PreviewBillOptions = {}): Bill {
     const scenarios = readScenarios();
     const policy = policyFor(scenarios.zoneFees);
     const restaurant = findRestaurant(cartRestaurantId(cart) ?? undefined);
@@ -325,6 +326,7 @@ export const demoApi: RestaurantApi = {
       quantity: line.quantity,
     }));
     if (lines.length === 0) return billFor(cart, coupon ?? null);
+    const tip = Math.max(0, Math.min(1000, Math.round(Number(options.tip) || 0)));
     const subtotal = lines.reduce((sum, line) => sum + Number(line.price) * Number(line.quantity), 0);
     const applied = applyScenarioCoupon(scenarios, coupon ?? undefined) ?? null;
     const quote = computeQuote(policy, {
@@ -333,14 +335,15 @@ export const demoApi: RestaurantApi = {
       addressId: selectedAddress(scenarios)?.id ?? null,
       distanceKm: distanceFor(restaurant),
       items: lines,
-      paymentMethod: 'upi',
+      paymentMethod: options.paymentMethod === 'cod' ? 'cod' : 'upi',
       couponCode: applied ? applied.code : null,
       couponValue: applied ? couponDiscount(applied, subtotal) : 0,
       couponMinSubtotal: applied?.minOrder ?? 0,
       isFirstOrder: false,
       rainSurge: false,
+      tipAmount: tip,
     });
-    return billFromQuote(cart, quote, policy);
+    return billFromQuote(cart, quote, policy, tip);
   },
 
   async createOrder(input) {
@@ -553,6 +556,16 @@ export const demoApi: RestaurantApi = {
   async getPlatformStatus(): Promise<PlatformStatusLite> {
     await latency(readScenarios());
     const scenarios = readScenarios();
+    const policy = policyFor(scenarios.zoneFees);
+    const payment = {
+      isCodEnabled: scenarios.cod !== 'off' && scenarios.cod !== 'blocked',
+      isUpiEnabled: true,
+      isCodBlocked: scenarios.cod === 'blocked',
+      maxCodOrderAmount: scenarios.cod === 'overcap' ? 1 : policy.codMaxOrderAmount,
+      isUnderMaintenance: false,
+      maintenanceMessage: '',
+      isDeliveryPausedShortage: false,
+    };
     if (scenarios.closed) {
       return {
         service: {
@@ -561,10 +574,12 @@ export const demoApi: RestaurantApi = {
           title: 'Restaurant closed',
           message: 'This restaurant is not accepting orders right now.',
         },
+        ...payment,
       };
     }
     return {
       service: { state: 'open', canOrder: true, title: '', message: '' },
+      ...payment,
     };
   },
 };

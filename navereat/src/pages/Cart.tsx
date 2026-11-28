@@ -6,6 +6,7 @@ import { CartBillSheet } from '../components/cart/CartBillSheet';
 import { CartCheckoutFooter } from '../components/cart/CartCheckoutFooter';
 import { CartFreeDeliveryStrip } from '../components/cart/CartFreeDeliveryStrip';
 import { CartItems } from '../components/cart/CartItems';
+import { CartNoFeesNote } from '../components/cart/CartNoFeesNote';
 import { CartSkeleton } from '../components/cart/CartSkeleton';
 import { CartOfferWatcher } from '../components/cart/CartOfferWatcher';
 import { CartLocationModal } from '../components/cart/CartLocationModal';
@@ -14,6 +15,11 @@ import { CartPaySheet } from '../components/cart/CartPaySheet';
 import { CartSavingsCorner } from '../components/cart/CartSavingsCorner';
 import { CartTotalsProvider } from '../components/cart/CartTotalsProvider';
 import { CartUpsell } from '../components/cart/CartUpsell';
+import {
+  DEFAULT_PAYMENT_SETTINGS,
+  revalidateBeforeOrder,
+  type PaymentSettings,
+} from '../logic/paymentOptions';
 import { NOTE_MAX, TIP_PRESETS } from '../components/cart/cartConstants';
 import { Icon } from '../components/Icon';
 import { SlideReveal } from '../components/reveal/SlideReveal';
@@ -128,6 +134,7 @@ export function Cart() {
   const [tipInput, setTipInput] = useState('');
   const [tipError, setTipError] = useState('');
   const [payment, setPayment] = useState<Payment>(() => readPaymentMethod());
+  const [platform, setPlatform] = useState<PaymentSettings>(DEFAULT_PAYMENT_SETTINGS);
   const [cutlery, setCutlery] = useState(false);
   const [placing, setPlacing] = useState(false);
   const [offerPopup, setOfferPopup] = useState<DemoOffer[] | null>(null);
@@ -155,6 +162,27 @@ export function Cart() {
   const eta = restaurant ? `${restaurant.deliveryMin}–${restaurant.deliveryMax} mins` : '30–40 mins';
   const displayName = user?.name ?? 'Demo Foodie';
   const phone = user?.phone ?? '+91 98765 43210';
+  useEffect(() => {
+    let cancelled = false;
+    void api
+      .getPlatformStatus()
+      .then((status) => {
+        if (cancelled) return;
+        setPlatform({
+          isCodEnabled: status.isCodEnabled !== false,
+          isUpiEnabled: status.isUpiEnabled !== false,
+          isCodBlocked: status.isCodBlocked === true,
+          maxCodOrderAmount: status.maxCodOrderAmount,
+          isUnderMaintenance: status.isUnderMaintenance === true,
+          maintenanceMessage: status.maintenanceMessage,
+          isDeliveryPausedShortage: status.isDeliveryPausedShortage === true,
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [address, setAddress] = useState<SavedAddress | null>(() => selectedAddress());
   const [locationPrompt, setLocationPrompt] = useState(false);
   useEffect(() => {
@@ -304,6 +332,21 @@ export function Cart() {
       toast('Your cart is empty', 'error');
       return;
     }
+    // The selector rules can change under the customer (platform switch, COD
+    // cap). Re-check before POST /orders, exactly as `revalidateBeforeOrder()`.
+    const preview = api.previewBill(state.cart, state.coupon, { tip, paymentMethod: payment });
+    const groups = new Set(Object.values(state.cart).map((line) => line.resId)).size;
+    const recheck = revalidateBeforeOrder(platform, payment, {
+      total: preview.grandTotal,
+      groups,
+      restaurantCod: null,
+      backend: null,
+    });
+    if (recheck.method !== payment) setPayment(recheck.method);
+    if (recheck.message) {
+      toast(recheck.message, 'error');
+      return;
+    }
     const token = localStorage.getItem('nearbite_token') || localStorage.getItem('token');
     if (!token) {
       rememberCartForAuth();
@@ -432,6 +475,9 @@ export function Cart() {
         offerMode={offerMode}
         unavailable={unavailable}
         freeAbove={freeAbove}
+        tip={tip}
+        payment={payment}
+        platform={platform}
       >
         <div id="cart-has-items">
           <div className="ct-delivery-head" id="delivery-eta-card">
@@ -450,17 +496,7 @@ export function Cart() {
           </div>
 
           <SlideReveal dataReady maxBlocks={1} skeleton={<CartSkeleton />}>
-          <div className="ct-fees" role="note">
-            <svg aria-hidden="true" className="ct-fees-ic" fill="none" height="14" viewBox="0 0 24 24" width="14">
-              <path d="M19.5 4.5c.6 6.9-2.8 11.5-8.4 11.5H8.6C8.2 10.3 12.6 5.7 19.5 4.5Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.7" />
-              <path d="M5.2 19.5c.3-3.3 1.4-6 3.4-8.1" stroke="currentColor" strokeLinecap="round" strokeWidth="1.7" />
-            </svg>
-            <span className="ct-fees-copy">
-              <strong>₹0</strong> Packaging Fee
-              <span aria-hidden="true" className="ct-fees-dot" />
-              <strong>₹0</strong> Platform Fee
-            </span>
-          </div>
+          <CartNoFeesNote />
 
           <CartItems note={note} cutlery={cutlery} onCutleryChange={setCutlery} onOpenNote={openNoteSheet} />
 

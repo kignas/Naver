@@ -19,7 +19,7 @@ export interface SheetHandle {
   close: () => void;
 }
 
-export type SheetVariant = 'ct' | 'filter' | 'customize';
+export type SheetVariant = 'ct' | 'filter' | 'customize' | 'ctp';
 
 interface SheetProps {
   title: string;
@@ -242,7 +242,29 @@ export const Sheet = forwardRef<SheetHandle, SheetProps>(function Sheet(
     onPointerCancel: endDrag,
   };
 
-  const content = variant === 'customize' ? (
+  const content = variant === 'ctp' ? (
+    <div className={`ct-sheet-root ctp-root nb-sheet${visible ? ' is-open' : ''}`} role="presentation">
+      <div className="ct-scrim" onClick={requestClose} />
+      <button aria-label="Close" className="ctp-x" data-autofocus type="button" onClick={requestClose}>
+        <Icon name="solid:xmark" size={17} />
+      </button>
+      <div
+        className={`ct-sheet ctp-sheet${sheetClassName ? ` ${sheetClassName}` : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        ref={(element) => {
+          sheetRef.current = element;
+          panelRef.current = element;
+        }}
+      >
+        <h2 className="ctp-title" id={titleId}>{title}</h2>
+        <div className={bodyClassName || undefined} id={id ? `${id}-body` : undefined}>
+          {children}
+        </div>
+      </div>
+    </div>
+  ) : variant === 'customize' ? (
     <>
       <div className={`ewcs-backdrop${visible ? ' show' : ''}`} onClick={requestClose} />
       <div

@@ -60,6 +60,12 @@ export interface FreeDeliveryQuote {
 /** The backend quote, exactly as `POST /pricing/quote` returns it. */
 export type Quote = EngineQuote;
 
+export interface PreviewBillOptions {
+  /** Tip to price into the bill, exactly what `tipAmount` sends to a quote. */
+  tip?: number;
+  paymentMethod?: 'upi' | 'cod';
+}
+
 export interface QuoteRequest {
   restaurantId: string | number;
   addressId?: string | null;
@@ -157,6 +163,14 @@ export interface PaymentVerifyResult {
 
 export interface PlatformStatusLite {
   service: { state: string; canOrder: boolean; title: string; message: string };
+  /** Payment switches, the same fields `GET /platform/status` serves. */
+  isCodEnabled?: boolean;
+  isUpiEnabled?: boolean;
+  isCodBlocked?: boolean;
+  maxCodOrderAmount?: number;
+  isUnderMaintenance?: boolean;
+  maintenanceMessage?: string;
+  isDeliveryPausedShortage?: boolean;
 }
 
 export interface RestaurantApi {
@@ -181,7 +195,7 @@ export interface RestaurantApi {
   }): Promise<CouponCheck>;
 
   /** Local preview bill for carts the quote cannot price (multi-restaurant / no address). */
-  previewBill(cart: Cart, coupon?: Coupon | null): Bill;
+  previewBill(cart: Cart, coupon?: Coupon | null, options?: PreviewBillOptions): Bill;
 
   createOrder(input: CreateOrderInput): Promise<CreateOrderResult>;
   createPayment(input: { orderId: string; amount: number; method: 'upi' | 'cod' }): Promise<PaymentIntent>;

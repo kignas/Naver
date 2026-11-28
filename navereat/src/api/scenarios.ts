@@ -17,6 +17,8 @@ export type PaymentScenario =
   /** Status never settles inside the window: the customer must see `pending`. */
   | 'verifyTimeout';
 export type CouponScenario = 'valid' | 'invalid' | 'expired';
+/** COD states the payment sheet has to be able to show. */
+export type CodScenario = 'off' | 'blocked' | 'overcap';
 
 export interface DemoScenarios {
   /** Restaurant reports temporarily closed. */
@@ -30,6 +32,8 @@ export interface DemoScenarios {
   freeDelivery: 'reached' | 'not' | null;
   address: 'missing' | 'saved' | null;
   payment: PaymentScenario | null;
+  /** Pay sheet COD states: switched off, customer blocked, over the COD cap. */
+  cod: CodScenario | null;
   /** `/pricing/quote` fails with a retryable network error. */
   quoteError: boolean;
   /** Adds 1.2-1.8 s to every call. */
@@ -50,6 +54,7 @@ export const EMPTY_SCENARIOS: DemoScenarios = {
   freeDelivery: null,
   address: null,
   payment: null,
+  cod: null,
   quoteError: false,
   slow: false,
   emptyCart: false,
@@ -85,6 +90,9 @@ const parseFlag = (raw: string): DemoScenarios => {
           break;
         case 'address':
           next.address = value === 'missing' || value === 'saved' ? value : null;
+          break;
+        case 'cod':
+          next.cod = value === 'off' || value === 'blocked' || value === 'overcap' ? value : null;
           break;
         case 'payment':
           next.payment =

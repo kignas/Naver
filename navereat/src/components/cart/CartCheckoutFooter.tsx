@@ -11,7 +11,7 @@ interface CartCheckoutFooterProps {
 }
 
 export function CartCheckoutFooter({ tip, unavailable, onOpenBill, onProceed, onPlace }: CartCheckoutFooterProps) {
-  const { bill, totalSavings, groups } = useCartTotals();
+  const { bill, totalSavings, groups, paymentOptions } = useCartTotals();
   const payTotal = bill.total + tip;
   const units = groups.reduce((count, group) => count + group.units, 0);
   const plural = units === 1 ? 'item' : 'items';
@@ -34,8 +34,8 @@ export function CartCheckoutFooter({ tip, unavailable, onOpenBill, onProceed, on
           className={unavailable ? 'ct-cta locked' : 'ct-cta'}
           id="btn-checkout"
           type="button"
-          aria-disabled={unavailable ? 'true' : 'false'}
-          onClick={unavailable ? onPlace : onProceed}
+          aria-disabled={unavailable || paymentOptions.block ? 'true' : 'false'}
+          onClick={unavailable || paymentOptions.block || !paymentOptions.choice ? onPlace : onProceed}
         >
           <span className="ct-cta-text" id="checkout-label">
             {unavailable ? (
@@ -43,9 +43,14 @@ export function CartCheckoutFooter({ tip, unavailable, onOpenBill, onProceed, on
                 Delivery unavailable
                 <span className="ct-cta-sub">Change your address to continue</span>
               </>
+            ) : paymentOptions.block ? (
+              <>
+                {paymentOptions.block.label}
+                <span className="ct-cta-sub">{paymentOptions.block.sub}</span>
+              </>
             ) : (
               <>
-                Proceed to Pay{' '}
+                {paymentOptions.ctaLabel}{' '}
                 <svg className="ct-cta-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path
                     d="M5 12h13m-5-5.5 5.5 5.5-5.5 5.5"
@@ -65,7 +70,7 @@ export function CartCheckoutFooter({ tip, unavailable, onOpenBill, onProceed, on
       </div>
       <div className="ct-pay-note">
         <Icon name="solid:lock" size={12} />
-        <span>Secure UPI payment · GPay, PhonePe &amp; more</span>
+        <span id="ct-pay-note-text">{paymentOptions.payNote}</span>
       </div>
     </div>
   );
