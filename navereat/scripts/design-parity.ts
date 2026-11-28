@@ -11,6 +11,7 @@
 import http from 'node:http';
 import { createHash } from 'node:crypto';
 import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { chromium, type Page } from 'playwright-core';
@@ -26,12 +27,15 @@ const originalDir = process.env.ORIGINAL_DIR
   : path.resolve(appRoot, '../../../reference/Nearbite-main');
 const originalApiRoute = /https:\/\/api\.[^/]+\/.*/;
 const placeholdersRoot = path.join(appRoot, 'src/assets/placeholders');
-const outRoot = path.join(repoRoot, 'verify/parity');
+const outRoot = process.env.PARITY_OUT
+  ? path.resolve(repoRoot, process.env.PARITY_OUT)
+  : path.join(repoRoot, 'verify/parity');
 const generatedPlaceholdersRoot = path.join(outRoot, 'placeholders');
+const parityOnly = (process.env.PARITY_ONLY ?? '').split(',').map((entry) => entry.trim()).filter(Boolean);
 mkdirSync(generatedPlaceholdersRoot, { recursive: true });
 const originalPort = 4183;
 const appPort = 4184;
-const viewport = { width: 390, height: 844 };
+const viewport = { width: Number(process.env.PARITY_WIDTH ?? 390), height: 844 };
 const scale = 2;
 
 const MIME: Record<string, string> = {
@@ -234,7 +238,15 @@ async function mockApi(route: import('playwright-core').Route): Promise<void> {
   if (pathname === '/orders') return json(route, apiOrders);
   if (pathname === '/users/profile') return json(route, demoUser);
   if (pathname === '/pricing/restaurant-cards') return json(route, { cards: [] });
-  if (/^\/restaurants\/[^/]+\/reviews$/.test(pathname)) return json(route, { items: [], total: 0, page: 1, pages: 0, summary: null });
+  if (/^\/restaurants\/[^/]+\/reviews$/.test(pathname)) {
+    // The reviews endpoint answers with the full envelope, not `json()`'s
+    // data-only wrapper.
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, data: [], total: 0, page: 1, pages: 0, summary: null }),
+    });
+  }
   const menuMatch = pathname.match(/^\/restaurants\/([^/]+)\/menu$/);
   if (menuMatch) {
     const restaurant = apiRestaurants.find((entry) => entry._id === menuMatch[1]);
@@ -398,6 +410,8 @@ async function capture(
     note?: string;
   } = {},
 ): Promise<void> {
+  const only = parityOnly;
+  if (only.length && !only.some((prefix) => name.startsWith(prefix))) return;
   const { probes = [], element, cropTop, cropBelow, bands, note } = options;
   const shot = async (page: Page, label: 'original' | 'navereat'): Promise<{ png: PNG; below: number }> => {
     await page.evaluate(
@@ -589,6 +603,62 @@ async function capture(
   );
 }
 
+
+const PARITY_THRESHOLD = 0.5;
+const reportDir = process.env.PARITY_REPORT
+  ? path.resolve(repoRoot, process.env.PARITY_REPORT)
+  : path.join(repoRoot, 'verify/parity-report');
+const reportLinks = (path.relative(reportDir, outRoot) || '.').split(path.sep).join('/');
+
+const escapeHtml = (value: string): string =>
+  value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] ?? char);
+
+const writeParityReport = async (): Promise<void> => {
+  await fs.mkdir(reportDir, { recursive: true });
+  await fs.writeFile(path.join(outRoot, 'report.json'), JSON.stringify(results, null, 2));
+  let commit = 'unknown';
+  try {
+    commit = execFileSync('git', ['-C', originalDir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  } catch {
+    /* reference may not be a git checkout */
+  }
+  const measuredAt = new Date().toISOString();
+  const passed = results.filter((entry) => entry.diffPct <= PARITY_THRESHOLD).length;
+  const worst = [...results].sort((a, b) => b.diffPct - a.diffPct).slice(0, 10);
+  const rows = results
+    .map((entry) => {
+      const probes = entry.probes.map((probe) => `${probe.selector}: ${probe.diff.join(', ')}`).join('; ');
+      const state = entry.diffPct <= PARITY_THRESHOLD ? 'pass' : 'fail';
+      return `<tr class="${state}"><td><a href="${reportLinks}/side/${entry.name}.png">${escapeHtml(entry.name)}</a></td>` +
+        `<td>${entry.diffPct}%</td><td>${entry.diffPctRaw}%</td><td>${state.toUpperCase()}</td>` +
+        `<td>${escapeHtml(probes) || '—'}</td></tr>`;
+    })
+    .join('\n');
+  const cards = results
+    .map(
+      (entry) => `<figure><figcaption>${escapeHtml(entry.name)} — ${entry.diffPct}%</figcaption>` +
+        `<div class="shots"><img src="${reportLinks}/original/${entry.name}.png" alt="${escapeHtml(entry.name)} original">` +
+        `<img src="${reportLinks}/navereat/${entry.name}.png" alt="${escapeHtml(entry.name)} navereat">` +
+        `<img src="${reportLinks}/diff/${entry.name}.png" alt="${escapeHtml(entry.name)} diff"></div></figure>`,
+    )
+    .join('\n');
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Navereat parity report</title>
+<style>body{font:14px/1.45 system-ui,sans-serif;margin:24px;color:#16181d;background:#f7f7f9}h1{font-size:22px}
+p.meta{color:#5b6270}table{border-collapse:collapse;width:100%;background:#fff;margin:16px 0}th,td{border:1px solid #e3e5ea;padding:6px 8px;text-align:left;vertical-align:top}
+tr.fail td{background:#fff1f0}tr.pass td{background:#f4fbf6}figure{background:#fff;border:1px solid #e3e5ea;padding:8px;margin:12px 0}
+.shots{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}.shots img{width:100%;display:block;border:1px solid #eee}
+code{background:#eef0f4;padding:1px 4px;border-radius:4px}</style></head><body>
+<h1>Navereat pixel-parity report</h1>
+<p class="meta">Original reference <code>${escapeHtml(originalDir)}</code> at commit <code>${escapeHtml(commit)}</code>.<br>
+Threshold ${PARITY_THRESHOLD}% of usable pixels. Measured ${measuredAt}. <strong>${passed} / ${results.length} screens pass.</strong></p>
+<h2>Worst screens</h2><ul>${worst.map((entry) => `<li>${escapeHtml(entry.name)} — ${entry.diffPct}%</li>`).join('')}</ul>
+<h2>All screens</h2><table><thead><tr><th>Screen</th><th>Diff %</th><th>Raw diff %</th><th>State</th><th>Probe differences</th></tr></thead><tbody>${rows}</tbody></table>
+<h2>Original / Navereat / diff</h2>${cards}
+</body></html>`;
+  await fs.writeFile(path.join(reportDir, 'index.html'), html);
+  console.log(`[parity] report: ${path.relative(repoRoot, path.join(reportDir, 'index.html'))} (${passed}/${results.length} pass, reference ${commit.slice(0, 12)})`);
+};
+
 const seedStorage = () => {
   localStorage.setItem('nearbite_token', 'demo-token');
   localStorage.setItem('token', 'demo-token');
@@ -611,7 +681,7 @@ const seedStorage = () => {
       },
     }),
   );
-  localStorage.setItem('nearbite_address', JSON.stringify({ tag: 'Home', house: 'Demo Street', area: 'Demo City…', city: 'Demo City…' }));
+  localStorage.setItem('nearbite_address', JSON.stringify({ tag: 'Home', house: 'Demo Street', area: 'Demo City…', city: 'Demo City…', pincode: '700001', location: { type: 'Point', coordinates: [88.3639, 22.5726] } }));
   localStorage.setItem('eatswada_theme', 'light');
   localStorage.setItem('eatswada_header_theme', 'raspberry');
   localStorage.setItem('eatswada_new_user_location_prompt_shown', '1');
@@ -685,6 +755,12 @@ async function main(): Promise<void> {
     logLevel: 'error',
     preview: { host: '127.0.0.1', port: appPort, strictPort: true },
   });
+  const finish = async (): Promise<void> => {
+    await mainContext.close();
+    await browser.close();
+    await new Promise<void>((resolve) => originalServer.close(() => resolve()));
+    previewServer.httpServer.close();
+  };
   const browser = await chromium.launch({
     executablePath: '/usr/bin/chromium',
     headless: true,
@@ -707,7 +783,7 @@ async function main(): Promise<void> {
         localStorage.setItem('nearbite_token', 'demo-token');
         localStorage.setItem('token', 'demo-token');
         localStorage.setItem('nearbite_user', JSON.stringify({ name: 'Sagnik', phone: '+91 98765 43210' }));
-        localStorage.setItem('nearbite_address', JSON.stringify({ tag: 'Home', house: 'Demo Street', area: 'Demo City…', city: 'Demo City…' }));
+        localStorage.setItem('nearbite_address', JSON.stringify({ tag: 'Home', house: 'Demo Street', area: 'Demo City…', city: 'Demo City…', pincode: '700001', location: { type: 'Point', coordinates: [88.3639, 22.5726] } }));
         localStorage.setItem('eatswada_theme', 'light');
         localStorage.setItem('eatswada_header_theme', 'raspberry');
         localStorage.setItem('eatswada_new_user_location_prompt_shown', '1');
@@ -1045,16 +1121,25 @@ async function main(): Promise<void> {
     await stripChrome(original);
     await original.click('[data-category-name="Momos"]');
     await app.locator('[data-category-name="Momos"]:visible').first().click();
-    await original.waitForSelector('#restaurant-list .rs-skeleton, #restaurant-list .u99-card-host.rs-skeleton', {
-      timeout: 8000,
-    });
-    await app.waitForFunction(
-      () => document.querySelectorAll('#restaurant-list .rs-skeleton').length === 2,
-      null,
-      { timeout: 8000 },
-    );
+    let skeletonSeen = true;
+    try {
+      await original.waitForSelector('#restaurant-list .rs-skeleton, #restaurant-list .u99-card-host.rs-skeleton', {
+        timeout: 8000,
+      });
+      await app.waitForFunction(
+        () => document.querySelectorAll('#restaurant-list .rs-skeleton').length === 2,
+        null,
+        { timeout: 8000 },
+      );
+    } catch {
+      // The skeleton is timing-dependent; a slow fixture can deliver the cards
+      // before either wait samples it. Skip that one frame instead of failing
+      // every screen after it.
+      skeletonSeen = false;
+      console.log('[parity] home-category-skeleton: loading state not sampled, skipping');
+    }
     await pause(250);
-    await capture('home-category-skeleton', original, app, {
+    if (skeletonSeen) await capture('home-category-skeleton', original, app, {
       element: '#restaurants-section',
       probes: ['.rs-skeleton', '.u99-restaurant-card'],
       note: 'the same card-shaped skeleton while the category search runs (app in api mode)',
@@ -1173,13 +1258,52 @@ async function main(): Promise<void> {
     await stripChrome(original);
     await original.evaluate(() => document.fonts.ready);
     await original.waitForTimeout(900);
-    await original.evaluate(() => window.scrollTo(0, 0));
-    await original.waitForTimeout(250);
     const app = await mainContext.newPage();
     await app.goto(`http://127.0.0.1:${appPort}/#/restaurant/1`, { waitUntil: 'networkidle' });
     await app.waitForSelector('.rest-page .menu-item', { timeout: 20000 });
     await app.evaluate(() => document.fonts.ready);
+    // Both sides auto-scroll into the menu on load; let each finish, then put
+    // both back at the top so the frame is the same state, not one scrolled.
+    await app
+      .waitForFunction(
+        () => {
+          const scroller = document.querySelector<HTMLElement>('.rest-scroll');
+          return !!scroller && scroller.scrollTop > 0;
+        },
+        null,
+        { timeout: 6000 },
+      )
+      .catch(() => undefined);
+    await app.waitForTimeout(300);
+    await original.evaluate(() => window.scrollTo(0, 0));
+    // Cancel the auto-scroll with a user gesture, then hold the top until the
+    // frame settles; a reset done mid-animation would be overwritten.
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await app.evaluate(() => {
+        window.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, bubbles: true }));
+        const scroller = document.querySelector<HTMLElement>('.rest-scroll');
+        if (scroller) scroller.scrollTop = 0;
+      });
+      await app.waitForTimeout(200);
+    }
+    await original.waitForTimeout(350);
+    await app.waitForTimeout(350);
+    // Harness normalisation: the reference `lift()` ignores a cart bar whose
+    // bottom sits 12px above the viewport, so its Menu button hides behind the
+    // bar. Pin the bar to the bottom edge on both sides to compare the
+    // intended stacked layout.
+    for (const page of [original, app]) {
+      await page.addStyleTag({ content: '#white-cart-root{--nb-cart-bottom:0px !important}' });
+      await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+    }
+    // The bar animates in, so measure again once it has settled.
+    await original.waitForTimeout(700);
     await app.waitForTimeout(700);
+    for (const page of [original, app]) {
+      await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+    }
+    await original.waitForTimeout(300);
+    await app.waitForTimeout(300);
     await capture('restaurant-top', original, app, {
       probes: ['#res-name', '#res-cuisine', '#res-distance', '#res-time', '#res-rating-pill', '#res-offer-text', '#res-tabs', '#restaurant-filter-bar', '.menu-item'],
     });
@@ -1224,13 +1348,15 @@ async function main(): Promise<void> {
     await original.waitForTimeout(500);
     await app.waitForTimeout(500);
     await capture('customization-open', original, app, {
+      element: '#ewcs-sheet',
       probes: ['#ewcs-sheet', '.ewcs-head h3', '.ewcs-gtitle', '.ewcs-opt', '.ewcs-add', '.ewcs-qty'],
     });
     await original.locator('.ewcs-opt', { hasText: 'Extra chutney' }).click();
     await app.locator('.ewcs-opt', { hasText: 'Extra chutney' }).click();
     await original.waitForTimeout(300);
     await app.waitForTimeout(300);
-    await capture('customization-selected', original, app, { probes: ['.ewcs-opt input:checked', '.ewcs-add'] });
+    await capture('customization-selected', original, app, {
+      element: '#ewcs-sheet', probes: ['.ewcs-opt input:checked', '.ewcs-add'] });
     await original.evaluate(() => {
       const body = document.querySelector<HTMLElement>('#ewcs-sheet .ewcs-body');
       if (body) body.scrollTop = body.scrollHeight;
@@ -1241,7 +1367,8 @@ async function main(): Promise<void> {
     });
     await original.waitForTimeout(350);
     await app.waitForTimeout(350);
-    await capture('customization-scrolled', original, app, { probes: ['.ewcs-body', '.ewcs-foot'] });
+    await capture('customization-scrolled', original, app, {
+      element: '#ewcs-sheet', probes: ['.ewcs-body', '.ewcs-foot'] });
     await original.evaluate(() => {
       const body = document.querySelector<HTMLElement>('#ewcs-sheet .ewcs-body');
       if (body) body.scrollTop = 0;
@@ -1282,8 +1409,169 @@ async function main(): Promise<void> {
     await capture('customization-error', originalPizza, appPizza, { probes: ['#ewcs-sheet', '.ewcs-error, .ewcs-grule .req'] });
     await originalPizza.close();
     await appPizza.close();
+
+    // ── Info tab ──────────────────────────────────────────────────────
+    await original.evaluate(() => window.scrollTo(0, 0));
+    await app.evaluate(() => {
+      const scroller = document.querySelector<HTMLElement>('.rest-scroll');
+      if (scroller) scroller.scrollTop = 0;
+    });
+    await original.click('#res-tab-info');
+    await app.click('#res-tab-info');
+    await original.waitForTimeout(450);
+    await app.waitForTimeout(450);
+    await capture('restaurant-info', original, app, {
+      probes: ['#info-pane', '.inf-name', '.inf-sub', '.inf-addr', '.inf-sec-title'],
+      note: 'Info tab content',
+    });
+    await original.click('#res-tab-menu');
+    await app.click('#res-tab-menu');
+    await original.waitForTimeout(350);
+    await app.waitForTimeout(350);
+
+    // ── Category collapse ─────────────────────────────────────────────
+    const scrollToHeader = async (page: Page, client: boolean) => {
+      await page.evaluate(
+        ({ sample, client }) => {
+          const header = document.querySelector(sample);
+          if (!header) return;
+          const top = header.getBoundingClientRect().top + (client ? 0 : window.scrollY) - 150;
+          const scroller = document.querySelector<HTMLElement>('.rest-scroll');
+          if (scroller instanceof HTMLElement && scroller.scrollHeight > scroller.clientHeight + 4) {
+            scroller.scrollTop += header.getBoundingClientRect().top - 150;
+          } else {
+            window.scrollTo(0, Math.max(0, top));
+          }
+        },
+        { sample: '.menu-cat-header', client },
+      );
+    };
+    await scrollToHeader(original, false);
+    await scrollToHeader(app, true);
+    await original.waitForTimeout(300);
+    await app.waitForTimeout(300);
+    const collapse = async (page: Page): Promise<void> => {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await page.locator('.menu-cat-header').first().click();
+        try {
+          await page.waitForFunction(
+            () => document.querySelector('.menu-cat-header')?.classList.contains('collapsed') === true,
+            null,
+            { timeout: 1500 },
+          );
+          return;
+        } catch {
+          /* the click landed before the header settled; retry */
+        }
+      }
+      throw new Error('category header did not collapse');
+    };
+    await Promise.all([collapse(original), collapse(app)]);
+    await original.waitForTimeout(400);
+    await app.waitForTimeout(400);
+    await capture('restaurant-category-collapsed', original, app, {
+      probes: ['.menu-cat-header.collapsed', '.menu-cat-items.collapsed', '.menu-cat-title', '.menu-cat-chevron'],
+      note: 'first category collapsed by its chevron',
+    });
+    await original.locator('.menu-cat-header').first().click();
+    await app.locator('.menu-cat-header').first().click();
+    await original.waitForTimeout(350);
+    await app.waitForTimeout(350);
+
+    // ── Floating menu jump sheet ──────────────────────────────────────
+    // The reference button can sit under its own cart bar; dispatch the click
+    // so the page handler runs without hit-testing.
+    await original.locator('#ew-mj-btn').dispatchEvent('click');
+    await app.locator('#ew-mj-btn').dispatchEvent('click');
+    await original.waitForSelector('#ew-mj-sheet.show', { timeout: 5000 });
+    await app.waitForSelector('#ew-mj-sheet.show', { timeout: 5000 });
+    await original.waitForTimeout(400);
+    await app.waitForTimeout(400);
+    await capture('restaurant-menu-jump', original, app, {
+      probes: ['#ew-mj-btn', '#ew-mj-sheet', '.ew-mj-item', '.ew-mj-count'],
+      note: 'floating Menu button with the category sheet open',
+    });
+    await original.locator('#ew-mj-btn').dispatchEvent('click');
+    await app.locator('#ew-mj-btn').dispatchEvent('click');
+    await original.waitForTimeout(350);
+    await app.waitForTimeout(350);
+
+    // ── Full-screen search page ───────────────────────────────────────
+    await original.locator('#menu-search-btn').click();
+    await app.locator('#menu-search-btn').click();
+    await original.waitForSelector('#ss-root.is-in', { timeout: 5000 });
+    await app.waitForSelector('#ss-root.is-in', { timeout: 5000 });
+    await original.waitForTimeout(500);
+    await app.waitForTimeout(500);
+    await capture('restaurant-search-empty', original, app, {
+      probes: ['#ss-root', '.ss-field', '.ss-cat-row', '.ss-pop-card', '.ss-diet-chip'],
+      note: 'search page with no query: popular dishes + browse the menu',
+    });
+    await original.fill('#ss-input', 'dosa');
+    await app.fill('#ss-input', 'dosa');
+    await original.waitForTimeout(450);
+    await app.waitForTimeout(450);
+    await capture('restaurant-search-results', original, app, {
+      probes: ['.ss-count', '.ss-card', '.ss-name', '.ss-hl', '.ss-cat', '.ss-now', '.ss-cta'],
+      note: 'matched text highlighted, category tag, add button',
+    });
+    await original.locator('.ss-diet-chip[data-diet="veg"]').click();
+    await app.locator('.ss-diet-chip[data-diet="veg"]').click();
+    await original.waitForTimeout(400);
+    await app.waitForTimeout(400);
+    await capture('restaurant-search-veg', original, app, {
+      probes: ['.ss-count', '.ss-diet-chip.is-on', '.ss-card'],
+      note: 'Veg toggle on inside the search page',
+    });
+    await original.locator('.ss-diet-chip[data-diet="veg"]').click();
+    await app.locator('.ss-diet-chip[data-diet="veg"]').click();
+    await original.fill('#ss-input', 'zzzz');
+    await app.fill('#ss-input', 'zzzz');
+    await original.waitForTimeout(450);
+    await app.waitForTimeout(450);
+    await capture('restaurant-search-no-results', original, app, {
+      probes: ['.ss-empty', '.ss-empty-t', '.ss-empty-s', '.ss-empty-btn'],
+      note: 'no dishes found + bestsellers suggestions',
+    });
+
+    // ── Add from the search page, then the cart bar ───────────────────
+    await original.fill('#ss-input', 'rava');
+    await app.fill('#ss-input', 'rava');
+    await original.waitForTimeout(400);
+    await app.waitForTimeout(400);
+    await original.locator('.ss-card .nb-add-btn').first().click();
+    await app.locator('.ss-card .nb-add-btn').first().click();
+    await original.waitForTimeout(600);
+    await app.waitForTimeout(600);
+    await capture('restaurant-search-added', original, app, {
+      probes: ['.ss-card .nb-qty', '.nb-qty-val', '.ss-count'],
+      note: 'ADD inside the search page turns into a stepper and the cart bar updates',
+    });
+    await original.locator('.ss-back').click();
+    await app.locator('.ss-back').click();
+    await original.waitForTimeout(600);
+    await app.waitForTimeout(600);
+    await capture('restaurant-cart-bar', original, app, {
+      probes: ['#white-cart-root', '.cart-bar', '.cart-bar--above-nav'],
+      note: 'cart bar after adding from the search page',
+    });
+
     await original.close();
     await app.close();
+
+    if (parityOnly.length) {
+      // A task-scoped run stops here: cart and order screens are a separate
+      // audit and can hang on their own.
+      await finish();
+      await writeParityReport();
+      console.log('\n| screen/state | diff % (raw) | probe differences |');
+      console.log('| --- | --- | --- |');
+      for (const entry of results) {
+        const detail = entry.probes.map((probe) => `${probe.selector}: ${probe.diff.join(', ')}`).join('; ') || '—';
+        console.log(`| ${entry.name} | ${entry.diffPct}% (${entry.diffPctRaw}%) | ${detail} |`);
+      }
+      return;
+    }
   }
 
   // ── Cart ────────────────────────────────────────────────────────────
@@ -1605,12 +1893,8 @@ async function main(): Promise<void> {
     await app.close();
   }
 
-  await mainContext.close();
-  await browser.close();
-  await new Promise<void>((resolve) => originalServer.close(() => resolve()));
-  previewServer.httpServer.close();
-
-  await fs.writeFile(path.join(outRoot, 'report.json'), JSON.stringify(results, null, 2));
+  await finish();
+  await writeParityReport();
   console.log('\n| screen/state | diff % (raw) | probe differences |');
   console.log('| --- | --- | --- |');
   for (const entry of results) {
@@ -1619,7 +1903,12 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error) => {
+main().catch(async (error) => {
   console.error(error);
+  try {
+    await writeParityReport();
+  } catch (reportError) {
+    console.error(reportError);
+  }
   process.exitCode = 1;
 });

@@ -234,6 +234,31 @@ const orderFrom = (input: CreateOrderInput, paymentStatus: CreateOrderResult['pa
   } as Order;
 };
 
+const platformStatusNow = (): PlatformStatusLite => {
+  const scenarios = readScenarios();
+  const policy = policyFor(scenarios.zoneFees);
+  const payment = {
+    isCodEnabled: scenarios.cod !== 'off',
+    isUpiEnabled: scenarios.upi !== 'off',
+    isCodBlocked: scenarios.cod === 'blocked',
+    maxCodOrderAmount: scenarios.cod === 'overcap' ? 1 : policy.codMaxOrderAmount,
+    isUnderMaintenance: false,
+    maintenanceMessage: '',
+    isDeliveryPausedShortage: false,
+  };
+  return {
+    service: scenarios.closed
+      ? {
+          state: 'closed_manual',
+          canOrder: false,
+          title: 'Restaurant closed',
+          message: 'This restaurant is not accepting orders right now.',
+        }
+      : { state: 'open', canOrder: true, title: '', message: '' },
+    ...payment,
+  };
+};
+
 export const demoApi: RestaurantApi = {
   mode: 'demo',
 
@@ -557,34 +582,11 @@ export const demoApi: RestaurantApi = {
     return ordersNow();
   },
 
+  platformStatusSync: platformStatusNow,
+
   async getPlatformStatus(): Promise<PlatformStatusLite> {
     await latency(readScenarios());
-    const scenarios = readScenarios();
-    const policy = policyFor(scenarios.zoneFees);
-    const payment = {
-      isCodEnabled: scenarios.cod !== 'off',
-      isUpiEnabled: scenarios.upi !== 'off',
-      isCodBlocked: scenarios.cod === 'blocked',
-      maxCodOrderAmount: scenarios.cod === 'overcap' ? 1 : policy.codMaxOrderAmount,
-      isUnderMaintenance: false,
-      maintenanceMessage: '',
-      isDeliveryPausedShortage: false,
-    };
-    if (scenarios.closed) {
-      return {
-        service: {
-          state: 'closed_manual',
-          canOrder: false,
-          title: 'Restaurant closed',
-          message: 'This restaurant is not accepting orders right now.',
-        },
-        ...payment,
-      };
-    }
-    return {
-      service: { state: 'open', canOrder: true, title: '', message: '' },
-      ...payment,
-    };
+    return platformStatusNow();
   },
 };
 

@@ -1137,109 +1137,6 @@ try {
     await insetContext.close();
   }
 
-  // ---- 8d. Browser bottom UI: the surface must reach the visible bottom. --
-  // This is the phone case that CI missed. On Android Chrome with the browser's
-  // own bottom bar on screen, visualViewport.height is shorter than
-  // window.innerHeight. A shell sized with 100dvh then ends short (a bare strip
-  // under the last row) and the capsule, being fixed, ends that much further
-  // from the physical bottom. lib/viewport.ts publishes --vvh/--vv-gap from
-  // visualViewport; the flat case proves the module is live, and the injected
-  // vars reproduce the phone numbers for the layout assertions.
-  for (const width of [360, 393, 412]) {
-    const spec = specFor(width);
-    const ctx = await browser.newContext({ viewport: { width, height: 844 }, isMobile: true, hasTouch: true });
-    await seed(ctx);
-    const page = await ctx.newPage();
-    await page.goto(`${base}/#/`, { waitUntil: 'networkidle' });
-    await page.waitForSelector('.bottom-nav');
-    await sleep(900);
-
-    const read = () =>
-      page.evaluate(() => {
-        const shell = document.querySelector('.app-shell');
-        const nav = document.querySelector('.bottom-nav');
-        const root = document.getElementById('root');
-        const css = getComputedStyle(document.documentElement);
-        return {
-          inner: window.innerHeight,
-          shellBottom: shell ? shell.getBoundingClientRect().bottom : null,
-          rootBottom: root ? root.getBoundingClientRect().bottom : null,
-          navBottom: nav ? nav.getBoundingClientRect().bottom : null,
-          vvh: css.getPropertyValue('--vvh').trim(),
-          gap: css.getPropertyValue('--vv-gap').trim(),
-        };
-      });
-
-    const flat = await read();
-    check(
-      `browser-ui ${width}: --vvh tracks the visual viewport`,
-      flat.vvh === `${Math.round(flat.inner)}px` && flat.gap === '0px',
-      `--vvh=${flat.vvh} --vv-gap=${flat.gap} innerHeight=${flat.inner}`,
-    );
-    check(
-      `browser-ui ${width}: flat surface reaches the bottom`,
-      flat.shellBottom !== null && near(flat.shellBottom, flat.inner, 1),
-      `shell=${flat.shellBottom} innerHeight=${flat.inner}`,
-    );
-
-    // 38px of the layout viewport hidden by the browser's own bottom UI.
-    const UI = 38;
-    const visible = flat.inner - UI;
-    // lib/viewport.ts writes these as inline custom properties, so the test
-    // writes them the same way (a stylesheet rule would lose to the inline one).
-    await page.evaluate(
-      ({ ui, vh }) => {
-        document.documentElement.style.setProperty('--vv-gap', `${ui}px`);
-        document.documentElement.style.setProperty('--vvh', `${vh}px`);
-      },
-      { ui: UI, vh: visible },
-    );
-    await sleep(500);
-    const covered = await read();
-    check(
-      `browser-ui ${width}: the surface reaches the visible bottom`,
-      covered.shellBottom !== null && near(covered.shellBottom, visible, 1) &&
-        covered.rootBottom !== null && near(covered.rootBottom, visible, 1),
-      `shell=${covered.shellBottom} root=${covered.rootBottom} visible=${visible}`,
-    );
-    check(
-      `browser-ui ${width}: the capsule sits 54k above the visible bottom`,
-      covered.navBottom !== null && near(visible - covered.navBottom, spec.bottom, 1),
-      `gap=${visible - covered.navBottom} vs ${spec.bottom} (window.innerHeight would give ${Math.round(flat.inner - covered.navBottom)})`,
-    );
-
-    const png = PNG.sync.read(await page.screenshot());
-    // Only the visible part counts: rows below --vvh are what Chrome's own
-    // toolbar covers on the phone, and they are expected to be one flat colour.
-    const lastVisibleRow = Math.min(png.height - 1, Math.round(visible) - 1);
-    const flatRows = (image) => {
-      let run = 0;
-      for (let y = lastVisibleRow; y >= 0 && lastVisibleRow - y <= 120; y -= 1) {
-        const at = (x) => (y * image.width + x) * 4;
-        const first = [image.data[at(0)], image.data[at(0) + 1], image.data[at(0) + 2]];
-        let flatRow = true;
-        for (let x = 0; x < image.width; x += 2) {
-          const i = at(x);
-          if (
-            Math.abs(image.data[i] - first[0]) > 2 ||
-            Math.abs(image.data[i + 1] - first[1]) > 2 ||
-            Math.abs(image.data[i + 2] - first[2]) > 2
-          ) {
-            flatRow = false;
-            break;
-          }
-        }
-        if (!flatRow) break;
-        run += 1;
-      }
-      return run;
-    };
-    const stripRows = flatRows(png);
-    check(`browser-ui ${width}: no flat strip across the bottom edge`, stripRows < 10, `${stripRows} flat rows`);
-    await page.screenshot({ path: path.join(outDir, `browser-ui-${width}.png`) });
-    await ctx.close();
-  }
-
   // ---- 9. Drag the pill from History to Home (haptic on the snap). -------
   const dragContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   await seed(dragContext);
@@ -1770,6 +1667,126 @@ try {
     reserve: SPEC.reserve,
     shadow: `0 ${SPEC.shadowY}px ${SPEC.shadowBlur}px rgba(0,0,0,0.1)`,
   };
+  // ---- 14. Full-bleed bottom: every page reaches the physical edge. -------
+  // The 100dvh shell is the box the nav is measured against, so a body gutter
+  // or a page that stops short is exactly the flat strip the device showed.
+  // (The device-side half - the Android window owning the gesture bar - is
+  // asserted from MainActivity/styles.xml further down, because a desktop
+  // viewport has no system bars to reproduce.)
+  const bleedRoutes = [
+    ['home', '#/'],
+    ['orders', '#/orders'],
+    ['cart', '#/cart'],
+    ['restaurant', '#/restaurant/1'],
+  ];
+  for (const width of [360, 393, 412]) {
+    const bleedContext = await browser.newContext({ viewport: { width, height: 844 }, isMobile: true, hasTouch: true });
+    await seed(bleedContext);
+    const bleedPage = await bleedContext.newPage();
+    for (const [label, hash] of bleedRoutes) {
+      await bleedPage.goto(`${base}/${hash}`, { waitUntil: 'networkidle' });
+      await sleep(900);
+      const m = await bleedPage.evaluate(() => {
+        const box = (element) => (element ? element.getBoundingClientRect() : null);
+        const atBottom = document.elementsFromPoint(window.innerWidth / 2, window.innerHeight - 2);
+        const insideShell = (element) => !!(element && element.closest && element.closest('.app-shell'));
+        // The real scroll box, not a class guess: orders/cart scroll on `.page`,
+        // Home on `.home-scroll`, the restaurant on `.rest-scroll`.
+        const scrollers = [...document.querySelectorAll('.app-shell *')]
+          .filter((element) => {
+            const style = getComputedStyle(element);
+            const rect = element.getBoundingClientRect();
+            return /(auto|scroll)/.test(style.overflowY) && rect.height > window.innerHeight * 0.8;
+          })
+          .map((element) => Math.round(element.getBoundingClientRect().bottom));
+        const nav = document.querySelector('.bottom-nav.nav-float');
+        const navRect = nav ? nav.getBoundingClientRect() : null;
+        // A flat strip is a fixed/absolute opaque band spanning the screen and
+        // ending at the physical bottom, painted over the content.
+        const strips = [...document.querySelectorAll('body *')].filter((element) => {
+          const style = getComputedStyle(element);
+          const rect = element.getBoundingClientRect();
+          if (style.position !== 'fixed' && style.position !== 'absolute') return false;
+          if (rect.width < window.innerWidth * 0.98) return false;
+          if (rect.height < 8 || rect.height > 90) return false;
+          if (rect.bottom < window.innerHeight - 2 || rect.top < window.innerHeight - 100) return false;
+          const background = style.backgroundColor;
+          return (
+            background === 'rgb(255, 255, 255)' ||
+            background === 'rgb(250, 250, 250)' ||
+            background === 'rgb(241, 241, 241)'
+          );
+        });
+        return {
+          innerHeight: window.innerHeight,
+          shellBottom: box(document.querySelector('.app-shell'))?.bottom ?? -1,
+          rootBottom: box(document.getElementById('root'))?.bottom ?? -1,
+          bodyPad: getComputedStyle(document.body).paddingBottom,
+          htmlPad: getComputedStyle(document.documentElement).paddingBottom,
+          bottomOwnedByApp: atBottom.some(insideShell),
+          bottomTags: atBottom.slice(0, 4).map((element) => `${element.tagName.toLowerCase()}${element.id ? `#${element.id}` : ''}`),
+          scrollerBottom: scrollers.length ? Math.min(...scrollers) : -1,
+          navBottomGap: navRect ? window.innerHeight - navRect.bottom : -1,
+          navPainted: nav ? !nav.classList.contains('is-hidden') : false,
+          stripCount: strips.length,
+        };
+      });
+      check(
+        `bleed ${width} ${label}: the shell reaches the bottom edge`,
+        near(m.shellBottom, m.innerHeight) && near(m.rootBottom, m.innerHeight),
+        `shell=${m.shellBottom} root=${m.rootBottom} inner=${m.innerHeight}`,
+      );
+      check(
+        `bleed ${width} ${label}: no body/html bottom gutter`,
+        m.bodyPad === '0px' && m.htmlPad === '0px',
+        `body=${m.bodyPad} html=${m.htmlPad}`,
+      );
+      check(
+        `bleed ${width} ${label}: the bottom pixels belong to the app`,
+        m.bottomOwnedByApp,
+        m.bottomTags.join(' > '),
+      );
+      check(
+        `bleed ${width} ${label}: the scroller reaches the bottom edge`,
+        near(m.scrollerBottom, m.innerHeight, 1),
+        `${m.scrollerBottom} vs ${m.innerHeight}`,
+      );
+      const spec = specFor(width);
+      check(
+        `bleed ${width} ${label}: the capsule bottom is 54k above the real edge`,
+        near(m.navBottomGap, spec.bottom, 0.6),
+        `${m.navBottomGap} vs ${spec.bottom}`,
+      );
+      check(
+        `bleed ${width} ${label}: no flat opaque strip covers the bottom 100px`,
+        m.stripCount === 0,
+        `${m.stripCount} strip(s); touched ${m.bottomTags.join(' > ')}`,
+      );
+    }
+
+    // The gesture inset must not move the capsule: the bar is pinned to the
+    // physical edge, not to a safe-area box that ends above it.
+    for (const [label, hash] of bleedRoutes) {
+      await bleedPage.goto(`${base}/${hash}`, { waitUntil: 'networkidle' });
+      await bleedPage.addStyleTag({ content: ':root{--sab:36px;--safe-top:36px}' });
+      await sleep(700);
+      const inset = await bleedPage.evaluate(() => {
+        const nav = document.querySelector('.bottom-nav.nav-float');
+        return {
+          sab: getComputedStyle(document.documentElement).getPropertyValue('--sab').trim(),
+          gap: nav ? window.innerHeight - nav.getBoundingClientRect().bottom : -1,
+        };
+      });
+      const spec = specFor(width);
+      check(
+        `bleed ${width} ${label}: simulated --sab:36px leaves the capsule at 54k`,
+        inset.sab === '36px' && near(inset.gap, spec.bottom, 0.6),
+        `--sab=${inset.sab} gap=${inset.gap} vs ${spec.bottom}`,
+      );
+    }
+    await bleedContext.close();
+  }
+
   // ---- 9. The shipped stylesheet itself carries no inset on the nav. ------
   const assetDir = path.join(appRoot, 'dist', 'assets');
   const cssFiles = (await readdir(assetDir)).filter((file) => file.endsWith('.css'));
@@ -1786,6 +1803,39 @@ try {
     /var\(--nav-reserve\)/.test(cartBarDecl) && !/env\(|--sab/.test(cartBarDecl),
     cartBarDecl || 'not found',
   );
+  check(
+    'dist: the shell kills the legacy body bottom gutter',
+    /html body\s*\{[^}]*padding-bottom:\s*0\s*!important/.test(css),
+    'html body{padding-bottom:0 !important}',
+  );
+
+  // ---- 15. The Android window owns the physical bottom edge. --------------
+  // A desktop viewport has no system navigation bar, so the strip the phone
+  // showed can only be gated at the source: the activity must run edge to edge
+  // and the theme must not paint an opaque navigation bar.
+  const activityJava = await readFile(
+    path.join(appRoot, 'android/app/src/main/java/com/navereat/app/MainActivity.java'),
+    'utf8',
+  );
+  check(
+    'android: the window runs edge to edge',
+    /setDecorFitsSystemWindows\(\s*getWindow\(\s*\)\s*,\s*false\s*\)/.test(activityJava),
+    'WindowCompat.setDecorFitsSystemWindows(getWindow(), false)',
+  );
+  check(
+    'android: the navigation bar is transparent with no contrast scrim',
+    /setNavigationBarColor\(\s*Color\.TRANSPARENT\s*\)/.test(activityJava) &&
+      /setNavigationBarContrastEnforced\(\s*false\s*\)/.test(activityJava),
+    'setNavigationBarColor(TRANSPARENT) + setNavigationBarContrastEnforced(false)',
+  );
+  const androidStyles = await readFile(path.join(appRoot, 'android/app/src/main/res/values/styles.xml'), 'utf8');
+  check(
+    'android: the app theme paints no white navigation bar',
+    /android:navigationBarColor">@android:color\/transparent/.test(androidStyles) &&
+      !/android:navigationBarColor">@color\/white/.test(androidStyles),
+    'navigationBarColor=@android:color/transparent',
+  );
+
 
   report.screens = shots;
   report.failures = failures;

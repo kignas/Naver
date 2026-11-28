@@ -113,6 +113,9 @@ ol {
 html body {
   background: var(--page);
   height: var(--vvh, 100dvh);
+  /* Legacy sheets reserve their tab bar with body padding; in the port that
+     reserve belongs to the route scroller, never a flat strip below it. */
+  padding-bottom: 0 !important;
 }
 
 @media (min-width: 520px) {

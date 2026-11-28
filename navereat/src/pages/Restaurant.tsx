@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { MenuCatNav } from '../components/menu/MenuCatNav';
 import { MenuFilterBar } from '../components/menu/MenuFilterBar';
@@ -7,10 +7,10 @@ import { MenuFiltersProvider } from '../components/menu/MenuFiltersProvider';
 import { MenuFreeDeliveryStrip } from '../components/menu/MenuFreeDeliveryStrip';
 import { MenuSection } from '../components/menu/MenuSection';
 import { MenuSkeleton } from '../components/menu/MenuSkeleton';
-import { categoryId, type MenuGroup } from '../components/menu/menuTypes';
 import { MenuJump } from '../components/restaurant/MenuJump';
-import { RestaurantSearch } from '../components/restaurant/RestaurantSearch';
-import { RestaurantStickySearch } from '../components/restaurant/RestaurantStickySearch';
+import { RestaurantSearchPage } from '../components/restaurant/RestaurantSearchPage';
+import { StickySearchBar } from '../components/restaurant/StickySearchBar';
+import type { MenuGroup } from '../components/menu/menuTypes';
 import { SlideReveal } from '../components/reveal/SlideReveal';
 import { findRestaurant } from '../data/demo';
 import { useRestaurantData } from '../data';
@@ -24,9 +24,14 @@ import { useUiStore } from '../store/uiStore';
 import { toast } from '../store/toastStore';
 import restaurantBundleCss from '../styles/original/restaurant.bundle.css?raw';
 import restaurantShellCss from '../styles/original/restaurant-shell.css?raw';
+import restaurantSearchCss from '../styles/original/restaurant-search-page.css?raw';
+import menuJumpCss from '../styles/original/menu-jump.css?raw';
 import '../styles/pages/restaurant.css';
 
-const restaurantStyle = createRouteStyleSheet(`${restaurantBundleCss}\n${restaurantShellCss}`, 'navereatRestaurant');
+const restaurantStyle = createRouteStyleSheet(
+  `${restaurantBundleCss}\n${restaurantShellCss}\n${restaurantSearchCss}\n${menuJumpCss}`,
+  'navereatRestaurant',
+);
 
 /** Restaurant layers can overlap during a slide; the body class follows all of them. */
 let restaurantBodies = 0;
@@ -141,61 +146,128 @@ export function Restaurant() {
     patchRestaurant(routeId, { scrollTop: scroller.scrollTop });
   }, [patchRestaurant, routeId]);
 
+  const location = useLocation();
+  const focusItem = useMemo(() => new URLSearchParams(location.search).get('focusItem'), [location.search]);
+
   const closeSearch = useCallback(() => setMenuSearchOpen(false), []);
 
-  const scrollToCategory = useCallback(
-    (name: string, index: number) => {
+  const jumpToCategory = useCallback((targetId: string) => {
+    setTab('menu');
+    const run = () => {
       const scroller = scrollRef.current;
-      const target = document.getElementById(categoryId(name, index));
+      const target = document.getElementById(targetId);
       if (!scroller || !target) return;
       const top = target.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 118;
       scroller.scrollTo({ top, behavior: 'smooth' });
-    },
-    [],
-  );
+    };
+    requestAnimationFrame(() => requestAnimationFrame(run));
+  }, []);
 
-  // Landing glide, ported from ewAutoScrollIntoMenu: once the menu is on screen
-  // the page eases down so the header tucks away and the sticky search bar, the
-  // category strip and the quick filters take over the top. Once per page, never
-  // on Back/Forward or a reload, never when a scroll position is restored.
+  // Original: auto-scroll the header out on load so the menu (with the sticky
+  // search bar and the filter chips) starts on screen. Nearbite 0cca76b:
+  // ewAutoScrollIntoMenu().
   const autoScrolledRef = useRef(false);
   useEffect(() => {
-    if (!ready || autoScrolledRef.current || tab !== 'menu') return;
+    if (!ready || !restaurant || preparing || autoScrolledRef.current) return undefined;
+    if (tab !== 'menu' || menuSearchOpen || focusItem) return undefined;
+    if (!Number.isFinite(routeId)) return undefined;
+    if ((cachedRestaurant?.scrollTop ?? 0) > 0) return undefined;
     const scroller = scrollRef.current;
-    if (!scroller) return;
+    if (!scroller || scroller.scrollTop > 0) return undefined;
     autoScrolledRef.current = true;
-    // HashRouter keeps the route in the hash; only a real anchor/focus counts.
-    const anchorHash = window.location.hash.replace(/^#\/[^?]*/, '');
-    if (anchorHash || new URLSearchParams(window.location.search).get('focusItem')) return;
-    if (scroller.scrollTop > 0 || (cachedRestaurant?.scrollTop ?? 0) > 0) return;
-    const navigation = performance.getEntriesByType?.('navigation')[0] as PerformanceNavigationTiming | undefined;
-    if (navigation && (navigation.type === 'back_forward' || navigation.type === 'reload')) return;
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
-    const anchor = document.getElementById('restaurant-filter-bar');
-    if (!anchor) return;
-    const sticky = document.getElementById('ew-sticky-search');
-    const catNav = document.getElementById('cat-nav');
-    const gapTop = Math.max(sticky?.offsetHeight ?? 0, 62) + Math.max(catNav?.offsetHeight ?? 0, 44) + 6;
-    const anchorTop = anchor.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
-    const target = Math.round(anchorTop - gapTop);
-    if (target <= 80) return;
-    requestAnimationFrame(() => scroller.scrollTo({ top: target, behavior: 'smooth' }));
-  }, [cachedRestaurant?.scrollTop, ready, tab]);
 
-  // `?focusItem=<id>` links land on that dish with the original highlight.
+    let raf = 0;
+    let attempts = 0;
+    let cancelled = false;
+
+    const start = () => {
+      if (cancelled || !scroller.isConnected) return;
+      const bar = document.getElementById('restaurant-filter-bar');
+      const menuSection = document.getElementById('menu-pane')?.querySelector('.menu-section') as HTMLElement | null;
+      // The reveal gate swaps the skeleton for the menu a few frames after
+      // `ready`; wait for the real filter bar instead of guessing a delay.
+      if (!bar || !menuSection) {
+        attempts += 1;
+        if (attempts < 180) raf = requestAnimationFrame(start);
+        else autoScrolledRef.current = true;
+        return;
+      }
+      const tsb = document.getElementById('ew-sticky-search');
+      const catNav = document.getElementById('cat-nav');
+      const gapTop = Math.max(tsb ? tsb.offsetHeight : 0, 62) + Math.max(catNav ? catNav.offsetHeight : 0, 44) + 6;
+      const PAD = 44;
+      const currentPad = Number.parseFloat(getComputedStyle(menuSection).paddingTop) || 0;
+      const extra = Math.max(0, PAD - currentPad);
+      const anchorTop =
+        bar.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop + extra;
+      const maxY = scroller.scrollHeight + extra - scroller.clientHeight;
+      const target = Math.round(Math.min(anchorTop - gapTop, maxY));
+      if (!(target > 80)) {
+        // The reveal gate can still be collapsing the page: keep waiting for
+        // the real layout instead of recording a no-op.
+        attempts += 1;
+        if (attempts < 180) raf = requestAnimationFrame(start);
+        else autoScrolledRef.current = true;
+        return;
+      }
+      if (!(scroller.scrollHeight > scroller.clientHeight + 80)) {
+        autoScrolledRef.current = true;
+        return;
+      }
+      autoScrolledRef.current = true;
+
+      const section = menuSection;
+      section.style.paddingTop = `${PAD}px`;
+      const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      if (reduce) {
+        scroller.scrollTop = target;
+        return;
+      }
+      const events = ['touchstart', 'wheel', 'keydown', 'mousedown'] as const;
+      let animation = 0;
+      let stopped = false;
+      const detach = () => events.forEach((name) => window.removeEventListener(name, onUser, true));
+      function onUser() {
+        stopped = true;
+        cancelAnimationFrame(animation);
+        detach();
+        const sentinel = document.getElementById('cat-nav-sentinel');
+        if (sentinel && sentinel.getBoundingClientRect().top >= 0) section.style.paddingTop = '0px';
+      }
+      events.forEach((name) => window.addEventListener(name, onUser, { capture: true, passive: true }));
+      const started = performance.now();
+      const step = (now: number) => {
+        if (stopped) return;
+        const progress = Math.min(1, (now - started) / 420);
+        scroller.scrollTop = Math.round(target * (1 - (1 - progress) ** 3));
+        if (progress < 1) animation = requestAnimationFrame(step);
+        else detach();
+      };
+      animation = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(start);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+    };
+  }, [cachedRestaurant?.scrollTop, focusItem, menuSearchOpen, preparing, ready, restaurant, routeId, tab]);
+
+  // ?focusItem=<id> jumps to the dish and flashes the same highlight the
+  // original uses after leaving the search page.
   useEffect(() => {
-    if (!ready) return;
-    const focusItemId = new URLSearchParams(window.location.search).get('focusItem');
-    if (!focusItemId) return;
-    const target = Array.from(document.querySelectorAll<HTMLElement>('.menu-item[data-menu-item-id]')).find(
-      (element) => element.dataset.menuItemId === focusItemId,
-    );
-    if (!target) return;
-    target.scrollIntoView({ block: 'center', behavior: 'auto' });
-    target.classList.add('ew-search-focus-item');
-    const timer = window.setTimeout(() => target.classList.remove('ew-search-focus-item'), 1800);
+    if (!focusItem || !ready) return undefined;
+    if (tab !== 'menu') setTab('menu');
+    const timer = window.setTimeout(() => {
+      const target = Array.from(document.querySelectorAll<HTMLElement>('.menu-item[data-menu-item-id]')).find(
+        (element) => element.dataset.menuItemId === focusItem,
+      );
+      if (!target) return;
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target.classList.add('ew-search-focus-item');
+      window.setTimeout(() => target.classList.remove('ew-search-focus-item'), 1800);
+    }, 120);
     return () => window.clearTimeout(timer);
-  }, [ready]);
+  }, [focusItem, ready, tab]);
 
   // A page that is no longer the current route keeps rendering, and a store
   // reset can empty its menu for a moment. Swapping to the empty state then
@@ -273,7 +345,7 @@ export function Restaurant() {
               id="menu-search-btn"
               aria-expanded={menuSearchOpen}
               aria-label="Search dishes in this restaurant"
-              onClick={() => setMenuSearchOpen((value) => !value)}
+              onClick={() => setMenuSearchOpen(true)}
             >
               <Icon name="solid:magnifying-glass" size={19} />
               <span>Search</span>
@@ -479,14 +551,7 @@ export function Restaurant() {
                       Open now
                     </span>
                   </div>
-                  <p className="inf-sub">
-                    {restaurant.cuisine}
-                    {restaurant.priceForTwo > 0 && (
-                      <>
-                        <span className="inf-sep" aria-hidden="true" />₹{restaurant.priceForTwo} for two
-                      </>
-                    )}
-                  </p>
+                  <p className="inf-sub">{restaurant.cuisine}</p>
                   <div className="inf-acts">
                     <button type="button" className="inf-act" onClick={() => toast('Link copied (demo)')}>
                       <Icon name="solid:arrow-up-from-bracket" size={16} />
@@ -494,67 +559,68 @@ export function Restaurant() {
                     </button>
                   </div>
                 </section>
-                <section className="inf-sec inf-addr">
-                  <span className="inf-sec-ic">
-                    <Icon name="solid:location-dot" size={18} />
-                  </span>
-                  <div>
-                    <span className="inf-sec-title">Address</span>
-                    <p className="inf-addr-tx">42 Demo Street, Demo City, 735101</p>
+                <section className="inf-sec">
+                  <span className="inf-sec-title">Services</span>
+                  <div className="inf-svc-list">
+                    <div className="inf-svc">
+                      <span className="inf-svc-ic">
+                        <Icon name="solid:bag-shopping" size={18} />
+                      </span>
+                      <span className="inf-svc-tx">Delivery available</span>
+                    </div>
+                    <div className="inf-svc">
+                      <span className="inf-svc-ic">
+                        <Icon name="solid:motorcycle" size={18} />
+                      </span>
+                      <span className="inf-svc-tx">Free delivery above ₹{freeAbove}</span>
+                    </div>
                   </div>
                 </section>
-                <section className="inf-sec">
-                  <span className="inf-sec-ic">
-                    <Icon name="regular:clock" size={18} />
-                  </span>
-                  <div>
-                    <span className="inf-sec-title">Opening hours</span>
-                    <p className="inf-addr-tx">Every day 10:00 AM – 11:00 PM</p>
+                <section className="ew-customer-reviews" id="ew-customer-reviews" aria-label="Customer reviews">
+                  <div className="ew-customer-reviews-head">
+                    <h3 className="ew-customer-reviews-title">Customer reviews</h3>
+                    <span className="ew-customer-reviews-summary" id="ew-customer-reviews-summary" />
                   </div>
-                </section>
-                <section className="inf-sec">
-                  <div className="inf-svc">
-                    <span className="inf-svc-ic">
-                      <Icon name="solid:bag-shopping" size={18} />
-                    </span>
-                    <span className="inf-svc-tx">Delivery available</span>
+                  <div
+                    className="ew-customer-reviews-status"
+                    id="ew-customer-reviews-status"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    No verified customer reviews yet.
                   </div>
-                  <div className="inf-svc">
-                    <span className="inf-svc-ic">
-                      <Icon name="solid:motorcycle" size={18} />
-                    </span>
-                    <span className="inf-svc-tx">Free delivery above ₹{freeAbove}</span>
-                  </div>
+                  <div id="ew-customer-reviews-list" />
+                  <button type="button" className="ew-customer-reviews-more" id="ew-customer-reviews-more" hidden>
+                    Load more reviews
+                  </button>
                 </section>
               </div>
             )}
           </div>
           </div>
         </SlideReveal>
+        <MenuJump
+          scrollRef={scrollRef}
+          onClickCategory={jumpToCategory}
+          hidden={tab !== 'menu' || menuSearchOpen || !ready}
+        />
+        <StickySearchBar
+          groups={groups}
+          onOpen={() => setMenuSearchOpen(true)}
+          onBack={nav.back}
+          disabled={menuSearchOpen || tab !== 'menu'}
+        />
+        <RestaurantSearchPage
+          open={menuSearchOpen}
+          name={restaurant.name}
+          groups={groups}
+          resId={restaurant.id}
+          onClose={closeSearch}
+          onCategory={jumpToCategory}
+        />
         </MenuFiltersProvider>
       </div>
 
-      <RestaurantStickySearch
-        restaurantName={restaurant.name}
-        menu={menu}
-        onOpenSearch={() => setMenuSearchOpen(true)}
-        onBack={nav.back}
-      />
-      <MenuJump groups={groups} visible={tab === 'menu'} onJump={scrollToCategory} />
-      <RestaurantSearch
-        open={menuSearchOpen}
-        restaurantId={restaurant.id}
-        restaurantName={restaurant.name}
-        menu={menu}
-        onClose={closeSearch}
-        onJumpCategory={(name) => {
-          const index = groups.findIndex((group) => group.name === name);
-          if (index >= 0) {
-            setTab('menu');
-            window.setTimeout(() => scrollToCategory(name, index), 60);
-          }
-        }}
-      />
     </div>
   );
 }

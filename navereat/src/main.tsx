@@ -8,6 +8,17 @@ import './styles/sheets.css';
 import { primeFonts } from './lib/fonts';
 import { installViewportVars } from './lib/viewport';
 
+// Same first-paint theme the reference applies from an inline head script: the
+// only header family it ships is raspberry, and the page theme is light/dark.
+try {
+  const theme = localStorage.getItem('eatswada_theme') === 'dark' ? 'dark' : 'light';
+  document.documentElement.dataset.ewTheme = theme;
+  document.documentElement.style.colorScheme = theme;
+  document.documentElement.dataset.ewHeader = 'raspberry';
+} catch {
+  document.documentElement.dataset.ewHeader = 'raspberry';
+}
+
 installViewportVars();
 
 async function boot() {

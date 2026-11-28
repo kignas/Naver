@@ -23,7 +23,7 @@ import {
 import { NOTE_MAX, TIP_PRESETS } from '../components/cart/cartConstants';
 import { Icon } from '../components/Icon';
 import { SlideReveal } from '../components/reveal/SlideReveal';
-import { api, isApiFailure, type Quote } from '../api/restaurantApi';
+import { api, isApiFailure, type PlatformStatusLite, type Quote } from '../api/restaurantApi';
 import type { Coupon, DemoOffer, Order } from '../data/demo';
 import { cartRestaurantId, cartSubtotal } from '../lib/cart';
 import { ensureKey } from '../logic/checkoutKey';
@@ -57,6 +57,28 @@ type Payment = 'upi' | 'cod';
 const cartStyle = createRouteStyleSheet(cartBundleCss, 'navereatCart');
 
 type SheetName = 'coupon' | 'bill' | 'pay' | 'note' | 'tip' | null;
+
+const paymentSettingsFrom = (status: PlatformStatusLite | null): PaymentSettings =>
+  status
+    ? {
+        isCodEnabled: status.isCodEnabled !== false,
+        isUpiEnabled: status.isUpiEnabled !== false,
+        isCodBlocked: status.isCodBlocked === true,
+        maxCodOrderAmount: status.maxCodOrderAmount,
+        isUnderMaintenance: status.isUnderMaintenance === true,
+        maintenanceMessage: status.maintenanceMessage,
+        isDeliveryPausedShortage: status.isDeliveryPausedShortage === true,
+      }
+    : DEFAULT_PAYMENT_SETTINGS;
+
+const samePaymentSettings = (a: PaymentSettings, b: PaymentSettings): boolean =>
+  a.isCodEnabled === b.isCodEnabled &&
+  a.isUpiEnabled === b.isUpiEnabled &&
+  a.isCodBlocked === b.isCodBlocked &&
+  a.maxCodOrderAmount === b.maxCodOrderAmount &&
+  a.isUnderMaintenance === b.isUnderMaintenance &&
+  (a.maintenanceMessage ?? '') === (b.maintenanceMessage ?? '') &&
+  a.isDeliveryPausedShortage === b.isDeliveryPausedShortage;
 
 const cleanNote = (value: string): string =>
   value.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, NOTE_MAX);
@@ -135,7 +157,9 @@ export function Cart() {
   const [tipInput, setTipInput] = useState('');
   const [tipError, setTipError] = useState('');
   const [payment, setPayment] = useState<Payment>(() => readPaymentMethod());
-  const [platform, setPlatform] = useState<PaymentSettings>(DEFAULT_PAYMENT_SETTINGS);
+  const [platform, setPlatform] = useState<PaymentSettings>(() =>
+    paymentSettingsFrom(api.platformStatusSync()),
+  );
   const [cutlery, setCutlery] = useState(false);
   const [placing, setPlacing] = useState(false);
   const quoteRef = useRef<Quote | null>(null);
@@ -165,20 +189,16 @@ export function Cart() {
   const displayName = user?.name ?? 'Demo Foodie';
   const phone = user?.phone ?? '+91 98765 43210';
   useEffect(() => {
+    // The demo adapter answers synchronously, so the first paint already holds
+    // the live switches and must not re-render once the slide starts.
+    if (api.platformStatusSync()) return;
     let cancelled = false;
     void api
       .getPlatformStatus()
       .then((status) => {
         if (cancelled) return;
-        setPlatform({
-          isCodEnabled: status.isCodEnabled !== false,
-          isUpiEnabled: status.isUpiEnabled !== false,
-          isCodBlocked: status.isCodBlocked === true,
-          maxCodOrderAmount: status.maxCodOrderAmount,
-          isUnderMaintenance: status.isUnderMaintenance === true,
-          maintenanceMessage: status.maintenanceMessage,
-          isDeliveryPausedShortage: status.isDeliveryPausedShortage === true,
-        });
+        const next = paymentSettingsFrom(status);
+        setPlatform((prev) => (samePaymentSettings(prev, next) ? prev : next));
       })
       .catch(() => undefined);
     return () => {

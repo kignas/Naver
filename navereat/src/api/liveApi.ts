@@ -38,5 +38,6 @@ export const liveApi: RestaurantApi = {
   saveAddress: () => NOT_ENABLED('POST /users/addresses'),
   deleteAddress: () => NOT_ENABLED('DELETE /users/addresses/:id'),
   getOrders: () => NOT_ENABLED('GET /orders'),
+  platformStatusSync: () => null,
   getPlatformStatus: () => NOT_ENABLED('GET /platform/public-status'),
 };

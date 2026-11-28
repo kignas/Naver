@@ -180,6 +180,8 @@ export interface RestaurantApi {
   couponsSync(): Coupon[];
   offersSync(subtotal: number): DemoOffer[];
   pricingPolicy(): PricingPolicy;
+  /** Demo-only: the platform switches for a first paint that never re-renders. */
+  platformStatusSync(): PlatformStatusLite | null;
 
   getRestaurant(id: string | number): Promise<Restaurant>;
   getMenu(id: string | number): Promise<MenuItem[]>;
